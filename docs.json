@@ -1,68 +1,143 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mint Starter Kit",
+  "theme": "maple",
+  "name": "Vigolium Documentation",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#00b368",
+    "light": "#50fa7b",
+    "dark": "#8ec07c"
   },
-  "favicon": "/favicon.svg",
+  "background": {
+    "decoration": "gradient",
+    "color": {
+      "light": "#f6edda",
+      "dark": "#282828"
+    }
+  },
+  "logo": {
+    "light": "/images/vigolium-logo-small.png",
+    "dark": "/images/vigolium-logo-small.png",
+    "href": "/",
+    "name": "Vigolium Docs"
+  },
+  "favicon": "/favicon.ico",
   "navigation": {
     "tabs": [
       {
-        "tab": "Guides",
+        "tab": "Documentation",
         "groups": [
           {
-            "group": "Getting started",
+            "group": "Getting Started",
             "pages": [
-              "index",
-              "quickstart",
-              "development"
+              "overview",
+              "getting-started",
+              "configuration",
+              "projects",
+              "output-and-reporting"
+            ]
+          },
+          {
+            "group": "Native Scan",
+            "pages": [
+              "native-scan/scanning-modes-overview",
+              "native-scan/how-it-works",
+              "native-scan/strategies",
+              "native-scan/modules-reference",
+              "native-scan/authentication",
+              "native-scan/scan-scope",
+              {
+                "group": "Phases",
+                "pages": [
+                  "native-scan/phases/discovery",
+                  "native-scan/phases/spidering",
+                  "native-scan/phases/spa",
+                  "native-scan/phases/audit",
+                  "native-scan/phases/extension"
+                ]
+              }
+            ]
+          },
+          {
+            "group": "Agentic Scan",
+            "pages": [
+              "agentic-scan/how-it-works",
+              "agentic-scan/agent-mode",
+              "agentic-scan/autopilot",
+              "agentic-scan/swarm",
+              "agentic-scan/query",
+              "agentic-scan/using-vigolium-in-agent"
+            ]
+          },
+          {
+            "group": "Server Mode",
+            "pages": [
+              "server-and-ingestion",
+              "server-mode/running-the-server",
+              "server-mode/ingestion",
+              "server-mode/proxy"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/whitebox-scanning",
+              "guides/scanning-an-api",
+              "guides/scanning-a-spa",
+              "guides/ci-cd-integration"
             ]
           },
           {
             "group": "Customization",
             "pages": [
-              "essentials/settings",
-              "essentials/navigation"
+              "customization/extending-vigolium",
+              "customization/writing-extensions"
             ]
           },
           {
-            "group": "Writing content",
+            "group": "Benchmark",
             "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
+              "benchmark/benchmark-testing",
+              "benchmark/whitebox-sast",
+              "benchmark/whitebox-agent"
             ]
           },
           {
-            "group": "AI tools",
+            "group": "Troubleshooting",
             "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
+              "troubleshooting"
             ]
           }
         ]
       },
       {
-        "tab": "API reference",
+        "tab": "API Reference",
         "groups": [
           {
-            "group": "API documentation",
+            "group": "API Reference",
             "pages": [
-              "api-reference/introduction"
+              "api-overview",
+              "api-references/overview",
+              "api-references/authentication"
             ]
           },
           {
-            "group": "Endpoint examples",
+            "group": "Endpoints",
             "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
+              "api-references/projects",
+              "api-references/scan",
+              "api-references/findings",
+              "api-references/agent",
+              "api-references/http-records",
+              "api-references/ingestion",
+              "api-references/source-repos",
+              "api-references/scope",
+              "api-references/stats",
+              "api-references/extensions",
+              "api-references/config",
+              "api-references/modules",
+              "api-references/github",
+              "api-references/oast-interactions",
+              "api-references/database"
             ]
           }
         ]
@@ -71,33 +146,24 @@
     "global": {
       "anchors": [
         {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
+          "anchor": "Vigolium Cloud",
+          "href": "https://github.com/vigolium",
+          "icon": "bolt"
         }
       ]
     }
   },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
   "navbar": {
     "links": [
       {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
+        "label": "Github",
+        "href": "https://github.com/vigolium"
       }
     ],
     "primary": {
       "type": "button",
-      "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
+      "label": "Vigolium Cloud",
+      "href": "https://github.com/vigolium"
     }
   },
   "contextual": {
@@ -106,7 +172,6 @@
      "view",
      "chatgpt",
      "claude",
-     "perplexity",
      "mcp",
      "cursor",
      "vscode"
@@ -114,9 +179,23 @@
   },
   "footer": {
     "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
+      "twitter": "https://x.com/j3ssie",
+      "github": "https://github.com/vigolium",
+      "x": "https://x.com/j3ssie",
+      "linkedin": "https://www.linkedin.com/in/jessie-aiho/"
+    }
+  },
+  "seo": {
+    "metatags": {
+        "og:image": "https://avatars.githubusercontent.com/u/266502139?s=200&v=4",
+        "og:description": "Vigolium - High-fidelity vulnerability scanner fusing agentic AI with native speed, modularity, and precision"
+      }
+  },
+  "errors": {
+    "404": {
+      "redirect": false,
+      "title": "Oh my, the page has gone missing all on its own!",
+      "description": "Oh dear! I'm terribly sorry for the mix-up. Perhaps try the main path home, or check your directions again. Yours politely, with a tip of the hat."
     }
   }
 }
