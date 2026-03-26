@@ -86,6 +86,9 @@
             "group": "Guides",
             "icon": "book",
             "pages": [
+              "guides/native-scan-phases",
+              "guides/agentic-scan",
+              "guides/stateless-scan",
               "guides/whitebox-scanning",
               "guides/scanning-an-api",
               "guides/scanning-a-spa",
