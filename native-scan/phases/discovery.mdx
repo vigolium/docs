@@ -1,10 +1,10 @@
 ---
-title: "Deparos -- Modern Adaptive Content Discovery"
+title: "Deparos - Modern Adaptive Content Discovery"
 description: "Intelligent content discovery engine that adapts its strategy dynamically using fingerprint-based soft-404 detection."
 icon: "magnifying-glass"
 ---
 
-Deparos is an intelligent content discovery engine that performs directory enumeration, directory fuzzing, and endpoint discovery against web applications. It goes beyond static wordlist brute-forcing by learning from every response — adapting its strategy, growing its wordlists dynamically, and filtering false positives through fingerprint-based soft-404 detection.
+Deparos is an intelligent content discovery engine that performs directory enumeration, directory fuzzing, and endpoint discovery against web applications. It goes beyond static wordlist brute-forcing by learning from every response - adapting its strategy, growing its wordlists dynamically, and filtering false positives through fingerprint-based soft-404 detection.
 
 ## How It Works
 
@@ -64,7 +64,7 @@ Target URL
 
 Before scanning, the engine requests 3 random non-existent paths and extracts response attributes (status code, content-type, headers, body hash, content-length ranges). Only attributes **stable across all 3 samples** become the baseline signature. During scanning, responses matching this signature are discarded as false positives.
 
-When an unknown response pattern appears, a 4-strategy wildcard validation (prefix, suffix, extension, middle) confirms whether the discovery is real or a new soft-404 variant — and learns the new pattern.
+When an unknown response pattern appears, a 4-strategy wildcard validation (prefix, suffix, extension, middle) confirms whether the discovery is real or a new soft-404 variant - and learns the new pattern.
 
 ### 2. Observed Collection System
 
@@ -86,7 +86,7 @@ Two layers of JS analysis feed endpoints back into the discovery queue:
 - **JSScan** (embedded binary): Deobfuscates bundled JS, resolves string concatenation, traces variable assignments, and extracts `fetch()` / `XMLHttpRequest` / `$.ajax` call sites into full HTTP request specs.
 - **Spider extractors**: Parse inline `<script>` tags and JS string literals for URL patterns.
 
-Extracted endpoints become priority-0 tasks — tested before any wordlist fuzzing.
+Extracted endpoints become priority-0 tasks - tested before any wordlist fuzzing.
 
 ### 4. Dynamic Wordlist Growth
 
@@ -146,7 +146,7 @@ YAML-configured modules trigger specialized tasks when matching directories are 
 
 ## Integration with Vigolium
 
-Deparos runs as an input source (`DeparosDiscoverySource`) in the scanning pipeline. Each discovery is converted to an `httpmsg.HttpRequestResponse` and fed to the executor as a work item — where it flows through active and passive vulnerability scanning modules.
+Deparos runs as an input source (`DeparosDiscoverySource`) in the scanning pipeline. Each discovery is converted to an `httpmsg.HttpRequestResponse` and fed to the executor as a work item - where it flows through active and passive vulnerability scanning modules.
 
 ```
 DeparosDiscoverySource.Next()

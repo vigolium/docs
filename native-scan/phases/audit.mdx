@@ -1,5 +1,5 @@
 ---
-title: "Audit -- Active Vulnerability Scanning"
+title: "Audit - Active Vulnerability Scanning"
 description: "The core scanning phase that injects payloads at every insertion point to detect vulnerabilities in web applications."
 icon: "shield-halved"
 ---
@@ -81,11 +81,11 @@ Modules implementing the `Flusher` interface run finalization logic at scan end 
 
 Most injection-based modules use the shared DiffScan framework for differential response analysis:
 
-1. **Probe** — defines break strings and escape payloads for a vulnerability class
-2. **Attack** — tracks state across multiple probe attempts (baseline vs. current)
-3. **ResponseSnapshot** — captures fingerprinted response attributes for comparison
-4. **Reflection detection** — identifies how injected payloads manifest in responses
-5. **Quantitative measurements** — statistical response changes (timing, size, keyword frequency)
+1. **Probe** - defines break strings and escape payloads for a vulnerability class
+2. **Attack** - tracks state across multiple probe attempts (baseline vs. current)
+3. **ResponseSnapshot** - captures fingerprinted response attributes for comparison
+4. **Reflection detection** - identifies how injected payloads manifest in responses
+5. **Quantitative measurements** - statistical response changes (timing, size, keyword frequency)
 
 A vulnerability is confirmed when injected payloads cause measurable, consistent deviations from the baseline response.
 
@@ -131,8 +131,8 @@ audit:
 
 ## Rate Limiting and Deduplication
 
-- **Per-host rate limiting** — configurable request rate per target
-- **Request deduplication** — prevents sending identical modified requests
-- **Baseline caching** — caches baseline responses to avoid redundant fetches
-- **Response buffer pooling** — recycles 32KiB buffers to reduce GC pressure
-- **Body size enforcement** — drop, truncate, or skip scanning for oversized responses
+- **Per-host rate limiting** - configurable request rate per target
+- **Request deduplication** - prevents sending identical modified requests
+- **Baseline caching** - caches baseline responses to avoid redundant fetches
+- **Response buffer pooling** - recycles 32KiB buffers to reduce GC pressure
+- **Body size enforcement** - drop, truncate, or skip scanning for oversized responses

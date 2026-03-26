@@ -4,14 +4,14 @@ description: "Single-shot AI prompt execution for code analysis, endpoint discov
 icon: "magnifying-glass"
 ---
 
-Query mode is Vigolium's single-shot AI prompt execution mode. It sends a prompt template or inline prompt to an AI agent and returns structured output -- no network scanning, no multi-phase orchestration. One AI call, one response.
+Query mode is Vigolium's single-shot AI prompt execution mode. It sends a prompt template or inline prompt to an AI agent and returns structured output -no network scanning, no multi-phase orchestration. One AI call, one response.
 
 ## What It Does
 
 - Loads a prompt template, enriches it with source code and database context, and sends it to the configured AI agent
 - The agent analyzes the provided context and returns structured JSON (findings or HTTP records)
 - Results are parsed and saved to the Vigolium database
-- No network scanning occurs -- query mode purely analyzes what you give it
+- No network scanning occurs -query mode purely analyzes what you give it
 
 Query mode is not an agentic scan. It does not discover targets, send attack traffic, or iterate. It is a code analysis tool that leverages AI to find vulnerabilities, extract endpoints, or answer security questions from source code.
 
@@ -61,7 +61,7 @@ echo "explain CSRF" | vigolium agent query --stdin
 
 ### Dry Run
 
-Render the full prompt without sending it to the agent -- useful for debugging templates:
+Render the full prompt without sending it to the agent -useful for debugging templates:
 
 ```bash
 vigolium agent --prompt-template endpoint-discovery --source ./src --dry-run
@@ -133,19 +133,19 @@ At least one of `prompt_template`, `prompt_file`, or `prompt` is required. When 
 
 ## Use Cases
 
-- **Code review** -- run `security-code-review` before deployment to catch injection sinks, hardcoded secrets, and auth bypasses
-- **Endpoint discovery** -- extract API routes from source code (Express, Spring, Django, etc.) and ingest them as HTTP records for subsequent scanning
-- **Secret detection** -- scan config files, deploy scripts, and environment templates for hardcoded credentials
-- **CI/CD integration** -- single AI call completes in seconds, making it suitable for pipeline gates
-- **Triage questions** -- ask the agent about a specific vulnerability pattern or security concept
+- **Code review** -run `security-code-review` before deployment to catch injection sinks, hardcoded secrets, and auth bypasses
+- **Endpoint discovery** -extract API routes from source code (Express, Spring, Django, etc.) and ingest them as HTTP records for subsequent scanning
+- **Secret detection** -scan config files, deploy scripts, and environment templates for hardcoded credentials
+- **CI/CD integration** -single AI call completes in seconds, making it suitable for pipeline gates
+- **Triage questions** -ask the agent about a specific vulnerability pattern or security concept
 
 ## Pros and Cons
 
 | Pros | Cons |
 |------|------|
-| Fast -- single AI call, completes in seconds | No network scanning -- code analysis only |
-| Low cost -- one prompt, one response | Requires source code access for most templates |
-| Deterministic scope -- same template produces consistent coverage | Findings are unverified (no live confirmation) |
-| Good for CI/CD -- predictable runtime, structured output | Limited to what the template asks for |
+| Fast -single AI call, completes in seconds | No network scanning -code analysis only |
+| Low cost -one prompt, one response | Requires source code access for most templates |
+| Deterministic scope -same template produces consistent coverage | Findings are unverified (no live confirmation) |
+| Good for CI/CD -predictable runtime, structured output | Limited to what the template asks for |
 | Works without a running target | Cannot discover runtime-only vulnerabilities |
 | Supports structured output schemas (findings, HTTP records) | Freeform questions return unstructured text |

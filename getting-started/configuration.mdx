@@ -20,12 +20,12 @@ If no config file is found, built-in defaults are used.
 
 Settings are resolved from highest to lowest precedence:
 
-1. **CLI flags** -- e.g. `--concurrency 100`, `--rate-limit 50`
-2. **Environment variables** -- e.g. `VIGOLIUM_API_KEY`, `VIGOLIUM_PROJECT`
-3. **Scanning profile** -- loaded via `--scanning-profile <name>` (from `~/.vigolium/profiles/`)
-4. **Project-level config** -- per-project overlay at `~/.vigolium/projects/<uuid>/config.yaml`
-5. **Main config file** -- `~/.vigolium/vigolium-configs.yaml`
-6. **Built-in defaults** -- hardcoded in the Go source
+1. **CLI flags** -e.g. `--concurrency 100`, `--rate-limit 50`
+2. **Environment variables** -e.g. `VIGOLIUM_API_KEY`, `VIGOLIUM_PROJECT`
+3. **Scanning profile** -loaded via `--scanning-profile <name>` (from `~/.vigolium/profiles/`)
+4. **Project-level config** -per-project overlay at `~/.vigolium/projects/<uuid>/config.yaml`
+5. **Main config file** -`~/.vigolium/vigolium-configs.yaml`
+6. **Built-in defaults** -hardcoded in the Go source
 
 Higher-precedence sources override lower ones. Within the config file, environment variables can be referenced using `${VAR}` or `$VAR` syntax and are expanded at load time.
 
@@ -524,4 +524,4 @@ vigolium project config set scanning_pace.concurrency 200
 vigolium project config show
 ```
 
-See [projects](/projects) for full project management documentation.
+See [projects](/others/projects) for full project management documentation.

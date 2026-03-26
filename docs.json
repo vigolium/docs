@@ -28,50 +28,55 @@
         "groups": [
           {
             "group": "Getting Started",
+            "icon": "rocket",
             "pages": [
-              "overview",
-              "getting-started",
-              "configuration",
-              "projects",
-              "output-and-reporting"
+              "getting-started/overview",
+              "getting-started/getting-started",
+              "getting-started/configuration",
+              "getting-started/output-and-reporting"
             ]
           },
           {
             "group": "Native Scan",
+            "icon": "radar",
             "pages": [
               "native-scan/scanning-modes-overview",
               "native-scan/how-it-works",
               "native-scan/strategies",
               "native-scan/modules-reference",
               "native-scan/authentication",
-              "native-scan/scan-scope",
-              {
-                "group": "Phases",
-                "pages": [
-                  "native-scan/phases/discovery",
-                  "native-scan/phases/spidering",
-                  "native-scan/phases/spa",
-                  "native-scan/phases/audit",
-                  "native-scan/phases/extension"
-                ]
-              }
+              "native-scan/scan-scope"
+            ]
+          },
+          {
+            "group": "Phases",
+            "icon": "layer-group",
+            "pages": [
+              "native-scan/phases/discovery",
+              "native-scan/phases/spidering",
+              "native-scan/phases/known-issue-scan",
+              "native-scan/phases/audit",
+              "native-scan/phases/extension"
             ]
           },
           {
             "group": "Agentic Scan",
+            "icon": "brain",
             "pages": [
               "agentic-scan/how-it-works",
               "agentic-scan/agent-mode",
               "agentic-scan/autopilot",
               "agentic-scan/swarm",
               "agentic-scan/query",
-              "agentic-scan/using-vigolium-in-agent"
+              "agentic-scan/using-vigolium-in-your-agent"
+              
             ]
           },
           {
             "group": "Server Mode",
+            "icon": "server",
             "pages": [
-              "server-and-ingestion",
+              "getting-started/server-and-ingestion",
               "server-mode/running-the-server",
               "server-mode/ingestion",
               "server-mode/proxy"
@@ -79,6 +84,7 @@
           },
           {
             "group": "Guides",
+            "icon": "book",
             "pages": [
               "guides/whitebox-scanning",
               "guides/scanning-an-api",
@@ -88,6 +94,7 @@
           },
           {
             "group": "Customization",
+            "icon": "wrench",
             "pages": [
               "customization/extending-vigolium",
               "customization/writing-extensions"
@@ -95,6 +102,7 @@
           },
           {
             "group": "Benchmark",
+            "icon": "chart-bar",
             "pages": [
               "benchmark/benchmark-testing",
               "benchmark/whitebox-sast",
@@ -102,9 +110,11 @@
             ]
           },
           {
-            "group": "Troubleshooting",
+            "group": "Others",
+            "icon": "bug",
             "pages": [
-              "troubleshooting"
+              "others/projects",
+              "others/troubleshooting"
             ]
           }
         ]

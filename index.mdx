@@ -7,7 +7,7 @@ mode: "wide"
 ---
 
 <Frame caption="Vigolium Workbench Dashboard">
-  <img src="/images/vigolium-ui-dashboard-1.png" alt="UI Dashboard 1" />
+  <img src="/images/vigolium-main-workbench.png" alt="Vigolium Workbench Dashboard" />
 </Frame>
 
 Vigolium provides two complementary scanning modes:
@@ -42,17 +42,17 @@ It also operates as an API server with traffic ingestion, or a standalone ingest
 </Columns>
 
 <Columns cols={2}>
-  <Frame caption="UI Dashboard">
-    <img src="/images/vigolium-ui-dashboard-1.png" alt="UI Dashboard 1" />
+  <Frame caption="Workbench Dashboard">
+    <img src="/images/vigolium-ui-dashboard-1.png" alt="Workbench Dashboard 1" />
   </Frame>
-  <Frame caption="UI Dashboard">
-    <img src="/images/vigolium-ui-dashboard-2.png" alt="UI Dashboard 2" />
+  <Frame caption="Workbench Dashboard">
+    <img src="/images/vigolium-ui-dashboard-2.png" alt="Workbench Dashboard 2" />
   </Frame>
-  <Frame caption="UI Dashboard">
-    <img src="/images/vigolium-ui-dashboard-3.png" alt="UI Dashboard 3" />
+  <Frame caption="Workbench Dashboard">
+    <img src="/images/vigolium-ui-dashboard-3.png" alt="Workbench Dashboard 3" />
   </Frame>
-  <Frame caption="UI Dashboard">
-    <img src="/images/vigolium-ui-dashboard-4.png" alt="UI Dashboard 4" />
+  <Frame caption="Workbench Dashboard">
+    <img src="/images/vigolium-ui-dashboard-4.png" alt="Workbench Dashboard 4" />
   </Frame>
 </Columns>
 
@@ -129,7 +129,7 @@ vigolium run discovery -t https://example.com
 vigolium scan -t https://example.com --only discovery --format html -o report.html
 ```
 
-See [the full overview](/overview) and [strategies](/native-scan/strategies) for strategies, profiles, and pace configuration.
+See [the full overview](/getting-started/overview) and [strategies](/native-scan/strategies) for strategies, profiles, and pace configuration.
 
 ## Server Mode
 
@@ -238,33 +238,62 @@ The native scan pipeline is composed of modular layers, each documented separate
 
 ## Documentation
 
-| Topic | Link |
-|-------|------|
-| Overview | [Overview](/overview) |
-| Getting Started | [Getting Started](/getting-started) |
-| Configuration | [Configuration](/configuration) |
-| Output & Reporting | [Output & Reporting](/output-and-reporting) |
-| Troubleshooting | [Troubleshooting](/troubleshooting) |
-| Scanning Modes Overview | [Scanning Modes](/native-scan/scanning-modes-overview) |
-| Scanning Strategies | [Strategies](/native-scan/strategies) |
-| Authenticated Scanning | [Authentication](/native-scan/authentication) |
-| Content Discovery (Deparos) | [Discovery](/native-scan/phases/discovery) |
-| Browser Spider (Spitolas) | [Spidering](/native-scan/phases/spidering) |
-| SPA Scanning | [SPA](/native-scan/phases/spa) |
-| Audit | [Audit](/native-scan/phases/audit) |
-| Scanner Modules Reference | [Modules Reference](/native-scan/modules-reference) |
-| Agent Mode | [Agent Mode](/agentic-scan/agent-mode) |
-| Agentic Scan: How It Works | [How It Works](/agentic-scan/how-it-works) |
-| Autopilot | [Autopilot](/agentic-scan/autopilot) |
-| Swarm | [Swarm](/agentic-scan/swarm) |
-| Query Mode | [Query](/agentic-scan/query) |
-| Server Mode | [Running the Server](/server-mode/running-the-server) |
-| Ingestion | [Ingestion](/server-mode/ingestion) |
-| REST API Reference | [API Overview](/api-overview) |
-| Writing Extensions | [Writing Extensions](/customization/writing-extensions) |
-| Extending Vigolium | [Extending Vigolium](/customization/extending-vigolium) |
-| Whitebox Scanning | [Whitebox Scanning](/guides/whitebox-scanning) |
-| CI/CD Integration | [CI/CD Integration](/guides/ci-cd-integration) |
+<Columns cols={3}>
+  <Tile href="/getting-started/overview" title="Overview" description="Architecture, scanning paradigms, and reading guide" icon="telescope">
+    <img src="/images/vigolium-logo-small.png" alt="Vigolium Overview" />
+  </Tile>
+  <Tile href="/getting-started/getting-started" title="Getting Started" description="Install, run your first scan, and understand results" icon="rocket">
+    <img src="/images/vigolium-cli-scan-1.png" alt="Getting Started" />
+  </Tile>
+  <Tile href="/getting-started/configuration" title="Configuration" description="Layered config system, profiles, and environment variables" icon="gear">
+    <img src="/images/vigolium-cli-scan-2.png" alt="Configuration" />
+  </Tile>
+  <Tile href="/native-scan/scanning-modes-overview" title="Scanning Modes" description="Compare all native scanning modes and strategies" icon="radar">
+    <img src="/images/vigolium-native-scan.png" alt="Scanning Modes" />
+  </Tile>
+  <Tile href="/native-scan/strategies" title="Strategies" description="Lite, balanced, deep, and whitebox presets" icon="sliders">
+    <img src="/images/vigolium-native-scan.png" alt="Strategies" />
+  </Tile>
+  <Tile href="/native-scan/authentication" title="Authentication" description="Multi-session auth, IDOR testing, and login flows" icon="lock">
+    <img src="/images/vigolium-cli-scan-1.png" alt="Authentication" />
+  </Tile>
+  <Tile href="/native-scan/phases/discovery" title="Discovery (Deparos)" description="Adaptive content discovery with soft-404 detection" icon="magnifying-glass">
+    <img src="/images/vigolium-native-scan.png" alt="Discovery" />
+  </Tile>
+  <Tile href="/native-scan/phases/spidering" title="Spidering (Spitolas)" description="Browser-based Chromium crawler with CDP capture" icon="spider">
+    <img src="/images/vigolium-native-scan.png" alt="Spidering" />
+  </Tile>
+  <Tile href="/native-scan/phases/audit" title="Audit" description="Active/passive vulnerability scanning with 215 modules" icon="shield-halved">
+    <img src="/images/vigolium-native-scan.png" alt="Audit" />
+  </Tile>
+  <Tile href="/agentic-scan/agent-mode" title="Agent Mode" description="AI-powered scanning with autonomous agents" icon="brain">
+    <img src="/images/vigolium-agentic-scan.png" alt="Agent Mode" />
+  </Tile>
+  <Tile href="/agentic-scan/autopilot" title="Autopilot" description="Autonomous AI-driven vulnerability scanning" icon="robot">
+    <img src="/images/vigolium-agentic-scan.png" alt="Autopilot" />
+  </Tile>
+  <Tile href="/agentic-scan/swarm" title="Swarm" description="AI-guided targeted or full-scope scanning" icon="users">
+    <img src="/images/vigolium-agentic-scan.png" alt="Swarm" />
+  </Tile>
+  <Tile href="/server-mode/running-the-server" title="Server Mode" description="REST API server with Swagger UI and traffic ingestion" icon="server">
+    <img src="/images/vigolium-ui-dashboard-1.png" alt="Server Mode" />
+  </Tile>
+  <Tile href="/getting-started/output-and-reporting" title="Output & Reporting" description="Console, JSON, JSONL, and HTML report formats" icon="file-export">
+    <img src="/images/vigolium-static-report-1.png" alt="Output & Reporting" />
+  </Tile>
+  <Tile href="/customization/writing-extensions" title="Writing Extensions" description="Custom JS modules and hooks via embedded engine" icon="code">
+    <img src="/images/vigolium-cli-scan-2.png" alt="Writing Extensions" />
+  </Tile>
+  <Tile href="/guides/whitebox-scanning" title="Whitebox Scanning" description="Source-aware scanning with route extraction and SAST" icon="book-open">
+    <img src="/images/vigolium-native-scan.png" alt="Whitebox Scanning" />
+  </Tile>
+  <Tile href="/guides/ci-cd-integration" title="CI/CD Integration" description="Integrate Vigolium into your CI/CD pipeline" icon="circle-nodes">
+    <img src="/images/vigolium-cli-scan-1.png" alt="CI/CD Integration" />
+  </Tile>
+  <Tile href="/api-overview" title="REST API Reference" description="Full API documentation with Swagger UI" icon="plug">
+    <img src="/images/vigolium-ui-dashboard-2.png" alt="REST API Reference" />
+  </Tile>
+</Columns>
 
 ## JavaScript Engine
 

@@ -4,9 +4,14 @@ description: "Shared concepts and infrastructure behind Vigolium's agentic scann
 icon: "brain"
 ---
 
+
+<Frame caption="Vigolium Agentic Scan">
+  <img src="/images/vigolium-agentic-scan.png" alt="Vigolium Agentic Scan" />
+</Frame>
+
 ## What is Agentic Scanning
 
-Agentic scanning uses AI agents to assist or drive the vulnerability scanning process. Unlike Vigolium's native scanning pipeline -- where deterministic Go modules execute fixed detection logic against HTTP traffic -- agentic scanning leverages LLMs to:
+Agentic scanning uses AI agents to assist or drive the vulnerability scanning process. Unlike Vigolium's native scanning pipeline -where deterministic Go modules execute fixed detection logic against HTTP traffic -agentic scanning leverages LLMs to:
 
 - **Analyze source code** for routes, authentication flows, and vulnerability sinks
 - **Plan attacks** by selecting modules and generating targeted scan strategies
@@ -35,7 +40,7 @@ Vigolium integrates with coding agents through protocol-specific backends. Each 
 
 **Codex-SDK** and **OpenCode-SDK** are native protocol integrations for their respective coding agent CLIs, providing full tool access without going through ACP.
 
-**Pipe** is the simplest fallback — prompt piped to stdin, output read from stdout. Works with any CLI tool but provides no tool access.
+**Pipe** is the simplest fallback - prompt piped to stdin, output read from stdout. Works with any CLI tool but provides no tool access.
 
 ## Agent Backends
 
@@ -45,13 +50,13 @@ Backends are configured in `~/.vigolium/vigolium-configs.yaml` under the `agent`
 agent:
   default_agent: claude
   backends:
-    # Claude Code (SDK — recommended default)
+    # Claude Code (SDK - recommended default)
     claude:
       command: claude
       protocol: sdk
       model: sonnet
 
-    # Claude Code (ACP — for autopilot terminal mode)
+    # Claude Code (ACP - for autopilot terminal mode)
     claude-acp:
       command: npx
       args: ["-y", "@zed-industries/claude-agent-acp@latest"]
@@ -112,8 +117,8 @@ The `--agent` flag overrides the default backend per-invocation. The `--agent-ac
 
 Prompt templates are Markdown files with YAML frontmatter that define the instructions sent to AI agents. They are stored in:
 
-- `~/.vigolium/prompts/` -- user-defined templates
-- Embedded in the binary at `public/presets/prompts/` -- built-in templates
+- `~/.vigolium/prompts/` -user-defined templates
+- Embedded in the binary at `public/presets/prompts/` -built-in templates
 
 Each template declares an **output schema** in its frontmatter, which tells the agent what structured format to return:
 
@@ -164,10 +169,10 @@ Session directories persist after the run completes, allowing you to inspect wha
 
 The `--source` flag provides source code to agents across all modes. When provided, it enables:
 
-- **Route extraction** -- the agent reads application code and discovers HTTP endpoints (Express routes, Spring controllers, Django URL patterns, etc.)
-- **Auth flow discovery** -- the agent identifies login endpoints, session management, and token handling, producing a session configuration
-- **Custom extension generation** -- the agent writes JavaScript scanner extensions targeting application-specific patterns
-- **SAST integration** -- in swarm mode, ast-grep runs static analysis on the source and an AI sub-agent reviews the findings
+- **Route extraction** -the agent reads application code and discovers HTTP endpoints (Express routes, Spring controllers, Django URL patterns, etc.)
+- **Auth flow discovery** -the agent identifies login endpoints, session management, and token handling, producing a session configuration
+- **Custom extension generation** -the agent writes JavaScript scanner extensions targeting application-specific patterns
+- **SAST integration** -in swarm mode, ast-grep runs static analysis on the source and an AI sub-agent reviews the findings
 
 The `--files` flag narrows the source context to specific files or directories (paths relative to `--source`), which is useful for large codebases where you want to focus the agent's attention.
 

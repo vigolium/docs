@@ -1,5 +1,5 @@
 ---
-title: "Scan Scope -- How Modules Are Dispatched"
+title: "Scan Scope - How Modules Are Dispatched"
 description: "Understand how scanner modules are dispatched at insertion-point, request, and host granularity."
 icon: "crosshairs"
 ---
@@ -77,7 +77,7 @@ Content-Type: application/x-www-form-urlencoded
 query=test&page=1
 ```
 
-**Step 1 — The executor calls `CreateAllInsertionPoints()` and finds 5 insertion points:**
+**Step 1 - The executor calls `CreateAllInsertionPoints()` and finds 5 insertion points:**
 
 ```
 ┌─────┬──────────────┬────────────┬──────────┐
@@ -91,7 +91,7 @@ query=test&page=1
 └─────┴──────────────┴────────────┴──────────┘
 ```
 
-**Step 2 — For each insertion point, the executor runs all compatible modules in parallel:**
+**Step 2 - For each insertion point, the executor runs all compatible modules in parallel:**
 
 ```
 Insertion Point #1: lang=en (URL_PARAM)
@@ -115,7 +115,7 @@ Insertion Point #3: query=test (BODY_PARAM)
 ... and so on for each insertion point
 ```
 
-**Step 3 — Each module uses `BuildRequest(payload)` to construct the modified request.** Only the target parameter changes; everything else stays the same:
+**Step 3 - Each module uses `BuildRequest(payload)` to construct the modified request.** Only the target parameter changes; everything else stays the same:
 
 ```
 Original:  POST /api/search?lang=en HTTP/1.1  ...  query=test&page=1
@@ -142,7 +142,7 @@ Injected:  POST /api/search?lang=en HTTP/1.1  ...  query=' OR 1=1--&page=1
 | Parameter name (body) | `username=admin` | The key `username` itself |
 | Entire body | Full POST body | The whole body as one blob |
 
-With `includeNested=true` (the default), the executor also discovers **nested structures** — for example, a URL parameter whose value is Base64-encoded JSON will produce additional insertion points for each key inside that JSON.
+With `includeNested=true` (the default), the executor also discovers **nested structures** - for example, a URL parameter whose value is Base64-encoded JSON will produce additional insertion points for each key inside that JSON.
 
 Each module also declares which `InsertionPointType`s it accepts (via `AllowedInsertionPointTypes()`), so an SQLi module might only test URL params, body params, and JSON values, while skipping cookies and headers.
 
@@ -167,7 +167,7 @@ Each module also declares which `InsertionPointType`s it accepts (via `AllowedIn
 
 **Invoked once per unique request/response pair.**
 
-The module receives the entire `HttpRequestResponse` and decides on its own what to modify. It is not given a specific parameter — it has full control over the request structure.
+The module receives the entire `HttpRequestResponse` and decides on its own what to modify. It is not given a specific parameter - it has full control over the request structure.
 
 This scope is used for vulnerabilities that:
 - Don't map to a single parameter (e.g., changing the HTTP method, adding new headers)
@@ -232,14 +232,14 @@ Original token:    eyJhbGciOiJIUzI1NiJ9.eyJ1c2VyIjoiam9obiJ9.signature
                    │                     │                      │
                    header                payload                signature
 
-Test 1 — Algorithm confusion:
+Test 1 - Algorithm confusion:
   Change alg: HS256 → none, send without signature → still accepted?
 
-Test 2 — Weak key:
+Test 2 - Weak key:
   Try signing with common secrets ("secret", "password", "") → accepted?
 ```
 
-Notice how none of these attacks target a single parameter — they modify the request structure, headers, method, or tokens. That's why they use `ScanScopeRequest` instead of `ScanScopeInsertionPoint`.
+Notice how none of these attacks target a single parameter - they modify the request structure, headers, method, or tokens. That's why they use `ScanScopeRequest` instead of `ScanScopeInsertionPoint`.
 
 **Typical vulnerabilities found:**
 - 403/401 bypass (path tricks, method tampering, header injection)
@@ -268,7 +268,7 @@ Notice how none of these attacks target a single parameter — they modify the r
 
 **Invoked once per unique host.**
 
-The executor deduplicates by hostname — if 500 requests arrive for `example.com`, the module runs only once. This scope is for expensive one-time checks that apply to the entire host, not to individual pages or parameters.
+The executor deduplicates by hostname - if 500 requests arrive for `example.com`, the module runs only once. This scope is for expensive one-time checks that apply to the entire host, not to individual pages or parameters.
 
 #### How it works step by step
 
@@ -430,7 +430,7 @@ Host: example.com
 │                  │   - path_normalization: /admin vs /Admin vs /ADMIN      │
 │                  │   - sensitive files, swagger discovery, etc.            │
 ├──────────────────┼──────────────────────────────────────────────────────────┤
-│ Host             │ Same as above — runs once if host is new.              │
+│ Host             │ Same as above - runs once if host is new.              │
 └──────────────────┴──────────────────────────────────────────────────────────┘
 ```
 
@@ -447,9 +447,9 @@ Host: example.com
 ├──────────────────┼──────────────────────────────────────────────────────────┤
 │ InsertionPoint   │ Empty insertion point list. Skipped.                    │
 ├──────────────────┼──────────────────────────────────────────────────────────┤
-│ Request          │ Active: most modules skip via CanProcess() — the       │
+│ Request          │ Active: most modules skip via CanProcess() - the       │
 │                  │   default filters out .css/.js/.png/.jpg extensions.    │
-│                  │ Passive: still runs — e.g. secret_detect checks for    │
+│                  │ Passive: still runs - e.g. secret_detect checks for    │
 │                  │   leaked API keys, sourcemap_detect looks for .map     │
 │                  │   references in JS bundles.                             │
 ├──────────────────┼──────────────────────────────────────────────────────────┤
@@ -525,7 +525,7 @@ For each incoming request, the executor runs scopes in this order:
 ```
 HttpRequestResponse arrives
 │
-├── Phase 1: Passive modules (no network I/O — sequential)
+├── Phase 1: Passive modules (no network I/O - sequential)
 │   │
 │   ├── 1. ScanScopeHost     →  security_headers_missing (once per host)
 │   │
@@ -533,7 +533,7 @@ HttpRequestResponse arrives
 │                                cors_headers_detect, info_disclosure_detect,
 │                                dom_xss_detect, csrf_detect, ...
 │
-├── Phase 2: Active modules (network I/O — all three run in parallel)
+├── Phase 2: Active modules (network I/O - all three run in parallel)
 │   │
 │   ├── 3a. ScanScopeHost
 │   │       cors_misconfiguration, default_credentials, ...

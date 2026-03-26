@@ -1,5 +1,5 @@
 ---
-title: "Spitolas -- Browser-Based Web Crawler"
+title: "Spitolas - Browser-Based Web Crawler"
 description: "State-machine-driven web crawler using real Chromium for discovering application states through user-like interactions."
 icon: "spider"
 ---
@@ -56,7 +56,7 @@ Candidate clickable elements are discovered via CSS selectors (`a`, `button`, `[
 
 ### Fragments (Visual Page Segmentation)
 
-Pages are decomposed into **Fragments** — DOM regions identified by XPath, bounding box, subtree size, and content hash. Two modes:
+Pages are decomposed into **Fragments** - DOM regions identified by XPath, bounding box, subtree size, and content hash. Two modes:
 
 - **Landmark** (default): fast DOM-based extraction
 - **VIPS**: vision-based page segmentation with multi-pass decreasing thresholds
@@ -77,7 +77,7 @@ The Form Handler detects and fills forms with smart value generation:
 | Strategy | Description |
 |----------|-------------|
 | Default (BFS/DFS) | Deterministic traversal using fragment-based prioritization |
-| `adaptive` | **Exp3.1** multi-armed bandit — balances exploitation (known-good actions) with exploration (untried actions) via importance-weighted probability sampling. Rewards based on new state discovery. |
+| `adaptive` | **Exp3.1** multi-armed bandit - balances exploitation (known-good actions) with exploration (untried actions) via importance-weighted probability sampling. Rewards based on new state discovery. |
 
 ## Browser Management
 
