@@ -132,59 +132,57 @@ All agent modes support `--source` for source-aware analysis and store session a
 
 ## Gallery
 
-<Columns cols={3}>
-  <Tile href="/getting-started/overview" title="Overview" description="Architecture, scanning paradigms, and reading guide" icon="telescope">
-    <img src="/images/vigolium-logo-small.png" alt="Vigolium Overview" />
-  </Tile>
-  <Tile href="/getting-started/getting-started" title="Getting Started" description="Install, run your first scan, and understand results" icon="rocket">
-    <img src="/images/vigolium-cli-scan-1.png" alt="Getting Started" />
-  </Tile>
-  <Tile href="/getting-started/configuration" title="Configuration" description="Layered config system, profiles, and environment variables" icon="gear">
-    <img src="/images/vigolium-cli-scan-2.png" alt="Configuration" />
-  </Tile>
-  <Tile href="/native-scan/scanning-modes-overview" title="Scanning Modes" description="Compare all native scanning modes and strategies" icon="radar">
-    <img src="/images/vigolium-native-scan.png" alt="Scanning Modes" />
-  </Tile>
-  <Tile href="/native-scan/strategies" title="Strategies" description="Lite, balanced, deep, and whitebox presets" icon="sliders">
-    <img src="/images/vigolium-native-scan.png" alt="Strategies" />
-  </Tile>
-  <Tile href="/native-scan/authentication" title="Authentication" description="Multi-session auth, IDOR testing, and login flows" icon="lock">
-    <img src="/images/vigolium-cli-scan-1.png" alt="Authentication" />
-  </Tile>
-  <Tile href="/native-scan/phases/discovery" title="Discovery (Deparos)" description="Adaptive content discovery with soft-404 detection" icon="magnifying-glass">
-    <img src="/images/vigolium-native-scan.png" alt="Discovery" />
-  </Tile>
-  <Tile href="/native-scan/phases/spidering" title="Spidering (Spitolas)" description="Browser-based Chromium crawler with CDP capture" icon="spider">
-    <img src="/images/vigolium-native-scan.png" alt="Spidering" />
-  </Tile>
-  <Tile href="/native-scan/phases/audit" title="Audit" description="Active/passive vulnerability scanning with 215 modules" icon="shield-halved">
-    <img src="/images/vigolium-native-scan.png" alt="Audit" />
-  </Tile>
-  <Tile href="/agentic-scan/agent-mode" title="Agent Mode" description="AI-powered scanning with autonomous agents" icon="brain">
-    <img src="/images/vigolium-agentic-scan.png" alt="Agent Mode" />
-  </Tile>
-  <Tile href="/agentic-scan/autopilot" title="Autopilot" description="Autonomous AI-driven vulnerability scanning" icon="robot">
-    <img src="/images/vigolium-agentic-scan.png" alt="Autopilot" />
-  </Tile>
-  <Tile href="/agentic-scan/swarm" title="Swarm" description="AI-guided targeted or full-scope scanning" icon="users">
-    <img src="/images/vigolium-agentic-scan.png" alt="Swarm" />
-  </Tile>
-  <Tile href="/server-mode/running-the-server" title="Server Mode" description="REST API server with Swagger UI and traffic ingestion" icon="server">
-    <img src="/images/vigolium-ui-dashboard-1.png" alt="Server Mode" />
-  </Tile>
-  <Tile href="/getting-started/output-and-reporting" title="Output & Reporting" description="Console, JSON, JSONL, and HTML report formats" icon="file-export">
-    <img src="/images/vigolium-static-report-1.png" alt="Output & Reporting" />
-  </Tile>
-  <Tile href="/customization/writing-extensions" title="Writing Extensions" description="Custom JS modules and hooks via embedded engine" icon="code">
-    <img src="/images/vigolium-cli-scan-2.png" alt="Writing Extensions" />
-  </Tile>
-  <Tile href="/guides/whitebox-scanning" title="Whitebox Scanning" description="Source-aware scanning with route extraction and SAST" icon="book-open">
-    <img src="/images/vigolium-native-scan.png" alt="Whitebox Scanning" />
-  </Tile>
-  <Tile href="/guides/ci-cd-integration" title="CI/CD Integration" description="Integrate Vigolium into your CI/CD pipeline" icon="circle-nodes">
-    <img src="/images/vigolium-cli-scan-1.png" alt="CI/CD Integration" />
-  </Tile>
-  <Tile href="/api-overview" title="REST API Reference" description="Full API documentation with Swagger UI" icon="plug">
-    <img src="/images/vigolium-ui-dashboard-2.png" alt="REST API Reference" />
-  </Tile>
-</Columns>
+<Frame caption="Overview">
+  <img src="/images/vigolium-logo-small.png" alt="Vigolium Overview" />
+</Frame>
+<Frame caption="Getting Started">
+  <img src="/images/vigolium-cli-scan-1.png" alt="Getting Started" />
+</Frame>
+<Frame caption="Configuration">
+  <img src="/images/vigolium-cli-scan-2.png" alt="Configuration" />
+</Frame>
+<Frame caption="Scanning Modes">
+  <img src="/images/vigolium-native-scan.png" alt="Scanning Modes" />
+</Frame>
+<Frame caption="Strategies">
+  <img src="/images/vigolium-native-scan.png" alt="Strategies" />
+</Frame>
+<Frame caption="Authentication">
+  <img src="/images/vigolium-cli-scan-1.png" alt="Authentication" />
+</Frame>
+<Frame caption="Discovery (Deparos)">
+  <img src="/images/vigolium-native-scan.png" alt="Discovery" />
+</Frame>
+<Frame caption="Spidering (Spitolas)">
+  <img src="/images/vigolium-native-scan.png" alt="Spidering" />
+</Frame>
+<Frame caption="Audit">
+  <img src="/images/vigolium-native-scan.png" alt="Audit" />
+</Frame>
+<Frame caption="Agent Mode">
+  <img src="/images/vigolium-agentic-scan.png" alt="Agent Mode" />
+</Frame>
+<Frame caption="Autopilot">
+  <img src="/images/vigolium-agentic-scan.png" alt="Autopilot" />
+</Frame>
+<Frame caption="Swarm">
+  <img src="/images/vigolium-agentic-scan.png" alt="Swarm" />
+</Frame>
+<Frame caption="Server Mode">
+  <img src="/images/vigolium-ui-dashboard-1.png" alt="Server Mode" />
+</Frame>
+<Frame caption="Output & Reporting">
+  <img src="/images/vigolium-static-report-1.png" alt="Output & Reporting" />
+</Frame>
+<Frame caption="Writing Extensions">
+  <img src="/images/vigolium-cli-scan-2.png" alt="Writing Extensions" />
+</Frame>
+<Frame caption="Whitebox Scanning">
+  <img src="/images/vigolium-native-scan.png" alt="Whitebox Scanning" />
+</Frame>
+<Frame caption="CI/CD Integration">
+  <img src="/images/vigolium-cli-scan-1.png" alt="CI/CD Integration" />
+</Frame>
+<Frame caption="REST API Reference">
+  <img src="/images/vigolium-ui-dashboard-2.png" alt="REST API Reference" />
+</Frame>
