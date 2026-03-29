@@ -160,7 +160,7 @@
       "anchors": [
         {
           "anchor": "Vigolium Cloud",
-          "href": "https://github.com/vigolium",
+          "href": "https://www.vigolium.com/#cloud",
           "icon": "bolt"
         }
       ]
@@ -169,14 +169,14 @@
   "navbar": {
     "links": [
       {
-        "label": "Github",
-        "href": "https://github.com/vigolium"
+        "label": "Website",
+        "href": "https://www.vigolium.com/"
       }
     ],
     "primary": {
       "type": "button",
       "label": "Vigolium Cloud",
-      "href": "https://github.com/vigolium"
+      "href": "https://www.vigolium.com/#cloud"
     }
   },
   "contextual": {
@@ -192,6 +192,7 @@
   },
   "footer": {
     "socials": {
+      "website": "https://www.vigolium.com/",
       "twitter": "https://x.com/j3ssie",
       "github": "https://github.com/vigolium",
       "x": "https://x.com/j3ssie",
