@@ -4,52 +4,30 @@ description: "Vigolium is a high-fidelity web vulnerability scanner written in G
 icon: "telescope"
 ---
 
-<Frame caption="Vigolium Workbench Dashboard">
-  <img src="/images/vigolium-main-workbench.png" alt="Vigolium Workbench Dashboard" />
+<Frame caption="Vigolium Workbench — scan overview with severity breakdown and finding details">
+  <img src="/images/vigolium-main-workbench.png" alt="Vigolium Workbench showing scan overview with severity breakdown and individual finding details" />
 </Frame>
 
+Vigolium is a high-fidelity web vulnerability scanner that fuses agentic AI with native speed, modularity, and precision. It combines deterministic multi-phase scanning with AI-driven autonomous analysis to deliver comprehensive security coverage — from injection flaws and access control issues to framework-specific vulnerabilities and blind out-of-band attacks.
 
-Vigolium can operate as a CLI tool for one-off scans, as a persistent REST API server that ingests live traffic, or as a standalone ingestor client that forwards traffic to a running server. All scan data is project-scoped for multi-tenancy support. Module: `github.com/vigolium/vigolium`, requires Go 1.26+.
+The platform is built around three key components that work together to provide a complete vulnerability scanning solution.
 
-## Operating Modes
+## <Icon icon="puzzle-piece" /> Key Components
 
-| Mode | Binary | Description |
-|------|--------|-------------|
-| **CLI Scanner** | `vigolium scan` | Run scans directly from the command line against targets, input files (OpenAPI, Postman, Burp, cURL, HAR), or source code paths. |
-| **Server Mode** | `vigolium server` | Launch a REST API server with Swagger UI. Ingest traffic, trigger scans, query findings, and run agent sessions over HTTP. |
-| **Ingestor Client** | `vigolium-ingestor` | Lightweight client that captures and forwards HTTP traffic to a running Vigolium server for analysis. |
+<Columns cols={3}>
+  <Card title="Vigolium CLI" icon="terminal">
+    The core scanning engine. Handles all scanning logic, module execution, and heavy lifting — from content discovery and browser-based spidering to active fuzzing and agentic AI scanning.
+  </Card>
+  <Card title="Vigolium Workbench" icon="desktop">
+    A self-hosted dashboard for visualizing scan results, managing projects, and tracking findings across your infrastructure. Deploy it on your own servers for full control over your data.
+  </Card>
+  <Card title="Vigolium Console" icon="cloud">
+    A cloud-based solution that provides managed scanning, team collaboration, and centralized reporting without the overhead of self-hosting.
+  </Card>
+</Columns>
 
-## Scanning Paradigms
 
-### Native Scan
-
-The native scan pipeline is fully deterministic -pure Go, no AI involvement. Requests flow through a fixed sequence of phases, each handling a distinct stage of reconnaissance or testing.
-
-**Phases (in order):**
-
-```
-Heuristics -> External Harvesting -> Spidering -> SAST -> Discovery -> KnownIssueScan -> Audit -> Extension
-```
-
-| Phase | Purpose |
-|-------|---------|
-| Heuristics | Lightweight fingerprinting and technology detection |
-| External Harvesting | Wayback Machine and other passive source enumeration |
-| Spidering | Active crawling, JS analysis, link and form extraction |
-| SAST | Static analysis of source code (when `--source` is provided) |
-| Discovery | Endpoint and content discovery via wordlists |
-| KnownIssueScan | Checks for known CVEs and common misconfigurations |
-| Audit | Core vulnerability testing -injection, XSS, SSRF, etc. |
-| Extension | User-supplied JavaScript scanning extensions |
-
-**Strategies** control which phases run and how aggressively:
-
-| Strategy | Behavior |
-|----------|----------|
-| Lite | Fast surface-level scan; skips heavy crawling and discovery |
-| Balanced | Default. Runs all phases with sensible limits |
-| Deep | Exhaustive scanning with higher limits and broader wordlists |
-| Whitebox | Source-aware scanning with route extraction and SAST integration |
+## <Icon icon="radar" /> Scanning Mode
 
 ### Agentic Scan
 
@@ -59,130 +37,133 @@ Agentic scanning uses AI agents to drive or augment the scanning process. Invoke
 |------|---------|-------------|
 | **Query** | `vigolium agent query` | Single-shot prompt execution. Good for code review, endpoint discovery, secret detection. No network scanning. |
 | **Autopilot** | `vigolium agent autopilot` | The AI agent drives the CLI autonomously through a sandboxed terminal (ACP protocol). It can run scans, inspect results, and iterate. |
-| **Swarm** | `vigolium agent swarm` | Multi-phase pipeline where native Go handles heavy lifting and AI intervenes at checkpoints -planning attacks, triaging results, and generating custom JS scanner extensions. |
+| **Swarm** | `vigolium agent swarm` | Multi-phase pipeline where native Go handles heavy lifting and AI intervenes at checkpoints — planning attacks, triaging results, and generating custom JS scanner extensions. |
 
 All agent modes support `--source` for source-aware analysis and store session artifacts (plans, extensions, output) in a configurable sessions directory.
 
-## Architecture at a Glance
 
-```
-                          +------------------+
-                          |   Input Sources   |
-                          | curl/OpenAPI/Burp |
-                          |  HAR/Postman/URL  |
-                          +--------+---------+
-                                   |
-                    +--------------+--------------+
-                    |                             |
-              vigolium scan                 vigolium server
-                    |                             |
-                    v                             v
-            +---------------+           +-----------------+
-            |  Scope Filter |           | REST API (Fiber)|
-            +-------+-------+           +--------+--------+
-                    |                             |
-                    +-------------+---------------+
-                                  |
-                    +-------------+-------------+
-                    |                           |
-              Native Scan                 Agentic Scan
-                    |                           |
-         +----------+----------+      +---------+---------+
-         |  Executor (Workers) |      |   Agent Engine    |
-         |  Rate Limiter       |      |   ACP / Terminal  |
-         +----------+----------+      |   Prompt Templates|
-                    |                 +---------+---------+
-         +----------+----------+                |
-         |  Module Registry    |      +---------+---------+
-         |  127 Active Modules |      | AI Backend        |
-         |   83 Passive Modules|      | Claude/Codex/     |
-         +----------+----------+      | Gemini/OpenCode   |
-                    |                 +---------+---------+
-                    +-------------+---------------+
-                                  |
-                    +-------------+-------------+
-                    |       Results Store       |
-                    |  SQLite / PostgreSQL      |
-                    |  HTML / JSONL / Console   |
-                    +---------------------------+
-```
+### Native Scan
 
-## Reading Guide
+Deterministic, multi-phase vulnerability scanning via `vigolium scan`. Fast, modular, and repeatable — runs content discovery, browser spidering, SPA crawling, SAST, and active/passive audit phases with **215 scanner modules** (130 active, 85 passive).
 
-| I want to... | Go to |
-|--------------|-------|
-| Get up and running quickly | [getting-started](/getting-started/getting-started) |
-| Understand the native scan pipeline | [native-scan/how-it-works](/native-scan/how-it-works) |
-| Choose a scanning strategy | [native-scan/strategies](/native-scan/strategies) |
-| Learn about individual scan phases | [native-scan/phases/](/native-scan/phases/) (discovery, spidering, audit, extension, spa) |
-| Explore agentic scanning | [agentic-scan/agent-mode](/agentic-scan/agent-mode) |
-| Use Autopilot mode | [agentic-scan/autopilot](/agentic-scan/autopilot) |
-| Use Swarm mode | [agentic-scan/swarm](/agentic-scan/swarm) |
-| Use Query mode | [agentic-scan/query](/agentic-scan/query) |
-| Run Vigolium as a server | [server-mode/](/server-mode/) |
-| Configure scans and settings | [configuration](/getting-started/configuration) |
-| Format and export results | [output-and-reporting](/getting-started/output-and-reporting) |
-| Write custom JS extensions | [customization/writing-extensions](/customization/writing-extensions) |
-| Build from source | [development/building](/development/building) |
-| Develop new scanner modules | [development/developing-modules](/development/developing-modules) |
-| Browse the REST API | [api-references/](/api-references/) |
-| Manage projects (multi-tenancy) | [projects](/others/projects) |
-| Debug issues | [troubleshooting](/troubleshooting) |
+| Category | Coverage |
+|----------|----------|
+| **Injection** | XSS (reflected, DOM-based, SSR hydration), SQL injection (error-based, boolean/time-blind), NoSQL injection, SSTI/CSTI, CRLF injection, command injection, XXE/SAML, prototype pollution |
+| **Access Control** | CSRF, IDOR, authorization bypass, mass assignment, forbidden bypass, HTTP method tampering |
+| **File & Path** | LFI, path traversal, file upload flaws, directory listing, backup/sensitive file discovery, path normalization bypass |
+| **API & Protocol** | GraphQL introspection, SSRF (direct & blind), open redirect, HTTP request smuggling, JWT vulnerabilities, JSONP callback, WebSocket security, race conditions |
+| **Framework-Specific** | Spring Boot, Django, Laravel, Rails, Express, Next.js, Nuxt, Remix, ASP.NET/Blazor, Flask, FastAPI |
+| **CMS** | WordPress (XML-RPC, user enum, AJAX exposure), Drupal, Joomla, CMS installer exposure |
+| **Cloud & Infra** | Firebase (RTDB, storage, auth, functions), cloud storage listing/takeover, default credentials, web cache poisoning, CORS misconfiguration |
+| **Out-of-Band** | Blind vulnerabilities via OAST callbacks (blind SSRF, blind SSTI, OAST probes) |
+
+---
+
+## <Icon icon="terminal" /> Vigolium CLI
+
+The CLI is the heart of Vigolium, powering all scanning operations with two complementary modes:
+
+### CLI Highlights
+
+- **Value-aware mutation** — classify parameter values by semantic type and generate intelligent mutations
+- **Multi-phase pipeline** — external harvesting, content discovery, SPA crawling, and audit controlled by strategy presets
+- **Scanning profiles** — bundle strategy, pace, scope, and module config into a single YAML file
+- **Multiple input formats** — URLs, OpenAPI/Swagger, Postman, Burp Suite, cURL, Nuclei JSONL
+- **Browser-based spider** — Chromium-driven crawler with SPA support, form filling, and JS analysis
+- **Multi-session authentication** — inline sessions, session files, or full auth configs with login flows and token extraction
+- **JavaScript extensions** — custom modules and hooks via embedded JS engine
+- **Source code awareness** — link repos to hostnames for source-aware scanning with SAST integration
+- **Concurrent architecture** — configurable worker pool with per-host rate limiting and hybrid queue
+- **HTML reports** — self-contained HTML reports with sortable/filterable tables
+- **API server mode** — REST API with Swagger UI, multi-format ingestion, transparent HTTP proxy
+
+---
+
+## <Icon icon="desktop" /> Vigolium Workbench
+
+A self-hosted web dashboard that provides a visual interface for managing and analyzing your scan data. Deploy Workbench on your own infrastructure to maintain complete control over your vulnerability data while giving your team an intuitive way to:
+
+- Browse and filter scan findings with severity breakdown per project
+- Track vulnerability trends across repositories and scan history
+- Manage multiple projects with multi-tenancy support
+- View detailed request/response evidence for each finding
+
+<Columns cols={2}>
+  <Frame caption="Project overview with scan summary">
+    <img src="/images/vigolium-ui-dashboard-1.png" alt="Workbench project overview showing scan summary and severity counts" />
+  </Frame>
+  <Frame caption="Findings list with filtering options">
+    <img src="/images/vigolium-ui-dashboard-2.png" alt="Workbench findings list with severity filters and search" />
+  </Frame>
+  <Frame caption="Detailed finding view with request/response evidence">
+    <img src="/images/vigolium-ui-dashboard-3.png" alt="Workbench detailed finding view showing HTTP request and response evidence" />
+  </Frame>
+  <Frame caption="Scan history and trend tracking">
+    <img src="/images/vigolium-ui-dashboard-4.png" alt="Workbench scan history view with vulnerability trend tracking" />
+  </Frame>
+</Columns>
+
+<Columns cols={2}>
+  <Frame caption="HTML report — summary with severity chart">
+    <img src="/images/vigolium-static-report-1.png" alt="Self-contained HTML report showing vulnerability summary with severity chart" />
+  </Frame>
+  <Frame caption="HTML report — sortable findings table">
+    <img src="/images/vigolium-static-report-2.png" alt="Self-contained HTML report with sortable and filterable findings table" />
+  </Frame>
+</Columns>
+
+---
+
+## <Icon icon="cloud" /> Vigolium Console
+
+A cloud-based solution for teams that want the power of Vigolium without managing infrastructure. Console provides managed scanning, centralized reporting, and team collaboration out of the box — so you can focus on fixing vulnerabilities instead of maintaining tooling.
+
+<Callout icon="rocket" color="#FFC107" iconType="regular">
+  Interested in Vigolium Console? [Request a Demo](https://www.vigolium.com/request-demo) to see it in action.
+</Callout>
 
 
-## Gallery
+<Columns cols={2}>
+<Frame caption="Native scan results in Vigolium Console">
+  <img src="/images/vigolium-native-scan.png" alt="Vigolium Console native scan view" />
+</Frame>
 
-<Frame caption="Overview">
-  <img src="/images/vigolium-logo-small.png" alt="Vigolium Overview" />
+<Frame caption="Agentic scan results in Vigolium Console">
+  <img src="/images/vigolium-agentic-scan.png" alt="Vigolium Console agentic scan view" />
 </Frame>
-<Frame caption="Getting Started">
-  <img src="/images/vigolium-cli-scan-1.png" alt="Getting Started" />
+</Columns>
+
+
+<Columns cols={2}>
+<Frame caption="Project list with severity breakdown per repository">
+  <img src="/images/vigolium-opensource-audit-list.png" alt="Open-source audit project list" />
 </Frame>
-<Frame caption="Configuration">
-  <img src="/images/vigolium-cli-scan-2.png" alt="Configuration" />
+
+<Frame caption="Detailed findings view for an individual project">
+  <img src="/images/vigolium-opensource-audit-blur.png" alt="Open-source audit findings detail" />
 </Frame>
-<Frame caption="Scanning Modes">
-  <img src="/images/vigolium-native-scan.png" alt="Scanning Modes" />
-</Frame>
-<Frame caption="Strategies">
-  <img src="/images/vigolium-native-scan.png" alt="Strategies" />
-</Frame>
-<Frame caption="Authentication">
-  <img src="/images/vigolium-cli-scan-1.png" alt="Authentication" />
-</Frame>
-<Frame caption="Discovery (Deparos)">
-  <img src="/images/vigolium-native-scan.png" alt="Discovery" />
-</Frame>
-<Frame caption="Spidering (Spitolas)">
-  <img src="/images/vigolium-native-scan.png" alt="Spidering" />
-</Frame>
-<Frame caption="Audit">
-  <img src="/images/vigolium-native-scan.png" alt="Audit" />
-</Frame>
-<Frame caption="Agent Mode">
-  <img src="/images/vigolium-agentic-scan.png" alt="Agent Mode" />
-</Frame>
-<Frame caption="Autopilot">
-  <img src="/images/vigolium-agentic-scan.png" alt="Autopilot" />
-</Frame>
-<Frame caption="Swarm">
-  <img src="/images/vigolium-agentic-scan.png" alt="Swarm" />
-</Frame>
-<Frame caption="Server Mode">
-  <img src="/images/vigolium-ui-dashboard-1.png" alt="Server Mode" />
-</Frame>
-<Frame caption="Output & Reporting">
-  <img src="/images/vigolium-static-report-1.png" alt="Output & Reporting" />
-</Frame>
-<Frame caption="Writing Extensions">
-  <img src="/images/vigolium-cli-scan-2.png" alt="Writing Extensions" />
-</Frame>
-<Frame caption="Whitebox Scanning">
-  <img src="/images/vigolium-native-scan.png" alt="Whitebox Scanning" />
-</Frame>
-<Frame caption="CI/CD Integration">
-  <img src="/images/vigolium-cli-scan-1.png" alt="CI/CD Integration" />
-</Frame>
-<Frame caption="REST API Reference">
-  <img src="/images/vigolium-ui-dashboard-2.png" alt="REST API Reference" />
-</Frame>
+</Columns>
+
+---
+
+## <Icon icon="compass" /> Where to Go Next
+
+| I want to... | Start here |
+|--------------|------------|
+| Get up and running quickly | [Getting Started](/getting-started/getting-started) |
+| Understand how native scanning works | [How It Works](/native-scan/how-it-works) |
+| Pick the right scanning strategy | [Strategies](/native-scan/strategies) |
+| Dive into individual scan phases | [Phases](/native-scan/phases/) — discovery, spidering, audit, extension, SPA |
+| Try agentic scanning | [Agent Mode](/agentic-scan/agent-mode) |
+| Let AI drive scans autonomously | [Autopilot](/agentic-scan/autopilot) |
+| Run multi-phase AI + native pipelines | [Swarm](/agentic-scan/swarm) |
+| Run one-shot AI queries | [Query](/agentic-scan/query) |
+| Run Vigolium as an API server | [Server Mode](/server-mode/) |
+| Tweak scan settings | [Configuration](/getting-started/configuration) |
+| Export and format results | [Output & Reporting](/getting-started/output-and-reporting) |
+| Write custom JS extensions | [Writing Extensions](/customization/writing-extensions) |
+| Browse the REST API | [API References](/api-references/) |
+
+---
+
+For any inquiries, feel free to contact us at [contact@vigolium.com](mailto:contact@vigolium.com).

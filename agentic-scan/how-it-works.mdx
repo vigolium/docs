@@ -11,9 +11,10 @@ icon: "brain"
 
 ## What is Agentic Scanning
 
-Agentic scanning uses AI agents to assist or drive the vulnerability scanning process. Unlike Vigolium's native scanning pipeline -where deterministic Go modules execute fixed detection logic against HTTP traffic -agentic scanning leverages LLMs to:
+Agentic scanning uses AI agents to assist or drive the vulnerability scanning process. Unlike Vigolium's native scanning pipeline — where deterministic Go modules execute fixed detection logic against HTTP traffic — agentic scanning leverages LLMs to:
 
 - **Analyze source code** for routes, authentication flows, and vulnerability sinks
+- **Audit source code in depth** — perform thorough security code audits that identify business logic flaws, data flow issues, and framework misconfigurations beyond what static analysis tools catch
 - **Plan attacks** by selecting modules and generating targeted scan strategies
 - **Generate custom payloads** as JavaScript extensions tailored to specific endpoints
 - **Triage results** to separate true positives from false positives
@@ -22,25 +23,40 @@ Native scanning and agentic scanning are complementary. In swarm mode, for examp
 
 ## Communication Protocols
 
-Vigolium integrates with coding agents through protocol-specific backends. Each protocol offers different levels of tool access and capability:
+Vigolium integrates with coding agents through two protocol categories: **agent SDK protocols** that give the AI full tool access, and **native LLM calls** that invoke LLM APIs directly without an agent subprocess.
+
+### Agent SDK Protocols
+
+These protocols launch a coding agent CLI as a subprocess, giving the AI access to filesystem and shell tools:
 
 | Protocol | Tool Access | Best For |
 |----------|-------------|----------|
 | **`sdk`** | Full CLI tools (Read, Grep, Glob, Bash, Edit, Write) | Default; highest output quality |
-| **`acp`** | ReadTextFile only | Terminal/autopilot modes; warm sessions |
 | **`codex-sdk`** | Full tools (JSON-RPC v2) | OpenAI Codex CLI |
 | **`opencode-sdk`** | Full tools (REST API + SSE streaming) | OpenCode agent |
-| **`pipe`** | None (text only) | Legacy fallback; any CLI tool |
+| **`pipe`** | None (text only) | Simple fallback; any CLI tool |
 
-**SDK (Claude Agent SDK)** is the recommended default. It launches the `claude` CLI as a subprocess and communicates via JSON-lines, giving the agent access to all standard Claude Code tools. This produces significantly higher output quality than ACP, which only exposes `ReadTextFile`.
+**SDK (Claude Agent SDK)** is the recommended default. It launches the `claude` CLI as a subprocess and communicates via JSON-lines, giving the agent access to all standard Claude Code tools. This produces the highest output quality since the agent can read files, search code, and execute commands autonomously.
 
-**ACP (Agent Communication Protocol)** provides bidirectional structured communication with two interaction patterns:
-- **Terminal execution** (autopilot): The agent receives a sandboxed terminal and autonomously runs `vigolium` commands.
-- **Prompt/response** (query, swarm checkpoints): Vigolium sends a rendered prompt and receives structured JSON output.
+**Codex-SDK** and **OpenCode-SDK** are native protocol integrations for their respective coding agent CLIs, providing full tool access through their own protocols.
 
-**Codex-SDK** and **OpenCode-SDK** are native protocol integrations for their respective coding agent CLIs, providing full tool access without going through ACP.
+**Pipe** is the simplest fallback — prompt piped to stdin, output read from stdout. Works with any CLI tool but provides no tool access.
 
-**Pipe** is the simplest fallback - prompt piped to stdin, output read from stdout. Works with any CLI tool but provides no tool access.
+### Native LLM Calls
+
+For tasks that don't require tool access — such as extension validation, triage classification, or JS extension agent calls — Vigolium can call LLM APIs directly via the `pkg/agent/llm` package. This avoids the overhead of launching an agent subprocess and is configured in `vigolium-configs.yaml`:
+
+```yaml
+agent:
+  llm:
+    provider: anthropic    # or "openai"
+    model: claude-sonnet-4-20250514
+    api_key_env: ANTHROPIC_API_KEY
+    cache_size: 100        # LRU cache entries (0 to disable)
+    cache_ttl: 300         # cache TTL in seconds
+```
+
+Native LLM calls support both Anthropic and OpenAI providers and are also exposed to JavaScript extensions via the `vigolium.agent` API.
 
 ## Agent Backends
 
@@ -56,13 +72,6 @@ agent:
       protocol: sdk
       model: sonnet
 
-    # Claude Code (ACP - for autopilot terminal mode)
-    claude-acp:
-      command: npx
-      args: ["-y", "@zed-industries/claude-agent-acp@latest"]
-      protocol: acp
-      model: sonnet
-
     # OpenAI Codex (native JSON-RPC v2)
     codex:
       command: codex
@@ -73,17 +82,11 @@ agent:
       command: opencode
       protocol: opencode-sdk
 
-    # Google Gemini (ACP)
-    gemini:
-      command: gemini
-      args: ["--experimental-acp"]
-      protocol: acp
-
-    # Cursor (ACP)
-    cursor:
-      command: cursor
-      args: ["acp"]
-      protocol: acp
+    # Any CLI tool (pipe fallback)
+    custom-cli:
+      command: my-agent
+      args: ["--json"]
+      protocol: pipe
 ```
 
 Each backend entry has:
@@ -92,7 +95,7 @@ Each backend entry has:
 |-------|-------------|
 | `command` | CLI command to launch the agent |
 | `args` | Arguments passed to the command |
-| `protocol` | `sdk`, `acp`, `codex-sdk`, `opencode-sdk`, or `pipe` |
+| `protocol` | `sdk`, `codex-sdk`, `opencode-sdk`, or `pipe` |
 | `model` | Model override (e.g., `sonnet`, `opus`, `haiku`, or full model ID) |
 | `description` | Human-readable description |
 | `mcp_servers` | Per-backend MCP server attachments |
@@ -102,23 +105,18 @@ Each backend entry has:
 | Backend | Command | Protocol | Notes |
 |---------|---------|----------|-------|
 | `claude` | `claude` | `sdk` | **Default.** Full tool access. Requires `claude` CLI in PATH |
-| `claude-acp` | `npx @zed-industries/claude-agent-acp` | `acp` | Limited to ReadTextFile. Supports terminal mode |
 | `claude-cli` | `claude -p` | `pipe` | Simple pipe mode fallback |
 | `codex` | `codex` | `codex-sdk` | Native JSON-RPC v2 protocol |
-| `codex-acp` | `codex app-server` | `acp` | Legacy ACP mode |
 | `opencode` | `opencode` | `opencode-sdk` | Native REST + SSE streaming |
-| `opencode-acp` | `opencode acp` | `acp` | ACP mode |
-| `gemini` | `gemini --experimental-acp` | `acp` | Google Gemini CLI |
-| `cursor` | `cursor acp` | `acp` | Cursor AI editor |
 
-The `--agent` flag overrides the default backend per-invocation. The `--agent-acp-cmd` flag provides an ad-hoc ACP backend without config.
+The `--agent` flag overrides the default backend per-invocation.
 
 ## Prompt Templates
 
 Prompt templates are Markdown files with YAML frontmatter that define the instructions sent to AI agents. They are stored in:
 
-- `~/.vigolium/prompts/` -user-defined templates
-- Embedded in the binary at `public/presets/prompts/` -built-in templates
+- `~/.vigolium/prompts/` — user-defined templates
+- Embedded in the binary at `public/presets/prompts/` — built-in templates
 
 Each template declares an **output schema** in its frontmatter, which tells the agent what structured format to return:
 
@@ -138,7 +136,7 @@ vigolium agent --list-templates
 
 ## Warm Session Pooling
 
-Agent backends can reuse subprocesses across multiple AI calls within a single run, eliminating the startup latency of launching a new agent process for each call. All protocol types (SDK, ACP, Codex-SDK, OpenCode-SDK) support warm session pooling via dedicated pool implementations.
+Agent backends can reuse subprocesses across multiple AI calls within a single run, eliminating the startup latency of launching a new agent process for each call. All SDK protocol types support warm session pooling via dedicated pool implementations.
 
 Configured in `vigolium-configs.yaml`:
 
@@ -169,10 +167,11 @@ Session directories persist after the run completes, allowing you to inspect wha
 
 The `--source` flag provides source code to agents across all modes. When provided, it enables:
 
-- **Route extraction** -the agent reads application code and discovers HTTP endpoints (Express routes, Spring controllers, Django URL patterns, etc.)
-- **Auth flow discovery** -the agent identifies login endpoints, session management, and token handling, producing a session configuration
-- **Custom extension generation** -the agent writes JavaScript scanner extensions targeting application-specific patterns
-- **SAST integration** -in swarm mode, ast-grep runs static analysis on the source and an AI sub-agent reviews the findings
+- **Route extraction** — the agent reads application code and discovers HTTP endpoints (Express routes, Spring controllers, Django URL patterns, etc.)
+- **Auth flow discovery** — the agent identifies login endpoints, session management, and token handling, producing a session configuration
+- **Custom extension generation** — the agent writes JavaScript scanner extensions targeting application-specific patterns
+- **Deep code audit** — with `--code-audit`, an AI agent performs a thorough security audit of the source code, identifying business logic flaws, data flow issues, and framework misconfigurations that static tools miss
+- **SAST integration** — in swarm mode, ast-grep runs static analysis on the source and an AI sub-agent reviews the findings
 
 The `--files` flag narrows the source context to specific files or directories (paths relative to `--source`), which is useful for large codebases where you want to focus the agent's attention.
 

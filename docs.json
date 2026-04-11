@@ -37,6 +37,19 @@
             ]
           },
           {
+            "group": "Agentic Scan",
+            "icon": "brain",
+            "pages": [
+              "agentic-scan/how-it-works",
+              "agentic-scan/agent-mode",
+              "agentic-scan/autopilot",
+              "agentic-scan/swarm",
+              "agentic-scan/query",
+              "agentic-scan/using-vigolium-in-your-agent"
+              
+            ]
+          },
+          {
             "group": "Native Scan",
             "icon": "radar",
             "pages": [
@@ -49,7 +62,7 @@
             ]
           },
           {
-            "group": "Phases",
+            "group": "Native Scanning Phases",
             "icon": "layer-group",
             "pages": [
               "native-scan/phases/discovery",
@@ -57,19 +70,6 @@
               "native-scan/phases/known-issue-scan",
               "native-scan/phases/audit",
               "native-scan/phases/extension"
-            ]
-          },
-          {
-            "group": "Agentic Scan",
-            "icon": "brain",
-            "pages": [
-              "agentic-scan/how-it-works",
-              "agentic-scan/agent-mode",
-              "agentic-scan/autopilot",
-              "agentic-scan/swarm",
-              "agentic-scan/query",
-              "agentic-scan/using-vigolium-in-your-agent"
-              
             ]
           },
           {
@@ -104,20 +104,11 @@
             ]
           },
           {
-            "group": "Benchmark",
-            "icon": "chart-bar",
-            "pages": [
-              "benchmark/benchmark-testing",
-              "benchmark/whitebox-sast",
-              "benchmark/whitebox-agent"
-            ]
-          },
-          {
             "group": "Others",
             "icon": "bug",
             "pages": [
-              "others/projects",
-              "others/troubleshooting"
+              "others/audit-report",
+              "others/api-references"
             ]
           }
         ]
@@ -159,9 +150,14 @@
     "global": {
       "anchors": [
         {
-          "anchor": "Vigolium Cloud",
-          "href": "https://www.vigolium.com/#cloud",
-          "icon": "bolt"
+          "anchor": "Schedule A Demo",
+          "href": "https://www.vigolium.com/request-demo",
+          "icon": "calendar"
+        },
+        {
+          "anchor": "See Vigolium Static Audit Showcases",
+          "href": "/others/audit-report",
+          "icon": "bug"
         }
       ]
     }
@@ -169,14 +165,14 @@
   "navbar": {
     "links": [
       {
-        "label": "Website",
-        "href": "https://www.vigolium.com/"
+        "label": "Contact Us",
+        "href": "mailto:contact@vigolium.com"
       }
     ],
     "primary": {
       "type": "button",
-      "label": "Vigolium Cloud",
-      "href": "https://www.vigolium.com/#cloud"
+      "label": "Vigolium Website",
+      "href": "https://www.vigolium.com/"
     }
   },
   "contextual": {

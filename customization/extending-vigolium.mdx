@@ -15,13 +15,12 @@ This guide covers every customization mechanism, explains when to use each one, 
 - [Extension Points at a Glance](#extension-points-at-a-glance)
 - [1. JavaScript Extensions](#1-javascript-extensions)
 - [2. YAML Extensions](#2-yaml-extensions)
-- [3. Go Modules](#3-go-modules)
-- [4. Custom Prompt Templates](#4-custom-prompt-templates)
-- [5. Scanning Profiles](#5-scanning-profiles)
-- [6. Scope Rules](#6-scope-rules)
-- [7. Pre-Hooks and Post-Hooks](#7-pre-hooks-and-post-hooks)
-- [8. Agent Backends](#8-agent-backends)
-- [9. Configuration Overrides](#9-configuration-overrides)
+- [3. Custom Prompt Templates](#3-custom-prompt-templates)
+- [4. Scanning Profiles](#4-scanning-profiles)
+- [5. Scope Rules](#5-scope-rules)
+- [6. Pre-Hooks and Post-Hooks](#6-pre-hooks-and-post-hooks)
+- [7. Agent Backends](#7-agent-backends)
+- [8. Configuration Overrides](#8-configuration-overrides)
 - [Decision Matrix](#decision-matrix)
 
 ---
@@ -32,13 +31,12 @@ This guide covers every customization mechanism, explains when to use each one, 
 |---|---|---|---|
 | [JavaScript Extensions](#1-javascript-extensions) | JavaScript | No | Custom active/passive checks with full API access |
 | [YAML Extensions](#2-yaml-extensions) | YAML | No | Declarative pattern matching, simple payload/matcher rules |
-| [Go Modules](#3-go-modules) | Go | Yes | High-performance checks, deep integration with internals |
-| [Prompt Templates](#4-custom-prompt-templates) | Markdown + Go templates | No | AI-driven code review, endpoint discovery, custom analysis |
-| [Scanning Profiles](#5-scanning-profiles) | YAML | No | Reusable scan presets (speed, modules, phases) |
-| [Scope Rules](#6-scope-rules) | YAML | No | Target filtering (hosts, paths, status codes, content types) |
-| [Pre/Post Hooks](#7-pre-hooks-and-post-hooks) | JS or YAML | No | Request mutation, finding suppression, severity escalation |
-| [Agent Backends](#8-agent-backends) | Any (subprocess) | No | Plugging in new AI models or custom CLI tools |
-| [Config Overrides](#9-configuration-overrides) | YAML | No | Tuning concurrency, rate limits, database, notifications |
+| [Prompt Templates](#3-custom-prompt-templates) | Markdown + Go templates | No | AI-driven code review, endpoint discovery, custom analysis |
+| [Scanning Profiles](#4-scanning-profiles) | YAML | No | Reusable scan presets (speed, modules, phases) |
+| [Scope Rules](#5-scope-rules) | YAML | No | Target filtering (hosts, paths, status codes, content types) |
+| [Pre/Post Hooks](#6-pre-hooks-and-post-hooks) | JS or YAML | No | Request mutation, finding suppression, severity escalation |
+| [Agent Backends](#7-agent-backends) | Any (subprocess) | No | Plugging in new AI models or custom CLI tools |
+| [Config Overrides](#8-configuration-overrides) | YAML | No | Tuning concurrency, rate limits, database, notifications |
 
 ---
 
@@ -241,134 +239,7 @@ See the full guide: [Writing Extensions](/customization/writing-extensions)
 
 ---
 
-## 3. Go Modules
-
-Go modules are the highest-performance extension point. They compile directly into the scanner binary, have full access to Go internals (HTTP client, deduplication, OAST, mutation engine), and run concurrently in the worker pool.
-
-### Module interfaces
-
-All modules implement the base `Module` interface:
-
-```go
-type Module interface {
-    ID() string
-    Name() string
-    Description() string
-    ShortDescription() string
-    ConfirmationCriteria() string
-    Severity() severity.Severity
-    Confidence() severity.Confidence
-    ScanScopes() ScanScope
-    CanProcess(ctx *httpmsg.HttpRequestResponse) bool
-}
-```
-
-**Active modules** add three scan methods (implement only the ones matching your declared `ScanScopes()`):
-
-```go
-type ActiveModule interface {
-    Module
-    AllowedInsertionPointTypes() InsertionPointTypeSet
-    ScanPerInsertionPoint(ctx, ip, httpClient, scanCtx) ([]*ResultEvent, error)
-    ScanPerRequest(ctx, httpClient, scanCtx) ([]*ResultEvent, error)
-    ScanPerHost(ctx, httpClient, scanCtx) ([]*ResultEvent, error)
-}
-```
-
-**Passive modules** analyze traffic without sending new requests:
-
-```go
-type PassiveModule interface {
-    Module
-    Scope() PassiveScanScope
-    ScanPerRequest(ctx, scanCtx) ([]*ResultEvent, error)
-    ScanPerHost(ctx, scanCtx) ([]*ResultEvent, error)
-}
-```
-
-### Creating a module
-
-1. Create a package under `pkg/modules/active/` or `pkg/modules/passive/`.
-2. Embed `modkit.BaseActiveModule` or `modkit.BasePassiveModule` for defaults.
-3. Implement scan methods for your declared scopes.
-4. Register in `pkg/modules/default_registry.go`.
-
-```go
-package my_check
-
-import (
-    "github.com/vigolium/vigolium/pkg/modules/modkit"
-    "github.com/vigolium/vigolium/pkg/output"
-    // ...
-)
-
-type Module struct {
-    modkit.BaseActiveModule
-}
-
-func New() *Module {
-    return &Module{
-        BaseActiveModule: modkit.NewBaseActiveModule(
-            "my-check",
-            "My Custom Check",
-            "Detailed description of what this checks",
-            "One-line summary",
-            "How the vulnerability is confirmed",
-            severity.High,
-            severity.Firm,
-            modkit.ScanScopeInsertionPoint,
-            modkit.AllParamTypes,
-        ),
-    }
-}
-
-func (m *Module) ScanPerInsertionPoint(
-    ctx *httpmsg.HttpRequestResponse,
-    ip httpmsg.InsertionPoint,
-    httpClient *http.Requester,
-    scanCtx *modkit.ScanContext,
-) ([]*output.ResultEvent, error) {
-    // Your scanning logic here
-    return nil, nil
-}
-```
-
-### Scan scope options
-
-| Scope | Invocation | Typical use |
-|---|---|---|
-| `ScanScopeInsertionPoint` | Once per parameter (URL param, body param, header, cookie, JSON key, path segment) | Injection vulnerabilities (XSS, SQLi, SSTI, command injection) |
-| `ScanScopeRequest` | Once per unique request | Request-level checks (missing headers, auth bypass, method manipulation) |
-| `ScanScopeHost` | Once per unique host | Host-level checks (TLS config, server fingerprinting, path discovery) |
-
-Scopes are a bitmask — you can combine them (e.g., `ScanScopeRequest | ScanScopeHost`).
-
-### Pros
-
-- **Maximum performance** — compiled Go, no interpreter overhead, runs in the concurrent worker pool.
-- **Full internal access** — HTTP client with middleware, deduplication manager, OAST callbacks, mutation engine, baseline caching.
-- **Type safety** — compile-time checks, IDE support, Go testing ecosystem.
-- **First-class integration** — same lifecycle as built-in modules, automatic pipeline wiring.
-
-### Cons
-
-- **Requires recompilation** — every change needs `make build`.
-- **Go knowledge required** — must understand Go, the module interfaces, and internal types.
-- **Slower iteration** — compile-test cycle is heavier than drop-in JS/YAML.
-- **Tighter coupling** — changes to internal APIs may require module updates.
-
-### When to use
-
-- Performance-critical checks that run on every request or insertion point.
-- Checks that need deep integration with Vigolium internals (OAST, mutation engine, dedup).
-- You're contributing to the core scanner or building a permanent module.
-- Checks requiring complex multi-step logic with full concurrency support.
-
-See the full guide: [Developing Modules](../development/developing-modules)
-
----
-
-## 4. Custom Prompt Templates
+## 3. Custom Prompt Templates
 
 Prompt templates drive Vigolium's agent mode. They're Markdown files with YAML frontmatter that define what an AI agent should analyze and how it should report results. Templates support Go template syntax and are automatically enriched with context from the database, module registry, and source code.
 
@@ -511,7 +382,7 @@ vigolium agent --prompt-template my-custom-review --repo /path/to/source --dry-r
 
 ---
 
-## 5. Scanning Profiles
+## 4. Scanning Profiles
 
 Profiles are YAML files that overlay on top of the main configuration. They bundle scanning strategy, pace, phase settings, and module selection into a reusable preset.
 
@@ -586,7 +457,7 @@ Profiles are resolved from `~/.vigolium/profiles/` or `public/presets/profiles/`
 
 ---
 
-## 6. Scope Rules
+## 5. Scope Rules
 
 Scope rules control what gets scanned. They filter at the host, path, status code, content type, and body level. You can define them in the config, via CLI flags, or programmatically from JS extensions.
 
@@ -658,7 +529,7 @@ vigolium.scan.setScope({
 
 ---
 
-## 7. Pre-Hooks and Post-Hooks
+## 6. Pre-Hooks and Post-Hooks
 
 Hooks wrap the scanning pipeline. Pre-hooks transform requests before modules process them. Post-hooks filter or modify findings after detection.
 
@@ -750,7 +621,7 @@ See the full guide: [Writing Extensions](/customization/writing-extensions)
 
 ---
 
-## 8. Agent Backends
+## 7. Agent Backends
 
 Agent backends are external processes that Vigolium invokes for AI-driven analysis. You can plug in any CLI tool that accepts a prompt and returns structured output.
 
@@ -840,7 +711,7 @@ agent:
 
 ---
 
-## 9. Configuration Overrides
+## 8. Configuration Overrides
 
 The main `vigolium-configs.yaml` is the central control plane for all scan behavior. Every aspect of the scanner — phases, pace, modules, database, notifications, and more — is configurable.
 
@@ -901,14 +772,13 @@ Use this table to quickly pick the right extension mechanism:
 |---|---|
 | Add a custom vulnerability check (simple patterns) | [YAML Extension](#2-yaml-extensions) |
 | Add a custom vulnerability check (complex logic) | [JS Extension](#1-javascript-extensions) |
-| Add a high-performance check compiled into the binary | [Go Module](#3-go-modules) |
-| Run AI code review with custom focus areas | [Prompt Template](#4-custom-prompt-templates) |
-| Create a reusable scan preset for my team | [Scanning Profile](#5-scanning-profiles) |
-| Restrict scanning to specific hosts/paths | [Scope Rules](#6-scope-rules) |
-| Inject auth headers into every request | [Pre-Hook](#7-pre-hooks-and-post-hooks) |
-| Suppress false positives across all modules | [Post-Hook](#7-pre-hooks-and-post-hooks) |
-| Use AI to confirm findings before reporting | [Post-Hook + agent API](#7-pre-hooks-and-post-hooks) |
-| Plug in a new AI model | [Agent Backend](#8-agent-backends) |
-| Tune concurrency and rate limits | [Config Override](#9-configuration-overrides) or [Profile](#5-scanning-profiles) |
-| Generate HTTP test inputs from source code | [Prompt Template](#4-custom-prompt-templates) (with `http_records` schema) |
-| Build an organization-specific scanner pipeline | Combine: [Profile](#5-scanning-profiles) + [Scope](#6-scope-rules) + [Hooks](#7-pre-hooks-and-post-hooks) + [Extensions](#1-javascript-extensions) |
+| Run AI code review with custom focus areas | [Prompt Template](#3-custom-prompt-templates) |
+| Create a reusable scan preset for my team | [Scanning Profile](#4-scanning-profiles) |
+| Restrict scanning to specific hosts/paths | [Scope Rules](#5-scope-rules) |
+| Inject auth headers into every request | [Pre-Hook](#6-pre-hooks-and-post-hooks) |
+| Suppress false positives across all modules | [Post-Hook](#6-pre-hooks-and-post-hooks) |
+| Use AI to confirm findings before reporting | [Post-Hook + agent API](#6-pre-hooks-and-post-hooks) |
+| Plug in a new AI model | [Agent Backend](#7-agent-backends) |
+| Tune concurrency and rate limits | [Config Override](#8-configuration-overrides) or [Profile](#4-scanning-profiles) |
+| Generate HTTP test inputs from source code | [Prompt Template](#3-custom-prompt-templates) (with `http_records` schema) |
+| Build an organization-specific scanner pipeline | Combine: [Profile](#4-scanning-profiles) + [Scope](#5-scope-rules) + [Hooks](#6-pre-hooks-and-post-hooks) + [Extensions](#1-javascript-extensions) |

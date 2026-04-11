@@ -4,30 +4,17 @@ description: "Install and use the vigolium-scanner skill with AI coding agents f
 icon: "plug"
 ---
 
-This guide explains how to install and use the `vigolium-scanner` skill (`public/skills/vigolium-scanner/`) with AI coding agents — Claude Code and OpenAI Codex — to operate the Vigolium CLI for web vulnerability scanning, security testing, and custom extension authoring.
+This guide explains how to install and use the `vigolium-scanner` skill with AI coding agents — Claude Code and OpenAI Codex — to operate the Vigolium CLI for web vulnerability scanning, security testing, and custom extension authoring.
 
----
+**Skill repository:** [github.com/vigolium/skills](https://github.com/vigolium/skills)
 
-## Table of Contents
+### Quick Install
 
-- [What the Skill Does](#what-the-skill-does)
-- [Skill Structure](#skill-structure)
-- [Installation](#installation)
-- [Usage Examples by Category](#usage-examples-by-category)
-  - [Scanning](#1-scanning)
-  - [Input Formats](#2-input-formats)
-  - [Phase Control](#3-phase-control)
-  - [Module Filtering](#4-module-filtering)
-  - [Server & Ingestion](#5-server--ingestion)
-  - [AI Agent Modes](#6-ai-agent-modes)
-  - [Traffic & Results Browsing](#7-traffic--results-browsing)
-  - [Data Management](#8-data-management)
-  - [Export & Reports](#9-export--reports)
-  - [Whitebox / Source-Aware Scanning](#10-whitebox--source-aware-scanning)
-  - [JavaScript Extensions](#11-javascript-extensions)
-  - [Configuration & Projects](#12-configuration--projects)
-- [Natural Language Examples](#natural-language-examples)
-- [Tips & Best Practices](#tips--best-practices)
+```bash
+bunx skills add vigolium/skills --skill vigolium-scanner --agent <agent-name> --yes
+```
+
+Replace `<agent-name>` with your agent (e.g., `claude-code`, `codex`).
 
 ---
 

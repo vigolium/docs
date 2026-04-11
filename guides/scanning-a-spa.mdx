@@ -41,13 +41,7 @@ vigolium scan -t https://spa.example.com --only spidering
 
 Vigolium requires a Chromium-based browser for spidering. On first use, it automatically downloads a compatible Chromium binary. No manual installation is needed in most cases.
 
-For environments where auto-download is not possible (air-gapped systems, containers), you can:
-
-1. Pre-install Chromium and point Vigolium to it via the `browser.executable_path` config option.
-2. Build an embedded binary that bundles Chromium:
-   ```bash
-   make deps-chrome && make build-embedded
-   ```
+For environments where auto-download is not possible (air-gapped systems, containers), pre-install Chromium and point Vigolium to it via the `browser.executable_path` config option.
 
 To verify the browser is available:
 

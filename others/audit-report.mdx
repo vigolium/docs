@@ -1,0 +1,52 @@
+---
+title: "Open-Source Audit Showcases"
+description: "Real vulnerability scan reports from popular open-source projects, powered by Vigolium's agentic scanning engine"
+icon: "bug"
+---
+
+Vigolium continuously scans popular open-source projects to validate detection coverage and demonstrate real-world results. These showcases are generated using Vigolium's full scanning pipeline — native modules, agentic analysis, and whitebox SAST — against publicly available codebases.
+
+## Showcase Dashboard
+
+Browse all scan results at [demo.vigolium.com/showcases](https://demo.vigolium.com/showcases).
+
+<Frame caption="Project list with severity breakdown per repository">
+  <img src="/images/vigolium-opensource-audit-list.png" alt="Open-source audit project list" />
+</Frame>
+
+<Frame caption="Detailed findings view for an individual project">
+  <img src="/images/vigolium-opensource-audit-blur.png" alt="Open-source audit findings detail" />
+</Frame>
+
+## Aggregate Results
+
+| Metric | Count |
+|--------|-------|
+| **Projects scanned** | 32 |
+| **Total findings** | 713 |
+| **Critical** | 11 |
+| **High** | 235 |
+| **Medium** | 467 |
+
+## What Gets Scanned
+
+Each project goes through multiple scanning phases:
+
+| Phase | Description |
+|-------|-------------|
+| **Native scan** | Deterministic module-based scanning across all active and passive modules |
+| **SAST** | Static analysis with route extraction, SARIF integration, and framework-aware taint tracking |
+| **Agentic analysis** | AI-driven review using Swarm mode for attack planning, triage, and custom extension generation |
+
+## How to Read the Reports
+
+Each showcase report includes:
+
+- **Severity rating** — Critical, High, Medium, or Informational
+- **Vulnerability type** — Mapped to CWE identifiers where applicable
+- **Affected endpoint or code path** — With request/response evidence for DAST findings and file/line references for SAST findings
+- **Confidence level** — Based on detection method (strict match, heuristic, or AI-assisted)
+
+<Note>
+Findings are from automated scans against public repositories. Some results may be informational or context-dependent. Always verify findings before acting on them.
+</Note>

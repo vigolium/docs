@@ -1,0 +1,56 @@
+---
+title: "API References"
+description: "Complete index of all Vigolium API reference pages — endpoints for scanning, findings, ingestion, agent control, and more."
+icon: "code"
+---
+
+Browse the full Vigolium API surface below. Each row links to a dedicated reference page with request/response details, parameters, and examples.
+
+**Base URL:** `http://localhost:9002` (default)
+
+## General
+
+| Category | Description | Reference |
+|----------|-------------|-----------|
+| **Overview** | Server startup, health checks, authentication, and common endpoints | [View →](/api-references/overview) |
+| **Authentication** | Bearer token auth, file-based user system, roles, and login | [View →](/api-references/authentication) |
+
+## Core Endpoints
+
+| Category | Description | Reference |
+|----------|-------------|-----------|
+| **Projects** | Multi-tenant data isolation — all scan data is scoped to a project | [View →](/api-references/projects) |
+| **Scan** | Single-target scans, scan management, history, pause/resume, and logs | [View →](/api-references/scan) |
+| **Findings** | List, retrieve, and delete vulnerability findings with filtering | [View →](/api-references/findings) |
+| **HTTP Records** | Request/response records with filtering, pagination, and sorting | [View →](/api-references/http-records) |
+| **Ingestion** | Import data via URLs, curl commands, HAR, OpenAPI, Burp, Postman | [View →](/api-references/ingestion) |
+
+## AI & Agent
+
+| Category | Description | Reference |
+|----------|-------------|-----------|
+| **Agent** | Query, autopilot, and swarm run modes with SSE streaming and OpenAI-compatible chat | [View →](/api-references/agent) |
+
+## Configuration & Scope
+
+| Category | Description | Reference |
+|----------|-------------|-----------|
+| **Config** | View and update server configuration with hot reload support | [View →](/api-references/config) |
+| **Scope** | Control which HTTP records are in scope for scanning | [View →](/api-references/scope) |
+| **Modules** | List active and passive scanner modules with search and tag filtering | [View →](/api-references/modules) |
+
+## Integrations & Extensions
+
+| Category | Description | Reference |
+|----------|-------------|-----------|
+| **Extensions** | Manage JavaScript and YAML extensions for custom scanning logic | [View →](/api-references/extensions) |
+| **Source Repos** | Link application source code to target hostnames for source-aware scanning | [View →](/api-references/source-repos) |
+| **GitHub** | OAuth-based GitHub integration for repository browsing and cloning | [View →](/api-references/github) |
+
+## Data & Diagnostics
+
+| Category | Description | Reference |
+|----------|-------------|-----------|
+| **Stats** | Aggregated statistics on HTTP records, modules, and findings | [View →](/api-references/stats) |
+| **OAST Interactions** | Out-of-band security testing interactions from interactsh callbacks | [View →](/api-references/oast-interactions) |
+| **Database** | Unified CRUD API for any database table with pagination and filtering | [View →](/api-references/database) |
