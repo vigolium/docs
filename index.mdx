@@ -31,20 +31,22 @@ The platform is built around three key components that work together to provide 
 
 ### Agentic Scan
 
-Agentic scanning uses AI agents to drive or augment the scanning process. Invoked via `vigolium agent <mode>`. Supports Claude, Codex, Gemini, and OpenCode backends.
+Agentic scanning uses AI agents to drive or augment the scanning process. Invoked via `vigolium agent <mode>`. All AI dispatch is routed through the in-process **olium** engine, which supports five providers: `codex-oauth`, `anthropic-api-key`, `claude-oauth`, `openai-api-key`, and `claude-code-cli`.
 
 | Mode | Command | Description |
 |------|---------|-------------|
 | **Query** | `vigolium agent query` | Single-shot prompt execution. Good for code review, endpoint discovery, secret detection. No network scanning. |
-| **Autopilot** | `vigolium agent autopilot` | The AI agent drives the CLI autonomously through a sandboxed terminal (ACP protocol). It can run scans, inspect results, and iterate. |
-| **Swarm** | `vigolium agent swarm` | Multi-phase pipeline where native Go handles heavy lifting and AI intervenes at checkpoints — planning attacks, triaging results, and generating custom JS scanner extensions. |
+| **Autopilot** | `vigolium agent autopilot` | Autonomous AI-driven pentest. The olium engine drives bash, file ops, and the vigolium CLI until it calls `halt_scan`. |
+| **Swarm** | `vigolium agent swarm` | 10-phase pipeline where native Go handles heavy lifting and AI intervenes at checkpoints — planning attacks, triaging results, generating custom JS scanner extensions. |
+| **Archon** | `vigolium agent archon` | Multi-phase whitebox security audit (lite / balanced / deep). Runs as a foreground audit driver or in the background alongside swarm/autopilot. |
+| **Olium** | `vigolium olium` / `vigolium ol` | Interactive TUI chat or one-shot non-interactive prompt — the underlying agent runtime. |
 
-All agent modes support `--source` for source-aware analysis and store session artifacts (plans, extensions, output) in a configurable sessions directory.
+All scan-oriented modes support `--source` for source-aware analysis and store session artifacts (plans, extensions, output) under `~/.vigolium/agent-sessions/`.
 
 
 ### Native Scan
 
-Deterministic, multi-phase vulnerability scanning via `vigolium scan`. Fast, modular, and repeatable — runs content discovery, browser spidering, SPA crawling, SAST, and active/passive audit phases with **215 scanner modules** (130 active, 85 passive).
+Deterministic, multi-phase vulnerability scanning via `vigolium scan`. Fast, modular, and repeatable — runs content discovery, browser spidering, SPA crawling, and active/passive `dynamic-assessment` phases with **235 scanner modules** (144 active, 91 passive).
 
 | Category | Coverage |
 |----------|----------|
@@ -72,7 +74,7 @@ The CLI is the heart of Vigolium, powering all scanning operations with two comp
 - **Browser-based spider** — Chromium-driven crawler with SPA support, form filling, and JS analysis
 - **Multi-session authentication** — inline sessions, session files, or full auth configs with login flows and token extraction
 - **JavaScript extensions** — custom modules and hooks via embedded JS engine
-- **Source code awareness** — link repos to hostnames for source-aware scanning with SAST integration
+- **Source-aware agentic scan** — pair `--source` with `swarm`, `autopilot`, or `archon` for code-context-aware AI scanning and audit
 - **Concurrent architecture** — configurable worker pool with per-host rate limiting and hybrid queue
 - **HTML reports** — self-contained HTML reports with sortable/filterable tables
 - **API server mode** — REST API with Swagger UI, multi-format ingestion, transparent HTTP proxy
@@ -158,6 +160,8 @@ A cloud-based solution for teams that want the power of Vigolium without managin
 | Let AI drive scans autonomously | [Autopilot](/agentic-scan/autopilot) |
 | Run multi-phase AI + native pipelines | [Swarm](/agentic-scan/swarm) |
 | Run one-shot AI queries | [Query](/agentic-scan/query) |
+| Audit source code in depth | [Archon Audit](/agentic-scan/archon-audit) |
+| Chat with the agent runtime | [Olium](/agentic-scan/olium) |
 | Run Vigolium as an API server | [Server Mode](/server-mode/) |
 | Tweak scan settings | [Configuration](/getting-started/configuration) |
 | Export and format results | [Output & Reporting](/getting-started/output-and-reporting) |

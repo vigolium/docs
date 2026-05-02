@@ -90,16 +90,17 @@ All queries (findings, HTTP records, stats, scans) return data scoped to the pro
 | POST | `/api/scan` | Trigger a background scan |
 | GET | `/api/scan/status` | Check scan status |
 | DELETE | `/api/scan` | Cancel a running scan |
-| GET | `/api/source-repos` | List source repos |
-| POST | `/api/source-repos` | Create a source repo |
-| GET | `/api/source-repos/:id` | Get a source repo |
-| PUT | `/api/source-repos/:id` | Update a source repo |
-| DELETE | `/api/source-repos/:id` | Delete a source repo |
 | POST | `/api/agent/run/query` | Single-shot agent prompt execution |
 | POST | `/api/agent/run/autopilot` | Autonomous AI-driven scanning session |
-| POST | `/api/agent/run/pipeline` | Multi-phase scanning pipeline |
+| POST | `/api/agent/run/swarm` | AI-guided multi-phase vulnerability scan |
 | GET | `/api/agent/status/list` | List agent runs |
 | GET | `/api/agent/status/:id` | Get agent run status (includes full result when completed) |
+| GET | `/api/agent/sessions` | Paginated session history |
+| GET | `/api/agent/sessions/:id/logs` | Tail or read `runtime.log` (SSE supported) |
+| POST | `/api/agent/chat/completions` | OpenAI-compatible chat completions |
+| POST | `/api/storage/upload-source` | Upload source archive to cloud storage |
+| GET | `/api/storage/results/:scan-uuid` | Download scan result bundle |
+| GET | `/api/diagnostics` | System readiness check |
 
 ## Scan Management via API
 

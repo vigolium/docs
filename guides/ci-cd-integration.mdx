@@ -43,21 +43,22 @@ Extract a summary of findings:
 jq '{name: .name, severity: .severity, url: .url}' results.jsonl
 ```
 
-## With Source Code (Whitebox)
+## With Source Code (Agent Mode)
 
-When the source code is available in the CI workspace, enable whitebox scanning for deeper coverage. This runs SAST route extraction via ast-grep and feeds discovered routes into the dynamic scanner:
+Source-aware analysis lives in agent mode now. When the source code is available in the CI workspace, run an AI-driven swarm with `--source` for route extraction and AI-generated extensions:
 
 ```bash
-vigolium scan -t $TARGET_URL --source . --strategy whitebox --format jsonl -o results.jsonl
+vigolium agent swarm -t $TARGET_URL --source . --intensity quick \
+  --format jsonl -o results.jsonl
 ```
 
-This is particularly effective in CI because the source code is always present in the checkout directory. See the [Whitebox Scanning guide](/guides/whitebox-scanning) for more details.
+This is particularly effective in CI because the source code is always present in the checkout directory.
 
 ## Agent Mode in CI
 
-### Code Review
+### Code Review (Query)
 
-Run an AI-powered security code review on the current source tree:
+Run an AI-powered security code review on the current source tree — single LLM call, predictable runtime:
 
 ```bash
 vigolium agent query --prompt-template security-code-review --source . --json
@@ -65,15 +66,29 @@ vigolium agent query --prompt-template security-code-review --source . --json
 
 This produces structured JSON output with findings that can be parsed and posted as PR comments.
 
-### Swarm with Discovery
+### Diff-Focused Review (Autopilot)
+
+Focus on changed code only — perfect for PR gates:
+
+```bash
+# GitHub PR diff (auto-fetches changed files via REST API)
+vigolium agent autopilot -t $TARGET_URL --source . \
+  --diff "https://github.com/$GITHUB_REPOSITORY/pull/$PR_NUMBER" \
+  --intensity quick --token-budget 200000
+
+# Last N commits
+vigolium agent autopilot -t $TARGET_URL --source . --last-commits 5 --intensity quick
+```
+
+### Full-Scope Swarm with Discovery
 
 For a more thorough AI-driven scan with automatic endpoint discovery:
 
 ```bash
-vigolium agent swarm -t $TARGET_URL --discover --timeout 20m
+vigolium agent swarm -t $TARGET_URL --discover --intensity balanced --max-duration 20m
 ```
 
-The `--timeout` flag ensures the scan does not run indefinitely in CI. The swarm mode coordinates multiple scan phases with AI-guided triage.
+The `--max-duration` flag ensures the scan does not run indefinitely in CI. Swarm coordinates planning, native scanning, and optional triage with `--triage`.
 
 ## Docker
 

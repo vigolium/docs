@@ -1,6 +1,6 @@
 ---
 title: "Customizing & Extending Vigolium"
-description: "Covers every customization mechanism in Vigolium, from JS and YAML extensions to scanning profiles and agent backends."
+description: "Covers every customization mechanism in Vigolium, from JS and YAML extensions to scanning profiles and the olium agent runtime."
 icon: "puzzle-piece"
 ---
 
@@ -19,7 +19,7 @@ This guide covers every customization mechanism, explains when to use each one, 
 - [4. Scanning Profiles](#4-scanning-profiles)
 - [5. Scope Rules](#5-scope-rules)
 - [6. Pre-Hooks and Post-Hooks](#6-pre-hooks-and-post-hooks)
-- [7. Agent Backends](#7-agent-backends)
+- [7. Agent Providers (Olium)](#7-agent-providers-olium)
 - [8. Configuration Overrides](#8-configuration-overrides)
 - [Decision Matrix](#decision-matrix)
 
@@ -35,7 +35,7 @@ This guide covers every customization mechanism, explains when to use each one, 
 | [Scanning Profiles](#4-scanning-profiles) | YAML | No | Reusable scan presets (speed, modules, phases) |
 | [Scope Rules](#5-scope-rules) | YAML | No | Target filtering (hosts, paths, status codes, content types) |
 | [Pre/Post Hooks](#6-pre-hooks-and-post-hooks) | JS or YAML | No | Request mutation, finding suppression, severity escalation |
-| [Agent Backends](#7-agent-backends) | Any (subprocess) | No | Plugging in new AI models or custom CLI tools |
+| [Agent Providers](#7-agent-providers-olium) | Olium provider config | No | Picking the LLM provider/model for AI subcommands |
 | [Config Overrides](#8-configuration-overrides) | YAML | No | Tuning concurrency, rate limits, database, notifications |
 
 ---
@@ -621,62 +621,57 @@ See the full guide: [Writing Extensions](/customization/writing-extensions)
 
 ---
 
-## 7. Agent Backends
+## 7. Agent Providers (Olium)
 
-Agent backends are external processes that Vigolium invokes for AI-driven analysis. You can plug in any CLI tool that accepts a prompt and returns structured output.
+Every agent invocation in Vigolium is dispatched through the in-process **olium** runtime (`pkg/olium/`). There are no external SDK or ACP subprocess backends — instead you choose a *provider* (the LLM API olium dispatches to) and configure its credential.
 
-### Built-in backends
+### Built-in providers
 
-| Backend | Protocol | Command |
+| Provider | Default model | Credential source |
 |---|---|---|
-| Claude Code (ACP) | `acp` | `npx -y @zed-industries/claude-agent-acp@latest` |
-| Codex (ACP) | `acp` | `codex app-server` |
-| OpenCode (ACP) | `acp` | `npx -y opencode-acp` |
-| Gemini (ACP) | `acp` | `gemini --experimental-acp` |
-| Claude CLI (pipe) | `pipe` | `claude --dangerously-skip-permissions -p` |
+| `codex-oauth` *(default)* | `gpt-5.5` | `oauth_cred_path` (`~/.codex/auth.json`, produced by `codex login`) |
+| `anthropic-api-key` | `claude-opus-4-7` | `llm_api_key` or `$ANTHROPIC_API_KEY` |
+| `claude-oauth` | `claude-opus-4-7` | `oauth_token` from `claude setup-token` (or `$ANTHROPIC_API_KEY`) |
+| `openai-api-key` | `gpt-5.5` | `llm_api_key` or `$OPENAI_API_KEY` |
+| `claude-code-cli` | `claude-opus-4-7` | shells out to the local `claude` binary on `$PATH` |
 
-### Adding a custom backend
+### Configuring a provider
 
 ```yaml
 # vigolium-configs.yaml
 agent:
-  backends:
-    my-agent:
-      command: my-tool
-      args: ["--json", "--security-mode"]
-      description: "My custom security agent"
-      protocol: pipe        # pipe: prompt on stdin, output on stdout
-      env:
-        MY_API_KEY: "${MY_API_KEY}"
+  olium:
+    provider: anthropic-api-key
+    model: claude-opus-4-7
+    llm_api_key: ${ANTHROPIC_API_KEY}
+    reasoning_effort: medium       # codex providers only
+    max_tokens: 1000000
+    max_turns: 32
+    max_concurrent: 4              # global cap on simultaneous provider calls
+    call_timeout_sec: 600
 ```
 
-Use it:
+Override per-run from any agent subcommand:
+
 ```bash
-vigolium agent --agent my-agent --prompt-template security-code-review --repo /path/to/code
+vigolium agent query --prompt-template security-code-review --source ./app \
+  --provider anthropic-api-key --model claude-opus-4-7
+
+vigolium agent autopilot -t https://example.com \
+  --provider claude-oauth --oauth-token "$ANTHROPIC_API_KEY"
+
+vigolium ol --provider openai-api-key --llm-api-key "$OPENAI_API_KEY"
 ```
 
-### Protocols
+> **Server-side workloads:** the REST API does **not** mirror these per-invocation flags. The server resolves the provider once from `agent.olium.*` and reuses it across requests so prompt caches stay stable.
 
-| Protocol | How it works | Agent capabilities |
-|---|---|---|
-| `pipe` | Prompt piped to stdin, output read from stdout | Simple: no tool use, no file access |
-| `acp` | Bidirectional JSON-RPC over stdio | Full: file reading, tool invocation, streaming |
+### Tool registry
 
-### Warm sessions
+The olium engine exposes eight built-in tools to the model: `bash`, `read_file`, `write_file`, `edit_file`, `ls`, `grep`, `glob`, `web_fetch`. Autopilot adds two security-specific tools: `halt_scan` (model-driven exit) and `report_finding` (DB-backed finding ingestion). See [Olium Agent](/agentic-scan/olium) for the full tool reference.
 
-For iterative workflows (autopilot), ACP backends support session pooling to avoid subprocess startup overhead:
+### LLM config (for JS extensions only)
 
-```yaml
-agent:
-  warm_session:
-    enable: true
-    idle_timeout: 300    # seconds before killing idle session
-    max_sessions: 2      # concurrent sessions per agent
-```
-
-### LLM config (for JS extensions)
-
-The `agent.llm` section configures the LLM provider used by `vigolium.agent.*` APIs in JavaScript extensions:
+The `agent.llm` section configures the LLM provider used by `vigolium.agent.*` APIs inside JavaScript extensions — separate from the olium engine that powers `vigolium agent` subcommands.
 
 ```yaml
 agent:
@@ -692,22 +687,19 @@ agent:
 
 ### Pros
 
-- **Any AI model** — plug in any CLI tool as a backend.
-- **Two protocols** — simple pipe for basic tools, ACP for full agent capabilities.
-- **Session pooling** — warm sessions reduce latency for iterative analysis.
-- **Environment isolation** — per-agent env vars, scoped file access.
+- **Five providers** — pick the credential model that fits (OAuth for ChatGPT Plus / Claude Max, API keys for raw API access, CLI shellout for `claude-code-cli`).
+- **Single in-process runtime** — no subprocess startup overhead, prompt caching is reused across phases that share an engine.
+- **Per-invocation overrides** — every CLI subcommand exposes `--provider`, `--model`, `--oauth-cred`, `--oauth-token`, `--llm-api-key`.
+- **Global concurrency cap** — `max_concurrent` keeps tier-1 plans from hitting 429s under fan-out.
 
 ### Cons
 
-- **External dependency** — requires installing and configuring the agent CLI.
-- **Cost** — AI API calls have token costs.
-- **Latency** — subprocess startup + LLM inference is slower than local checks.
+- **Provider lock-in to supported drivers** — only the five drivers above are recognised; arbitrary custom CLIs are not pluggable as backends anymore.
+- **Cost** — LLM API calls still have token costs; `--token-budget` (autopilot) caps the spend.
 
 ### When to use
 
-- You have a preferred AI model or a fine-tuned security model you want to integrate.
-- You're building a custom tool that produces structured security findings.
-- You need agent capabilities beyond what the built-in backends provide.
+- Always — every agent subcommand goes through olium. The choice you actually make is **which provider and model**, not whether to use olium.
 
 ---
 
@@ -719,9 +711,9 @@ The main `vigolium-configs.yaml` is the central control plane for all scan behav
 
 | Section | What it controls |
 |---|---|
-| `scanning_strategy` | Phase presets: `lite`, `balanced`, `deep`, `whitebox` |
+| `scanning_strategy` | Phase presets: `lite`, `balanced`, `deep` |
 | `scanning_pace` | Concurrency, rate limits, per-phase duration caps |
-| `audit` | Active/passive module selection, extension config |
+| `dynamic-assessment` | Active/passive module selection, extension config |
 | `discovery` | Content discovery mode, recursion, wordlists |
 | `spidering` | Browser crawling depth, strategy, headless mode |
 | `scope` | Host/path/status/content-type filtering |
@@ -729,7 +721,8 @@ The main `vigolium-configs.yaml` is the central control plane for all scan behav
 | `notify` | Alert routing: Telegram, Discord, severity filters |
 | `mutation_strategy` | Payload mutation modes, field-type defaults |
 | `oast` | Out-of-band testing server, blind XSS config |
-| `agent` | AI backends, LLM config, warm sessions |
+| `agent` | Olium provider, LLM config (JS extensions), archon-audit, browser, context limits |
+| `storage` | S3-compatible cloud storage for source uploads and result archival |
 
 ### Environment variable expansion
 
@@ -778,7 +771,7 @@ Use this table to quickly pick the right extension mechanism:
 | Inject auth headers into every request | [Pre-Hook](#6-pre-hooks-and-post-hooks) |
 | Suppress false positives across all modules | [Post-Hook](#6-pre-hooks-and-post-hooks) |
 | Use AI to confirm findings before reporting | [Post-Hook + agent API](#6-pre-hooks-and-post-hooks) |
-| Plug in a new AI model | [Agent Backend](#7-agent-backends) |
+| Pick a different LLM provider/model | [Agent Providers (Olium)](#7-agent-providers-olium) |
 | Tune concurrency and rate limits | [Config Override](#8-configuration-overrides) or [Profile](#4-scanning-profiles) |
 | Generate HTTP test inputs from source code | [Prompt Template](#3-custom-prompt-templates) (with `http_records` schema) |
 | Build an organization-specific scanner pipeline | Combine: [Profile](#4-scanning-profiles) + [Scope](#5-scope-rules) + [Hooks](#6-pre-hooks-and-post-hooks) + [Extensions](#1-javascript-extensions) |

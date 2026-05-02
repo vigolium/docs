@@ -1,10 +1,12 @@
 ---
-title: "Audit - Active Vulnerability Scanning"
+title: "Dynamic-Assessment — Active Vulnerability Scanning"
 description: "The core scanning phase that injects payloads at every insertion point to detect vulnerabilities in web applications."
 icon: "shield-halved"
 ---
 
-The audit phase is the scanning layer that sends modified requests to detect vulnerabilities. It receives traffic from all input sources (crawling, spidering, content discovery, manual ingestion) and systematically injects payloads at every insertion point to identify security issues.
+The `dynamic-assessment` phase (formerly `audit`) is the scanning layer that sends modified requests to detect vulnerabilities. It receives traffic from all input sources (crawling, spidering, content discovery, manual ingestion) and systematically injects payloads at every insertion point to identify security issues.
+
+> **Phase aliases:** `dynamic-assessment` is the canonical name. `audit`, `dast`, and `assessment` are accepted aliases on `--only` / `--skip` flags. The configuration block in `vigolium-configs.yaml` uses the canonical key `dynamic-assessment`.
 
 ## How It Works
 
@@ -125,7 +127,7 @@ vigolium scan -t https://example.com --max-findings-per-module 0
 Configuration in `vigolium-configs.yaml`:
 
 ```yaml
-audit:
+dynamic-assessment:
   max_findings_per_module: 15    # 0 = unlimited
 ```
 

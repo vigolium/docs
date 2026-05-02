@@ -45,8 +45,10 @@
               "agentic-scan/autopilot",
               "agentic-scan/swarm",
               "agentic-scan/query",
+              "agentic-scan/archon-audit",
+              "agentic-scan/piolium-audit",
+              "agentic-scan/olium",
               "agentic-scan/using-vigolium-in-your-agent"
-              
             ]
           },
           {
@@ -89,7 +91,6 @@
               "guides/native-scan-phases",
               "guides/agentic-scan",
               "guides/stateless-scan",
-              "guides/whitebox-scanning",
               "guides/scanning-an-api",
               "guides/scanning-a-spa",
               "guides/ci-cd-integration"
@@ -133,14 +134,14 @@
               "api-references/agent",
               "api-references/http-records",
               "api-references/ingestion",
-              "api-references/source-repos",
               "api-references/scope",
               "api-references/stats",
               "api-references/extensions",
               "api-references/config",
               "api-references/modules",
-              "api-references/github",
               "api-references/oast-interactions",
+              "api-references/storage",
+              "api-references/diagnostics",
               "api-references/database"
             ]
           }

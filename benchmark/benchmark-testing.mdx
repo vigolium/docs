@@ -39,7 +39,6 @@ The benchmark system validates that Vigolium's active and passive scanner module
 | **crAPI** | `canary` | Docker Compose (crAPI — 10 services) | Soft | Docker + `make crapi-up` |
 | **XBOW** | `xbow` | CTF-style benchmarks built from source (XSS, SSTI, SQLi, LFI, CmdI, SSRF, XXE) | Strict + Soft | Docker + `XBOW_SOURCE_DIR` |
 | **Blackbox** | `blackbox` | External demo sites (Acunetix, PortSwigger, IBM) | Soft only | Internet |
-| **SAST** | `sast` | Static analysis pipeline (route extraction, SARIF parsing, handoff) | Strict + Soft | ast-grep binary (Layer 1 only) |
 | **Coverage** | `canary` | None (analyzes YAML definitions) | N/A | None |
 
 ### Relationship to Existing Tests
@@ -51,7 +50,7 @@ The benchmark system complements the existing test tiers:
 | Unit tests | `pkg/*/` | Fast, isolated function-level tests |
 | E2E tests | `test/e2e/` | HTTP client, server, and pipeline integration |
 | Canary tests | `test/e2e/` | Original per-app vulnerability detection tests |
-| **Benchmark tests** | `test/benchmark/` | Data-driven module coverage validation (whitebox, blackbox, xbow, SAST) |
+| **Benchmark tests** | `test/benchmark/` | Data-driven module coverage validation (whitebox, blackbox, xbow) |
 | Integration tests | `test/benchmark/xss_scanner/` | Brutelogic XSS gym (external) |
 
 The benchmark system is designed to eventually supersede the per-app canary tests in `test/e2e/` (dvwa_test.go, vampi_test.go, juiceshop_test.go) by providing the same coverage through YAML definitions with less boilerplate.
@@ -60,7 +59,7 @@ The benchmark system is designed to eventually supersede the per-app canary test
 
 ## Target Applications
 
-Vigolium benchmarks against a diverse set of intentionally vulnerable applications. Each application covers different vulnerability categories, tech stacks, and scanning approaches (DAST, SAST, or both).
+Vigolium benchmarks against a diverse set of intentionally vulnerable applications. Each application covers different vulnerability categories and tech stacks.
 
 ### DAST Targets (Docker-based)
 
@@ -93,33 +92,6 @@ This application is an educational project demonstrating six categories of secur
 Seed data includes two users (alice/abc, bob/def) and 7 blog posts, including two with XSS payloads.
 
 Each example also has 1-3 **solution variants** that fix the vulnerability. These serve as negative test cases — the scanner should NOT flag them.
-
-### SAST Targets (Static Analysis)
-
-The SAST benchmark suite validates the source-aware scanning pipeline using **source stubs** — minimal, syntactically valid framework code that exercises key patterns. See [whitebox-sast](/benchmark/whitebox-sast) for full details.
-
-| Framework | Source Stub | Routes | Key Patterns |
-|-----------|------------|--------|-------------|
-| Gin (Go) | `sast-stubs/gin/` | ~12 routes | CRUD, groups, Any, path params |
-| FastAPI (Python) | `sast-stubs/fastapi/` | ~11 routes | Path, Query, Body params |
-| Express (JS) | `sast-stubs/express/` | ~8 routes | Router, groups, all |
-| Django (Python) | `sast-stubs/django/` | ~9 routes | URL patterns, class views |
-| Flask (Python) | `sast-stubs/flask/` | ~7 routes | Decorators, add_url_rule |
-| Next.js (TS) | `sast-stubs/nextjs/` | 3+ handlers | App Router, Pages Router |
-| Next.js OopsSec (TS) | `sast-stubs/nextjs-oopssec/` | 15+ handlers | Dynamic routes, middleware, body parsing, header extraction |
-| **Next.js VulnExamples (TS)** | `sast-stubs/nextjs-vulnexamples/` | 9+ handlers | Missing auth/authz, secrets exposure, XSS, solution variants |
-| Go HTTP (Go) | `sast-stubs/gohttp/` | 3 routes | HandleFunc |
-
-The **Next.js VulnExamples** SAST stub is unique because it includes both vulnerable and secure code paths. Its SARIF fixture (`semgrep-nextjs-vulnexamples.sarif`) covers 6 findings across 4 vulnerability categories:
-
-| Finding | Severity | File | Category |
-|---------|----------|------|----------|
-| `dangerouslySetInnerHTML` with unsanitized DB content | Medium | `example-6-cross-site-scripting/vulnerable/page.tsx` | XSS |
-| Route handler missing authentication check | High | `example-1-missing-authentication/vulnerable/route.ts` | Missing AuthN |
-| Data access without authorization scoping | High | `example-3-missing-authorization/vulnerable/route.ts` | Missing AuthZ |
-| `process.env.API_KEY` passed to client component | High | `example-5-secrets-exposure/vulnerable/page.tsx` | Secrets Exposure |
-| `getUsersWithPasswordHash()` result sent to client | High | `example-5-secrets-exposure/vulnerable/page.tsx` | Secrets Exposure |
-| `SELECT *` on users table exposes password hashes | Medium | `database/users.ts` | Data Exposure |
 
 ### Blackbox Targets (External Sites)
 
@@ -213,8 +185,6 @@ The **Next.js VulnExamples** SAST stub is unique because it includes both vulner
 test/benchmark/
 ├── harness/                        # Shared Go library (not a test package)
 │   ├── types.go                    # BenchmarkDefinition, TestCase, AppConfig structs
-│   ├── sast_types.go               # SAST definition types
-│   ├── sast_loader.go              # SAST YAML loaders
 │   ├── harness.go                  # TestInfra, YAML loader, module resolver, assertions
 │   ├── container.go                # Docker container lifecycle (testcontainers-go + compose)
 │   ├── compose.go                  # Docker Compose CLI lifecycle (build/start/port/stop)
@@ -237,30 +207,6 @@ test/benchmark/
 │   │   ├── acunetix.yaml           # testphp.vulnweb.com
 │   │   ├── ginandjuice.yaml        # ginandjuice.shop (PortSwigger)
 │   │   └── testfire.yaml           # demo.testfire.net (IBM AppScan)
-│   ├── whitebox/                   # SAST benchmark definitions
-│   │   ├── extraction/             #   Layer 1: route extraction
-│   │   │   ├── gin-extraction.yaml
-│   │   │   ├── fastapi-extraction.yaml
-│   │   │   ├── express-extraction.yaml
-│   │   │   ├── django-extraction.yaml
-│   │   │   ├── flask-extraction.yaml
-│   │   │   ├── nextjs-extraction.yaml
-│   │   │   ├── nextjs-oopssec-extraction.yaml
-│   │   │   ├── nextjs-vulnexamples-extraction.yaml
-│   │   │   └── gohttp-extraction.yaml
-│   │   ├── sarif/                  #   Layer 2: SARIF parsing
-│   │   │   ├── semgrep-normal.yaml
-│   │   │   ├── semgrep-multirule.yaml
-│   │   │   ├── semgrep-nextjs-vulnexamples.yaml
-│   │   │   ├── trivy-normal.yaml
-│   │   │   ├── trivy-multirule.yaml
-│   │   │   └── sarif-edge-cases.yaml
-│   │   └── handoff/                #   Layer 3: route-to-HRR conversion
-│   │       ├── gin-handoff.yaml
-│   │       ├── fastapi-handoff.yaml
-│   │       ├── express-handoff.yaml
-│   │       ├── nextjs-oopssec-handoff.yaml
-│   │       └── nextjs-vulnexamples-handoff.yaml
 │   └── xbow/                       # XBOW CTF-style validation benchmarks
 │       ├── xbow-xss-013.yaml
 │       ├── xbow-ssti-009.yaml
@@ -277,13 +223,6 @@ test/benchmark/
 │   ├── active_test.go              # Active scanning with rate limiting
 │   └── passive_test.go             # Passive analysis
 │
-├── sast/                           # SAST pipeline tests (build tag: sast / sast_e2e)
-│   ├── helpers.go                  # Shared utilities (no build tag)
-│   ├── extraction_test.go          # Layer 1: route extraction
-│   ├── sarif_test.go               # Layer 2: SARIF parsing
-│   ├── handoff_test.go             # Layer 3: route-to-HRR conversion
-│   └── e2e_test.go                 # Layer 4: full pipeline
-│
 ├── xbow/                           # XBOW validation tests (build tag: xbow)
 │   └── xbow_test.go                # Data-driven runner with per-vuln-type functions
 │
@@ -294,23 +233,6 @@ test/benchmark/
     └── brutelogic_test.go
 
 test/testdata/
-├── sast-stubs/                     # Minimal framework source code for SAST
-│   ├── gin/
-│   ├── fastapi/
-│   ├── express/
-│   ├── django/
-│   ├── flask/
-│   ├── nextjs/
-│   ├── nextjs-oopssec/             # 15 API routes + middleware
-│   ├── nextjs-vulnexamples/        # 9 routes + database layer + vulnerable/solution variants
-│   └── gohttp/
-│
-├── sast-sarif/                     # SARIF fixture JSON files
-│   ├── semgrep-normal.sarif
-│   ├── semgrep-nextjs-vulnexamples.sarif
-│   ├── ...                          # 10 fixtures total
-│   └── sarif-severity-mapping.sarif
-│
 └── vulnerable-apps/                # Docker Compose configs for vulnerable apps
     ├── crapi/
     ├── oopssec-store/
@@ -341,14 +263,6 @@ test/testdata/
   make crapi-status      # Verify all services are healthy
   ```
 
-### SAST Tests
-
-- **ast-grep binary**: Required for Layer 1 (route extraction). Auto-downloaded on first run, or install manually:
-  ```bash
-  brew install ast-grep   # macOS
-  ```
-- **No Docker needed**: Layers 2-3 use static fixture data only
-
 ### XBOW Validation Benchmarks
 
 - **Docker with Compose**: Required to build and run benchmark containers
@@ -374,11 +288,6 @@ test/testdata/
 | `make test-benchmark-all` | All whitebox + blackbox | Docker + Internet |
 | `make test-benchmark-crapi` | crAPI only | Docker + `make crapi-up` |
 | `make test-benchmark-coverage` | Generate coverage report | None |
-| `make test-sast` | SAST Layers 1-3 (extraction + SARIF + handoff) | ast-grep binary |
-| `make test-sast-extraction` | Layer 1 only | ast-grep binary |
-| `make test-sast-sarif` | Layer 2 only | None |
-| `make test-sast-handoff` | Layer 3 only | None |
-| `make test-sast-e2e` | Layer 4 (full pipeline) | ast-grep binary |
 | `make test-xbow` | All 13 XBOW validation benchmarks | Docker + `XBOW_SOURCE_DIR` |
 | `make test-xbow-ssti` | 3 SSTI benchmarks | Docker + `XBOW_SOURCE_DIR` |
 | `make test-xbow-xss` | 2 XSS benchmarks | Docker + `XBOW_SOURCE_DIR` |
@@ -412,28 +321,6 @@ go test -v -tags=canary -run "TestWhitebox_OopssecStore" ./test/benchmark/whiteb
 
 # crAPI (requires `make crapi-up`)
 go test -v -tags=canary -run TestWhitebox_CrAPI ./test/benchmark/whitebox/...
-```
-
-### Running SAST Benchmarks
-
-```bash
-# All SAST layers
-make test-sast
-
-# Layer 2 only (no external deps)
-make test-sast-sarif
-
-# NextJS VulnExamples extraction
-go test -tags=sast -v -run TestExtraction_NextJS_VulnExamples ./test/benchmark/sast/...
-
-# NextJS VulnExamples handoff
-go test -tags=sast -v -run TestHandoff_NextJS_VulnExamples ./test/benchmark/sast/...
-
-# NextJS VulnExamples SARIF fixture
-go test -tags=sast -v -run "TestSARIF_All/semgrep-nextjs-vulnexamples" ./test/benchmark/sast/...
-
-# Full E2E pipeline
-go test -tags=sast_e2e -v -run TestSAST_E2E ./test/benchmark/sast/...
 ```
 
 ### Running XBOW Validation Benchmarks
@@ -709,8 +596,6 @@ For apps that need to be built from source or require multiple services (like Ne
    }
    ```
 
-4. **Optionally add SAST coverage** — create a source stub and YAML definitions for the whitebox SAST pipeline (see [whitebox-sast](/benchmark/whitebox-sast)).
-
 ---
 
 ## Adding a New Blackbox Site
@@ -840,9 +725,6 @@ The `test/benchmark/harness/` package is a shared Go library (not a test package
 | `TestInfra` | Test infrastructure (HTTP client, host errors, rate limiter, scan context) |
 | `TestResult` | Outcome of a single test case execution |
 | `CoverageReport` | Module coverage matrix |
-| `SASTExtractionDefinition` | Route extraction test: framework, source_dir, expected routes, bounds |
-| `SASTSARIFDefinition` | SARIF parsing test: fixture path, tool name, format, expectations |
-| `SASTHandoffDefinition` | Handoff test: framework, base URL, routes with expected requests |
 
 ### Key Functions
 
@@ -867,9 +749,6 @@ The `test/benchmark/harness/` package is a shared Go library (not a test package
 | `GenerateCoverageReport(dirs...)` | Generate module coverage matrix |
 | `FormatCoverageMarkdown(report)` | Render coverage report as markdown |
 | `CheckExternalAvailability(t, url)` | Skip test if external site is unreachable |
-| `LoadSASTExtractionDefinitionsFromDir(dir)` | Load all extraction YAMLs |
-| `LoadSASTSARIFDefinitionsFromDir(dir)` | Load all SARIF YAMLs |
-| `LoadSASTHandoffDefinitionsFromDir(dir)` | Load all handoff YAMLs |
 
 ### Active Test Case Flow
 
@@ -929,24 +808,15 @@ ApplyAssertion(t, tc, mod.ID(), findings)
 
 | Trigger | What to Run | Timeout |
 |---------|------------|---------|
-| On every PR | `make test-sast-sarif && make test-sast-handoff` | 5 min |
 | On every PR | `make test-benchmark-whitebox` (DVWA + VAmPI only) | 15 min |
 | Nightly | `make test-benchmark-all` (all whitebox + blackbox) | 30 min |
-| Nightly | `make test-sast` (all SAST layers) | 10 min |
 | Weekly | `make test-benchmark-crapi` (requires crAPI up) | 20 min |
 | Weekly | `make test-xbow` (requires XBOW_SOURCE_DIR) | 30 min |
-| Weekly | `make test-sast-e2e` (full pipeline) | 15 min |
 | On release | `make test-benchmark-coverage` | 1 min |
 
 ### Example GitHub Actions Workflow
 
 ```yaml
-- name: Run SAST benchmarks (no external deps)
-  run: |
-    make test-sast-sarif
-    make test-sast-handoff
-  timeout-minutes: 5
-
 - name: Run whitebox benchmarks
   run: |
     make test-benchmark-whitebox
@@ -1173,14 +1043,6 @@ External site http://testphp.vulnweb.com is unreachable
 
 - Check internet connectivity
 - The site may be temporarily down — blackbox tests are designed to gracefully skip
-
-### ast-grep compatibility issue
-
-```
-Skipping: ast-grep ast-grep-config.yaml compatibility issue (known)
-```
-
-- Some ast-grep versions (v0.41.0+) treat `ast-grep-config.yaml` as a rule file, causing a parse error. Extraction tests skip gracefully. Other SAST layers (SARIF, handoff) are unaffected.
 
 ### No findings from a strict-asserted test
 

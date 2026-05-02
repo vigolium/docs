@@ -28,9 +28,9 @@ CLI invocation
          ▼
 ┌─────────────────────┐
 │  Runner Orchestration│  internal/runner/runner.go
-│  7-phase pipeline:   │  Heuristics → Harvest → Spider →
-│  build infra, run    │  SAST → Discovery → KnownIssueScan →
-│  phases in order     │  Audit
+│  6-phase pipeline:   │  Heuristics → Harvest → Discovery →
+│  build infra, run    │  Spidering → KnownIssueScan →
+│  phases in order     │  Dynamic-Assessment
 └────────┬────────────┘
          │
          ▼
@@ -67,7 +67,7 @@ CLI invocation
 
 1. Initializes the global `zap.Logger` via `initLogger()`.
 2. Falls back to the `VIGOLIUM_PROXY` environment variable if `--proxy` is empty.
-3. Runs first-time setup via `ensureInitialized()` — creates `~/.vigolium/` and writes the default config, profiles, SAST rules, and prompt templates if they don't exist.
+3. Runs first-time setup via `ensureInitialized()` — creates `~/.vigolium/` and writes the default config, profiles, prompt templates, and skills if they don't exist.
 4. Handles early-exit flags: `--list-modules`, `--list-input-mode`, `--full-example`.
 
 ### Scan Command — `pkg/cli/scan.go`
@@ -288,28 +288,24 @@ RunNativeScan()
 │    Queries Wayback, CommonCrawl, AlienVault, URLScan, VirusTotal.
 │    Ingests discovered URLs into DB (no modules, pure ingestion).
 │
-├─── Phase 2: Spidering            [guard: SpideringEnabled]
-│    Browser-based crawling (Chromium). Applies heuristics filter.
-│    Stores discovered pages in DB via repository.
-│
-├─── Phase 3: SAST                 [guard: SASTEnabled]
-│    Static analysis via ast-grep. Extracts routes from source code.
-│    Ingests routes as minimal HTTP requests into DB.
-│
-├─── Phase 4: Discovery            [guard: !SkipIngestion]
+├─── Phase 2: Discovery            [guard: !SkipIngestion]
 │    Content discovery (brute-force dirs/files via deparos engine)
 │    + CLI input source. Both wrapped in MultiSource.
 │    Ingests into DB (no modules, pure ingestion).
 │    Fallback: seedCLITargets() if ingestion skipped but KnownIssueScan/DA need records.
 │
-├─── Phase 5: KnownIssueScan       [guard: KnownIssueScanEnabled]
+├─── Phase 3: Spidering            [guard: SpideringEnabled]
+│    Browser-based crawling (Chromium). Applies heuristics filter.
+│    Stores discovered pages in DB via repository.
+│
+├─── Phase 4: KnownIssueScan       [guard: KnownIssueScanEnabled]
 │    Nuclei template scan + Kingfisher secret detection on stored
 │    response bodies. Targets enriched with discovered paths
 │    (enrich_targets). Filters out secret_detect passive module
 │    to avoid duplicates in DA phase.
 │    Post-phase: DeduplicateFindings() groups same-module/URL findings.
 │
-└─── Phase 6: Audit                [guard: !SkipAudit]
+└─── Phase 5: Dynamic-Assessment   [guard: !SkipAudit]
      THE CORE SCANNING PHASE. Reads records from DB, dispatches
      active + passive modules. Per-module finding cap suppresses
      noisy modules. Feedback loop (up to 3 rounds) re-scans
@@ -317,7 +313,7 @@ RunNativeScan()
      Post-phase: DeduplicateFindings() merges redundant findings.
 ```
 
-Phases 0-5 populate the database with HTTP records. Phase 6 reads those records back and runs the full module pipeline against them.
+Phases 0-4 populate the database with HTTP records. Phase 5 reads those records back and runs the full module pipeline against them.
 
 ### Phase 5 Detail: KnownIssueScan
 
@@ -958,17 +954,17 @@ vigolium scan -t https://example.com
           │
           ▼
     ┌────────────────────────────────────────────────────────┐
-    │              RunNativeScan() — 7 Phases                │
+    │             RunNativeScan() — 6 Phases                 │
     │                                                        │
-    │  [Heuristics] → [Harvest] → [Spider] → [SAST]         │
-    │       → [Discovery/Ingest] → [KnownIssueScan] → [Dynamic Assess] │
+    │  [Heuristics] → [Harvest] → [Discovery/Ingest]         │
+    │       → [Spidering] → [KnownIssueScan] → [Dynamic-Assessment]│
     │                                                        │
-    │  Phases 0-5: populate DB with HTTP records             │
-    │  Phase 5-6: DeduplicateFindings() after each          │
-    │  Phase 6: scan records with modules                    │
+    │  Phases 0-4: populate DB with HTTP records             │
+    │  Phase 4-5: DeduplicateFindings() after each           │
+    │  Phase 5: scan records with modules                    │
     └───────────────────────┬────────────────────────────────┘
                             │
-                            ▼  (Phase 6 detail)
+                            ▼  (Phase 5 detail)
     ┌───────────────────────────────────────────────────┐
     │                    Executor                        │
     │                                                   │

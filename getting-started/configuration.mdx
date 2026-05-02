@@ -68,7 +68,7 @@ Controls which scan phases run for each strategy preset.
 
 ```yaml
 scanning_strategy:
-  default_strategy: balanced    # lite | balanced | deep | whitebox
+  default_strategy: balanced    # lite | balanced | deep
   heuristics_check: basic
   scanning_profile: ""          # name of a profile to auto-load
   profiles_dir: ~/.vigolium/profiles/
@@ -76,31 +76,33 @@ scanning_strategy:
   session:
     session_dir: ~/.vigolium/sessions/
     use_in_discovery: true       # apply session headers during discovery/spidering
-    compare_enabled: true        # cross-session IDOR/BOLA replay in audit
+    compare_enabled: true        # cross-session IDOR/BOLA replay in dynamic-assessment
     reauth_interval: ""          # e.g. "15m" to refresh tokens periodically
     reauth_on_status: []         # e.g. [401, 403]
     validate_url: ""             # URL to GET after login to verify credentials
 
-  # Phase toggles per strategy:
+  # Phase toggles per strategy (canonical names):
   balanced:
     discovery: true
     spidering: true
     known_issue_scan: true
-    audit: true
+    dynamic-assessment: true
     external_harvesting: false
-    source_aware: false
 ```
 
 Available strategies and their default phases:
 
-| Phase | lite | balanced | deep | whitebox |
-|---|---|---|---|---|
-| external_harvesting | - | - | yes | - |
-| discovery | - | yes | yes | yes |
-| spidering | - | yes | yes | - |
-| known_issue_scan | - | yes | yes | yes |
-| audit | yes | yes | yes | yes |
-| source_aware | - | - | - | yes |
+| Phase | lite | balanced | deep |
+|---|---|---|---|
+| external_harvesting | - | - | yes |
+| discovery | - | yes | yes |
+| spidering | - | yes | yes |
+| known_issue_scan | - | yes | yes |
+| dynamic-assessment | yes | yes | yes |
+
+> **Phase aliases:** `dynamic-assessment` is the canonical name for active/passive vulnerability scanning. `audit`, `dast`, and `assessment` are accepted aliases on `--only` / `--skip` flags. `discovery` accepts `deparos` / `discover`; `spidering` accepts `spitolas`; `extension` accepts `ext`.
+
+For source-aware whitebox analysis, use `vigolium agent swarm --source <path>` or `vigolium agent archon --source <path>` instead of a native scan strategy. See [Agent Mode](/agentic-scan/agent-mode).
 
 ### `scanning_pace`
 
@@ -205,23 +207,24 @@ spidering:
   pilot_stall_timeout: 7m
 ```
 
-### `audit`
+### `dynamic-assessment`
 
-Controls which scanner modules run and JavaScript extension settings.
+Controls which scanner modules run and JavaScript extension settings. (Formerly `audit`.)
 
 ```yaml
-audit:
+dynamic-assessment:
+  max_feedback_rounds: 1            # rescan rounds for newly-discovered URLs
+  max_findings_per_module: 15       # 0 = unlimited
+
   enabled_modules:
-    active_modules: ["all"]    # ["all"] or list of module IDs
+    active_modules: ["all"]         # ["all"] or list of module IDs
     passive_modules: ["all"]
 
   extensions:
     enabled: false
     extension_dir: ~/.vigolium/extensions/
-    custom_dir: []              # additional script paths
-    variables: {}               # key-value pairs passed to scripts
-    allow_exec: false           # enable exec() and setEnv() in scripts
-    sandbox_dir: ""             # base path for file ops (empty = cwd)
+    custom_dir: []                  # additional script paths
+    variables: {}                   # key-value pairs passed to scripts
     limits:
       timeout: 30s
       max_memory_mb: 128
@@ -270,26 +273,44 @@ REST API server settings.
 ```yaml
 server:
   auth_api_key: ""                 # auto-generated if empty; also set via VIGOLIUM_API_KEY
-  users_file: ~/.vigolium/users.json
   service_port: 9002
   ingest_proxy_port: 0             # 0 = disabled
   cors_allowed_origins: reflect-origin
   enable_metrics: true
+  agent_heavy_max: 5               # max concurrent autopilot/swarm runs via API
+  agent_light_max: 10              # max concurrent query/chat runs via API
+  agent_queue_timeout: 30s         # wait for an agent slot before returning 429
+  license: ""                      # optional license tag surfaced in /server-info
 ```
 
 ### `agent`
 
-AI agent integration for agentic scan modes.
+AI agent integration. Every agent invocation is dispatched through the in-process **olium** runtime — there are no subprocess SDK or ACP backends.
 
 ```yaml
 agent:
-  default_agent: claude
+  default_agent: olium
   templates_dir: ~/.vigolium/prompts/
   sessions_dir: ~/.vigolium/agent-sessions/
   stream: true                     # real-time output streaming
-  mcp_enabled: false               # MCP server passthrough
 
-  # LLM config for JS extension agent API:
+  # Olium engine — used by every agent subcommand
+  olium:
+    provider: codex-oauth          # codex-oauth | anthropic-api-key | claude-oauth | openai-api-key | claude-code-cli
+    model: gpt-5.5                 # empty = provider default
+    oauth_cred_path: ~/.codex/auth.json    # codex-oauth provider
+    oauth_token: ""                # claude-oauth bearer token (from `claude setup-token`); supports ${ENV_VAR}
+    llm_api_key: ""                # for anthropic-api-key / openai-api-key; supports ${ENV_VAR}; falls back to provider env
+    reasoning_effort: medium       # minimal | low | medium | high | xhigh (codex)
+    system_prompt: ""              # override built-in olium system prompt
+    max_tokens: 1000000
+    temperature: 0.0
+    max_turns: 32                  # tool-loop iteration cap
+    cache_size: 1024               # LRU entries; 0 disables
+    max_concurrent: 4              # global cap on simultaneous in-flight provider calls
+    call_timeout_sec: 600          # per-call deadline; -1 = no enforced timeout
+
+  # LLM config for JavaScript extension agent API (vigolium.agent.* in extensions)
   llm:
     provider: anthropic            # anthropic | openai
     model: claude-sonnet-4-20250514
@@ -301,54 +322,44 @@ agent:
     cache_size: 256                # LRU entries (0 = disabled)
     cache_ttl: 300                 # seconds
 
-  # Warm session pooling for ACP subprocess reuse:
-  warm_session:
-    enable: false
-    idle_timeout: 300              # seconds
-    max_sessions: 2
-
-  # Swarm terminal capabilities:
-  swarm_terminal:
-    slash_commands: []
-    custom_agents: []
-    max_commands: 50
-
-  # Context enrichment limits:
+  # DB context enrichment limits for swarm/autopilot
   context_limits:
     max_findings: 50
     max_endpoints: 100
     max_high_risk: 20
     min_risk_score: 50
 
-  # Autopilot guardrails:
+  # Autopilot guardrails (SDK-era; mostly informational under olium)
   guardrails:
     log_commands: false
     max_turns: 0                   # 0 = auto (MaxCommands * 3)
     disallowed_tools: []
 
-  # Agent backends (built-in defaults shown):
-  backends:
-    claude:
-      command: claude
-      description: "Anthropic Claude Code (SDK protocol)"
-      protocol: sdk
-    claude-acp:
-      command: npx
-      args: ["-y", "@zed-industries/claude-agent-acp@latest"]
-      protocol: acp
-    codex:
-      command: codex
-      protocol: codex-sdk
-    opencode:
-      command: opencode
-      protocol: opencode-sdk
-    gemini:
-      command: gemini
-      args: ["--experimental-acp"]
-      protocol: acp
+  # Optional agent-browser integration (Bash tool can drive a real Chromium for auth-walled flows)
+  browser:
+    enable: true
+    binary_path: agent-browser     # default: looked up on $PATH
+
+  # Archon-audit integration
+  archon:
+    enable: false                  # auto-enabled by --archon flag
+    mode: lite                     # lite | balanced | deep | mock
+    platform: claude               # claude | codex | opencode
+    plugin_dir: ""                 # default: ~/.vigolium/archon-audit/
+    sync_interval: 30              # seconds between state syncs
 ```
 
-Valid protocols: `pipe`, `acp`, `sdk`, `codex-sdk`, `opencode-sdk`.
+Provider quick reference:
+
+| Provider | Default model | Credential source |
+|----------|--------------|--------------------|
+| `codex-oauth` | `gpt-5.5` | `oauth_cred_path` (`~/.codex/auth.json`) |
+| `anthropic-api-key` | `claude-opus-4-7` | `llm_api_key` or `$ANTHROPIC_API_KEY` |
+| `claude-oauth` | `claude-opus-4-7` | `oauth_token` (from `claude setup-token`); falls back to `$ANTHROPIC_API_KEY` |
+| `openai-api-key` | `gpt-5.5` | `llm_api_key` or `$OPENAI_API_KEY` |
+| `claude-code-cli` | `claude-opus-4-7` | local `claude` binary on `$PATH` |
+
+CLI flags `--provider`, `--model`, `--oauth-cred`, `--oauth-token`, `--llm-api-key` override these per-invocation. The REST API does **not** mirror these overrides — server-side workloads use the YAML config exclusively. See [Olium Agent](/agentic-scan/olium) for full provider details.
 
 ### `database`
 
@@ -445,42 +456,32 @@ oast:
 
 ### `source_aware`
 
-Source code integration for whitebox scanning (SAST, route extraction).
+Storage location for cloned source repositories. Used when `--source` receives a git URL (autopilot, swarm, archon, query). Static analysis tooling (ast-grep, semgrep, etc.) has been removed — for AI-driven code audit, use `vigolium agent archon` or `vigolium agent swarm --source --code-audit`.
 
 ```yaml
 source_aware:
-  storage_path: ~/.vigolium/source-aware/
-  clone_depth: 1
-
-  ast_grep:
-    enabled: true
-    rules_dir: ~/.vigolium/sast-rules/astgrep/
-    timeout: 5m
-
-  third_party_integration:
-    enabled: true
-    timeout: 10m
-    tools:
-      semgrep:
-        enabled: true
-        command: semgrep
-        args: ["scan", "--sarif", "--quiet", "--sarif-output={{output}}"]
-      osv-scanner:
-        enabled: true
-        command: osv-scanner
-        args: ["scan", "--format", "sarif", "--output={{output}}"]
-      codeql:
-        enabled: false
-        command: codeql
-        language: auto
-
-  agent_sast:
-    enabled: false
-    prompt_templates: [security-code-review]
-    custom_prompts: []
-    agent: ""                      # backend override (empty = default_agent)
-    timeout: 15m
+  storage_path: ~/.vigolium/source-aware/   # base directory for cloned repos
+  clone_depth: 1                            # `git clone --depth` (1 = shallow)
 ```
+
+### `storage`
+
+Cloud storage integration for source code upload/download and scan result archival. Uses an S3-compatible API — supports GCS (via HMAC), AWS S3, and MinIO.
+
+```yaml
+storage:
+  enabled: false
+  driver: gcs                  # gcs | s3 | minio
+  endpoint: ""                 # auto for gcs/s3; required for minio
+  bucket: ${VIGOLIUM_STORAGE_BUCKET_NAME}
+  region: asia-southeast1
+  access_key: ${VIGOLIUM_STORAGE_ACCESS_KEY}
+  secret_key: ${VIGOLIUM_STORAGE_SECRET_KEY}
+  use_ssl: true
+  path_style: false            # required for some MinIO deployments
+```
+
+When enabled, agent runs invoked with `--upload-results` archive their session bundle to `<bucket>/<project-uuid>/agentic-scans/<run-uuid>/results.tar.gz`. Native scans use `<bucket>/<project-uuid>/native-scans/<scan-uuid>/results.tar.gz`. See [Storage API](/api-references/storage) for upload/download endpoints.
 
 ### `notify`
 

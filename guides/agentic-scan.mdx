@@ -1,37 +1,52 @@
 ---
 title: "Agentic Scanning"
-description: "Use AI-driven scanning modes — Query, Swarm, Pipeline, and Autopilot — to autonomously discover and verify vulnerabilities."
+description: "Use AI-driven scanning modes — Query, Swarm, Autopilot, and Archon — to autonomously discover, audit, and verify vulnerabilities."
 icon: "brain"
 ---
 
 ## Overview
 
-Vigolium's agent mode uses AI to drive vulnerability scanning. There are three execution modes with increasing autonomy: **Query** for single-shot analysis, **Swarm** for AI-planned targeted scanning, and **Autopilot** for fully autonomous multi-class assessments. A fourth command, **Pipeline**, is a convenience alias for `swarm --discover`.
+Vigolium's agent mode uses AI to drive vulnerability scanning. Five subcommands cover the full spectrum:
+
+- **Query** — single-shot prompt; code review, endpoint discovery, secret hunt.
+- **Swarm** — AI-guided multi-phase scan that drives the native scanner (plan → modules → triage).
+- **Autopilot** — autonomous AI pentest; the agent drives bash, files, and the vigolium CLI itself.
+- **Archon** — multi-phase whitebox security audit (lite / balanced / deep).
+- **Olium** — interactive TUI / one-shot prompt; the underlying agent runtime, also used by every mode above.
+
+All AI dispatch goes through the in-process **olium** engine. Configure the provider once in `agent.olium.*`; per-run flags can override.
 
 ## Prerequisites
 
-Agent mode requires an AI backend. The default backend is Claude (via the Agent SDK). Verify it's available:
-
 ```bash
+# List configured providers and the credentials they need
 vigolium agent --list-agents
+
+# List available prompt templates
+vigolium agent --list-templates
+
+# Check provider readiness (auth, API key, model)
+vigolium doctor
 ```
 
-To use a different backend, pass `--agent <name>` (e.g., `--agent gemini`, `--agent opencode`).
+Default provider is `codex-oauth` (uses `~/.codex/auth.json`). Switch to Anthropic:
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...
+vigolium config set agent.olium.provider anthropic-api-key
+vigolium config set agent.olium.model claude-opus-4-7
+```
+
+Or override per run with `--provider`, `--model`, `--llm-api-key`, `--oauth-cred`, `--oauth-token`.
 
 ## Query: Single-Shot Analysis
 
-Query runs a single AI prompt and returns structured output. No network scanning -- useful for code review, endpoint discovery, and secret detection.
+Query runs a single AI prompt and returns structured output. No network scanning — useful for code review, endpoint discovery, and secret detection.
 
 ### With a Built-in Template
 
 ```bash
 vigolium agent query --prompt-template security-code-review --source ./app
-```
-
-List available templates:
-
-```bash
-vigolium agent --list-templates
 ```
 
 ### With an Inline Prompt
@@ -64,23 +79,20 @@ Swarm is the primary agentic scan mode. A master AI agent analyzes your input, s
 
 ### Scanning a Specific Request
 
-Pass a target request via `--input` (accepts URLs, curl commands, raw HTTP, Burp XML, or base64):
+Pass a target request via `--input` (accepts URLs, curl commands, raw HTTP, Burp XML, or base64). Auto-detected:
 
 ```bash
 # From a URL
-vigolium agent swarm \
-  --input "https://example.com/api/users?id=1" \
-  -t https://example.com
+vigolium agent swarm --input "https://example.com/api/users?id=1"
 
-# From a curl command
-vigolium agent swarm \
-  --input "curl -X POST -H 'Content-Type: application/json' -d '{\"user\":\"admin\"}' https://example.com/api/login" \
-  -t https://example.com
+# From a curl command (target auto-derived)
+vigolium agent swarm --input "curl -X POST -H 'Content-Type: application/json' -d '{\"user\":\"admin\"}' https://example.com/api/login"
 
-# From a file
-vigolium agent swarm \
-  --input @request.txt \
-  -t https://example.com
+# From a stored DB record
+vigolium agent swarm --record-uuid 550e8400-e29b-41d4-a716-446655440000
+
+# From stdin
+echo -e "POST /api/search HTTP/1.1\r\nHost: example.com\r\n\r\nq=test" | vigolium agent swarm
 ```
 
 ### Full-Scope Scanning with Discovery
@@ -88,15 +100,7 @@ vigolium agent swarm \
 Add `--discover` to run content discovery and spidering before the AI planning phase:
 
 ```bash
-vigolium agent swarm \
-  --discover \
-  -t https://example.com
-```
-
-This is equivalent to using the `pipeline` command:
-
-```bash
-vigolium agent pipeline -t https://example.com
+vigolium agent swarm --discover -t https://example.com
 ```
 
 ### Source-Aware Scanning
@@ -104,40 +108,38 @@ vigolium agent pipeline -t https://example.com
 Provide application source code for deeper analysis. The AI agent analyzes routes, auth flows, and generates targeted extensions:
 
 ```bash
-vigolium agent swarm \
-  --source ./app \
-  -t https://example.com \
-  --discover
+vigolium agent swarm --source ./app -t https://example.com --discover
 ```
 
-For a deep AI-driven code audit on top of scanning:
-
-```bash
-vigolium agent swarm \
-  --source ./app \
-  -t https://example.com \
-  --code-audit
-```
+`--code-audit` is on by default when `--source` is set; the AI runs a deep security code audit on top of scanning. Disable with `--code-audit=false`.
 
 ### Focusing on a Vulnerability Type
 
 ```bash
 vigolium agent swarm \
   --input "https://example.com/api/users?id=1" \
-  -t https://example.com \
   --vuln-type sqli
 ```
 
 ### Enabling Triage
 
-By default, swarm outputs raw findings. Add `--triage` for AI-powered true/false positive classification with automatic rescan:
+By default, swarm outputs raw findings. Add `--triage` for AI-powered true/false-positive classification with automatic rescan:
 
 ```bash
 vigolium agent swarm \
   --input "https://example.com/api/users?id=1" \
-  -t https://example.com \
   --triage \
   --max-iterations 3
+```
+
+### Intensity Presets
+
+`--intensity` bundles many flags into a single knob:
+
+```bash
+vigolium agent swarm -t https://example.com --intensity quick      # CI-friendly
+vigolium agent swarm -t https://example.com --intensity balanced   # default
+vigolium agent swarm -t https://example.com --intensity deep       # thorough audit
 ```
 
 ### Swarm Phases
@@ -147,13 +149,12 @@ The swarm pipeline runs these phases in order:
 | Phase | Type | Description |
 |-------|------|-------------|
 | `native-normalize` | Native | Parse and normalize input |
+| `auth` | Native | Browser-based login (when `--browser-auth` + `--browser`) |
 | `source-analysis` | AI | Route extraction from source code (if `--source`) |
-| `code-audit` | AI | Deep security code audit (if `--code-audit`) |
-| `native-sast` | Native | Static analysis (if `--source`) |
-| `sast-review` | AI | Validate SAST findings |
+| `code-audit` | AI | Deep security code audit (if `--code-audit`, on by default with `--source`) |
 | `native-discover` | Native | Discovery + spidering (if `--discover`) |
 | `plan` | AI | Master agent plans the attack |
-| `native-extension` | Native | Write generated JS extensions |
+| `native-extension` | Native | Validate and write generated JS extensions |
 | `native-scan` | Native | Execute the planned scan |
 | `triage` | AI | Classify findings (if `--triage`) |
 | `native-rescan` | Native | Targeted rescan on follow-ups |
@@ -161,87 +162,88 @@ The swarm pipeline runs these phases in order:
 Skip or start from a specific phase:
 
 ```bash
-# Skip source analysis and SAST
-vigolium agent swarm -t https://example.com --skip source-analysis --skip native-sast
+# Skip code audit
+vigolium agent swarm -t https://example.com --source ./app --skip code-audit
 
 # Resume from the plan phase
 vigolium agent swarm -t https://example.com --start-from plan
 ```
 
-## Pipeline: Full-Scope Alias
+## Autopilot: Autonomous AI Pentest
 
-Pipeline is a backward-compatible alias for `swarm --discover`. Use it when you want a full-scope agentic scan:
-
-```bash
-vigolium agent pipeline -t https://example.com
-```
-
-With source code:
-
-```bash
-vigolium agent pipeline -t https://example.com --source ./app
-```
-
-With a timeout:
-
-```bash
-vigolium agent pipeline -t https://example.com --timeout 2h
-```
-
-## Autopilot: Autonomous Multi-Class Assessment
-
-Autopilot runs a 5-phase specialist pipeline that autonomously scans for multiple vulnerability classes in parallel:
+Autopilot is a single long-running olium engine with full tool access (bash, files, web fetch, vigolium CLI). The agent decides what to investigate, reports findings as it confirms them via `report_finding`, and halts on its own via `halt_scan`.
 
 ```bash
 vigolium agent autopilot -t https://example.com
 ```
 
-### Phases
-
-1. **Recon** - map the attack surface (endpoints, tech stack, auth flows)
-2. **Vulnerability Analysis** - parallel specialists identify potential vulns per class
-3. **Native Scan** - execute targeted scans based on analysis
-4. **Exploit Verification** - confirm findings with proof-of-concept attempts
-5. **Report** - generate a structured security report
-
-### Selecting Specialists
-
-By default, autopilot runs all specialists. Focus on specific vulnerability classes:
-
-```bash
-vigolium agent autopilot -t https://example.com \
-  --specialists injection,xss,auth
-```
-
-Available specialists: `injection`, `xss`, `auth`, `ssrf`, `authz`.
-
 ### With Source Code
+
+When `--source` is provided, archon-audit runs first (foreground), prepares a frozen whitebox context bundle, and the autonomous operator launches against that context.
 
 ```bash
 vigolium agent autopilot -t https://example.com --source ./app
+
+# Source from a remote repo
+vigolium agent autopilot -t https://example.com --source https://github.com/org/app.git
+
+# Focus on changed code from a PR
+vigolium agent autopilot -t https://example.com --source ./app \
+  --diff https://github.com/org/app/pull/42
+
+# Last N commits
+vigolium agent autopilot -t https://example.com --source ./app --last-commits 5
 ```
 
-### With a Focus Area
+### Intensity Presets
+
+| Preset | Max commands | Timeout | Archon mode | Browser |
+|--------|--------------|---------|-------------|---------|
+| `quick` | 30 | 1h | `lite` | off |
+| `balanced` (default) | 100 | 6h | `balanced` | off |
+| `deep` | 300 | 12h | `deep` | on |
 
 ```bash
-vigolium agent autopilot -t https://example.com --focus "authentication bypass"
+vigolium agent autopilot -t https://example.com --intensity deep
 ```
 
-### Resuming a Session
-
-Autopilot supports checkpointing. If interrupted, resume from where it left off:
+### Browser-Assisted Auth
 
 ```bash
-vigolium agent autopilot --resume ~/.vigolium/agent-sessions/agt-abc123-def456
+vigolium agent autopilot -t https://app.example.com --intensity deep \
+  --browser --credentials "admin/admin123"
 ```
 
-### Timeout and Limits
+### Halt and Token Budget
 
 ```bash
+# CI scan with a token budget cap
 vigolium agent autopilot -t https://example.com \
-  --timeout 2h \
-  --max-commands 50
+  --intensity quick --token-budget 200000 --max-duration 30m
 ```
+
+## Archon: Source Audit
+
+Archon-audit is the dedicated whitebox audit mode. It runs as a foreground command on its own, or as a background prep step when swarm/autopilot are invoked with `--source`.
+
+```bash
+# Standalone — multi-phase audit
+vigolium agent archon --source ./app --mode deep
+
+# Lite mode (CI-friendly, 3 phases)
+vigolium agent archon --source ./app --mode lite
+
+# Use a different agent CLI
+vigolium agent archon --source ./app --mode balanced --agent codex
+```
+
+Findings ingest into the same database as the rest of vigolium with `finding_source: archon`. Query them with:
+
+```bash
+vigolium finding list --source archon
+```
+
+See [Archon Audit](/agentic-scan/archon-audit) for the full guide.
 
 ## Session Management
 
@@ -256,6 +258,9 @@ vigolium agent session --mode swarm
 
 # View a specific session
 vigolium agent session <uuid>
+
+# Tail the live console log
+vigolium log <uuid>
 ```
 
 ## Custom Instructions
@@ -282,16 +287,14 @@ Preview the rendered prompt without executing:
 
 ```bash
 vigolium agent swarm --dry-run \
-  --input "https://example.com/api/users?id=1" \
-  -t https://example.com
+  --input "https://example.com/api/users?id=1"
 ```
 
 Print the prompt to stderr while executing:
 
 ```bash
 vigolium agent swarm --show-prompt \
-  --input "https://example.com/api/users?id=1" \
-  -t https://example.com
+  --input "https://example.com/api/users?id=1"
 ```
 
 ## Choosing the Right Mode
@@ -299,6 +302,7 @@ vigolium agent swarm --show-prompt \
 | Mode | AI Calls | Best For |
 |------|----------|----------|
 | **Query** | 1 | Code review, endpoint discovery, CI checks |
-| **Swarm** | 2-4+ | Targeted request scanning, focused testing |
-| **Pipeline** | 5-6+ | Full-scope structured scanning |
-| **Autopilot** | Many (parallel) | Deep autonomous assessment, multi-class testing |
+| **Swarm** | 2-4+ | Targeted request scanning, focused testing, full-scope with `--discover` |
+| **Autopilot** | Many | Deep autonomous assessment, exploratory pentest |
+| **Archon** | Multi-phase | Whitebox source-code audit (standalone or alongside swarm/autopilot) |
+| **Olium** | Variable | Interactive chat, debugging, ad-hoc prompts |

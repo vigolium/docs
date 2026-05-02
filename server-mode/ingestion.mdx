@@ -206,6 +206,19 @@ vigolium ingest --input urls.txt --db ./project.db
 vigolium ingest --input urls.txt --project-id a1b2c3d4-...
 ```
 
+### Auto-detection (stdin / file content)
+
+`vigolium ingest` auto-detects the content shape of stdin and `--input` files. You no longer need `-I/--input-mode` for the common formats:
+
+| Auto-detected | Sample input |
+|---|---|
+| URL list | `https://example.com/api/users` (one URL per line) |
+| Raw HTTP request | `POST /api HTTP/1.1\r\nHost: example.com\r\n\r\n…` |
+| Burp request+response pair | concatenated raw request and response separated by the standard delimiter |
+| Curl command | `curl -X POST https://example.com/api -d '…'` |
+
+When a Burp pair already includes a response, the record is saved as-is (no live re-fetch). A short stderr preview and JSON summary report what was detected and ingested. Use `-I` only when you want to force a specific format (e.g. parsing a Postman/OpenAPI/HAR file).
+
 ## Input Modes Reference
 
 | Mode | Content Field | Description |

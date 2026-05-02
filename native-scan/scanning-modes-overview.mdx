@@ -15,36 +15,32 @@ Vigolium supports multiple scanning modes depending on what you have available: 
 | Mode | What You Need | Command | What It Does |
 |------|---------------|---------|--------------|
 | **Lite** | URL | `vigolium scan -t URL --strategy lite` | Audit only, no discovery |
-| **Balanced** | URL | `vigolium scan -t URL` | Discovery + spidering + known-issue-scan + audit |
+| **Balanced** | URL | `vigolium scan -t URL` | Discovery + spidering + known-issue-scan + dynamic-assessment |
 | **Deep** | URL | `vigolium scan -t URL --strategy deep` | Adds external harvesting to balanced |
-| **Whitebox** | URL + source code | `vigolium scan -t URL --source ./app --strategy whitebox` | SAST route extraction + discovery + known-issue-scan + audit |
-| **Whitebox (remote)** | URL + git repo | `vigolium scan -t URL --source-url GIT_URL --strategy whitebox` | Same as whitebox, clones the repo first |
-| **SAST-only** | Source code | `vigolium scan -t URL --source ./app --only sast` | Static analysis only, no dynamic scanning |
-| **Agent** | Source code + AI backend | `vigolium agent --prompt-template X --repo ./app` | AI-powered code review |
-| **Extension** | URL + JS/YAML extensions | `vigolium run extension -t URL --ext script.js` | Run only custom extension modules |
-| **Full Combined** | URL + source code + AI backend | Multi-step (see [full-scan.md](full-scan.md)) | SAST + agent + dynamic for maximum coverage |
+| **Extension** | URL + JS extensions | `vigolium run extension -t URL --ext script.js` | Run only custom extension modules |
+| **Agent — Query** | Source code + provider | `vigolium agent query --prompt-template security-code-review --source ./app` | One-shot AI code review |
+| **Agent — Swarm** | URL (+ optional source) | `vigolium agent swarm -t URL [--source ./app]` | AI plans modules + JS extensions, native scanner runs them |
+| **Agent — Autopilot** | URL (+ optional source) | `vigolium agent autopilot -t URL [--source ./app]` | AI drives bash/files/CLI autonomously |
+| **Agent — Archon** | Source code | `vigolium agent archon --source ./app --mode deep` | Multi-phase whitebox security audit |
 
 ## Decision Guide
 
 ```
 Do you have application source code?
 ├── No
-│   ├── Quick single-URL test? ──────────── vigolium scan-url <URL>
-│   ├── Want fast results? ──────────────── vigolium scan -t URL --strategy lite
-│   ├── Standard scan? ─────────────────── vigolium scan -t URL
-│   ├── Maximum external recon? ─────────── vigolium scan -t URL --strategy deep
-│   └── Custom extension scripts only? ──── vigolium run extension -t URL --ext script.js
+│   ├── Quick single-URL test? ──────────────── vigolium scan-url <URL>
+│   ├── Want fast results? ──────────────────── vigolium scan -t URL --strategy lite
+│   ├── Standard scan? ──────────────────────── vigolium scan -t URL
+│   ├── Maximum external recon? ─────────────── vigolium scan -t URL --strategy deep
+│   ├── AI-guided targeted scan? ────────────── vigolium agent swarm -t URL
+│   ├── AI-driven autonomous pentest? ───────── vigolium agent autopilot -t URL
+│   └── Custom extension scripts only? ──────── vigolium run extension -t URL --ext script.js
 │
 └── Yes
-    ├── Do you have an AI agent configured?
-    │   ├── No
-    │   │   ├── Static analysis only? ───── vigolium scan -t URL --source ./app --only sast
-    │   │   ├── Static + dynamic? ──────── vigolium scan -t URL --source ./app --strategy whitebox
-    │   │   └── Remote repo? ──────────── vigolium scan -t URL --source-url GIT_URL --strategy whitebox
-    │   │
-    │   └── Yes
-    │       ├── One-shot code review? ──── vigolium agent --prompt-template security-code-review --repo ./app
-    │       └── Full combined scan? ────── See full-scan.md
+    ├── One-shot code review? ──────────────── vigolium agent query --prompt-template security-code-review --source ./app
+    ├── Multi-phase code audit? ────────────── vigolium agent archon --source ./app --mode deep
+    ├── AI-guided dynamic scan w/ source? ──── vigolium agent swarm -t URL --source ./app --code-audit
+    └── Autonomous pentest w/ source? ──────── vigolium agent autopilot -t URL --source ./app
 ```
 
 ## Phase Execution Pipeline
@@ -54,37 +50,37 @@ Phases execute in this order. Each strategy enables a subset of these phases:
 ```
 1. Heuristics Check     Pre-flight probe (detect WAF, redirects, tech stack)
 2. External Harvesting  Query Wayback, CommonCrawl, AlienVault OTX, URLScan, VirusTotal
-3. Spidering            Browser-based crawling (Chromium), SPA support, form filling
-4. SAST                 Static analysis via ast-grep (route extraction, security rules)
-5. Discovery            Content discovery (brute-force dirs/files, JS analysis)
-6. KnownIssueScan       Known Issue Scan (Nuclei templates + Kingfisher secrets)
-7. Audit                Active + passive scanner modules against all discovered endpoints
-8. Extension            Custom JS/YAML extension modules (when --only extension or --ext is used)
+3. Discovery            Content discovery (brute-force dirs/files, JS analysis)
+4. Spidering            Browser-based crawling (Chromium), SPA support, form filling
+5. KnownIssueScan       Nuclei templates + Kingfisher secret scanning
+6. Dynamic-Assessment   Active + passive scanner modules against all discovered endpoints
+7. Extension            Custom JS extension modules (when `--only extension` or `--ext` is used)
 ```
 
 ## Strategy Comparison
 
-| Phase | Lite | Balanced | Deep | Whitebox |
-|-------|:----:|:--------:|:----:|:--------:|
-| External Harvesting | - | - | yes | - |
-| Discovery | - | yes | yes | yes |
-| Spidering | - | yes | yes | - |
-| KnownIssueScan | - | yes | yes | yes |
-| Audit | yes | yes | yes | yes |
-| Source-Aware (SAST) | - | - | - | yes |
+| Phase | Lite | Balanced | Deep |
+|-------|:----:|:--------:|:----:|
+| External Harvesting | - | - | yes |
+| Discovery | - | yes | yes |
+| Spidering | - | yes | yes |
+| KnownIssueScan | - | yes | yes |
+| Dynamic-Assessment | yes | yes | yes |
 
 **Balanced** is the default strategy when `--strategy` is not specified.
 
 ## Phase Aliases
 
-Several phases have short aliases that work with `--only` and `--skip`:
+The canonical phase names are `discovery`, `spidering`, `dynamic-assessment`, and `extension`. The following aliases work with `--only` and `--skip`:
 
 | Alias | Canonical Phase |
 |-------|-----------------|
 | `deparos` | `discovery` |
 | `discover` | `discovery` |
 | `spitolas` | `spidering` |
-| `dynamic-assessment` | `audit` |
+| `audit` | `dynamic-assessment` |
+| `dast` | `dynamic-assessment` |
+| `assessment` | `dynamic-assessment` |
 | `ext` | `extension` |
 
 ## Phase Control: `--only` and `--skip`
@@ -99,21 +95,18 @@ Disables all other phases and turns off heuristics.
 # Run only content discovery
 vigolium scan -t https://example.com --only discovery
 
-# Run only SAST analysis
-vigolium scan -t https://example.com --source ./app --only sast
-
-# Run only audit (skip all discovery)
-vigolium scan -t https://example.com --only audit
-# Legacy alias also works:
-# vigolium scan -t https://example.com --only dynamic-assessment
+# Run only the dynamic-assessment phase (active + passive vulnerability scan)
+vigolium scan -t https://example.com --only dynamic-assessment
+# Aliases also work:
+# vigolium scan -t https://example.com --only audit
 
 # Run only custom extensions (skip built-in modules)
-vigolium scan -t https://example.com --only extension
+vigolium scan -t https://example.com --only extension --ext my-scanner.js
 # Or using the alias:
-vigolium scan -t https://example.com --only ext
+vigolium scan -t https://example.com --only ext --ext my-scanner.js
 ```
 
-Valid values: `ingestion`, `discovery` (`deparos`), `spidering` (`spitolas`), `external-harvest`, `known-issue-scan`, `sast`, `audit` (`dynamic-assessment`), `extension` (`ext`)
+Valid values: `ingestion`, `discovery` (`deparos`/`discover`), `spidering` (`spitolas`), `external-harvest`, `known-issue-scan`, `dynamic-assessment` (`audit`/`dast`/`assessment`), `extension` (`ext`).
 
 ### `--skip <phase>` — Skip Specific Phases
 
@@ -127,8 +120,6 @@ vigolium scan -t https://example.com --skip spidering
 vigolium scan -t https://example.com --skip discovery --skip known-issue-scan
 ```
 
-Valid values: `discovery` (`deparos`), `external-harvest`, `spidering` (`spitolas`), `known-issue-scan`, `sast`, `audit` (`dynamic-assessment`), `extension` (`ext`)
-
 ### `vigolium run <phase>` Shortcut
 
 `vigolium run <phase>` is a direct alias for `vigolium scan --only <phase>`:
@@ -140,8 +131,6 @@ vigolium scan -t https://example.com --only discovery
 
 # Run only extension modules:
 vigolium run extension -t https://example.com --ext my-scanner.js
-# Equivalent to:
-vigolium scan -t https://example.com --only extension --ext my-scanner.js
 ```
 
 ## Scanning Profiles
@@ -185,7 +174,7 @@ discovery:
 known_issue_scan:
   enrich_targets: false         # host-level only (faster)
 
-audit:
+dynamic-assessment:
   max_findings_per_module: 10   # cap noisy modules
   enabled_modules:
     active_modules:
@@ -200,7 +189,7 @@ scope:
       - "/api/*"
 ```
 
-Overridable sections: `scanning_strategy`, `scanning_pace`, `discovery`, `spidering`, `known_issue_scan`, `audit`, `external_harvester`, `mutation_strategy`, `scope`.
+Overridable sections: `scanning_strategy`, `scanning_pace`, `discovery`, `spidering`, `known_issue_scan`, `dynamic-assessment`, `external_harvester`, `mutation_strategy`, `scope`.
 
 ### Profile Configuration
 
@@ -221,10 +210,8 @@ Profiles slot between CLI flags and the main config file:
 3. Main config file (`vigolium-configs.yaml`)
 4. Built-in defaults
 
-## Detailed Guides
+## Source-Aware Scanning
 
-- [Blackbox Scanning](/native-scan/blackbox-scan) — Dynamic scanning without source code
-- [Extension Scanning](/native-scan/extension-scan) — Custom JS/YAML extension modules
-- [Whitebox Scanning](/native-scan/whitebox-scan) — Static analysis with source code
-- [Whitebox + Agent Scanning](/native-scan/whitebox-agent-scan) — AI-enhanced source code analysis
-- [Full Combined Scan](/native-scan/full-scan) — Maximum coverage with all capabilities
+Source code-aware analysis lives in agent mode, not in the native scanner. Use `vigolium agent swarm --source <path>` for AI-driven route extraction + code audit + targeted scanning, `vigolium agent autopilot --source <path>` for autonomous pentest with code context, or `vigolium agent archon --source <path> --mode deep` for a standalone multi-phase whitebox audit.
+
+See [Agent Mode](/agentic-scan/agent-mode) for the full overview.

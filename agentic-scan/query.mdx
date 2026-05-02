@@ -4,16 +4,16 @@ description: "Single-shot AI prompt execution for code analysis, endpoint discov
 icon: "magnifying-glass"
 ---
 
-Query mode is Vigolium's single-shot AI prompt execution mode. It sends a prompt template or inline prompt to an AI agent and returns structured output -no network scanning, no multi-phase orchestration. One AI call, one response.
+Query mode is Vigolium's single-shot AI prompt execution mode. It sends a prompt template or inline prompt to the in-process olium engine and returns structured output — no network scanning, no multi-phase orchestration. One LLM call, one response.
 
 ## What It Does
 
-- Loads a prompt template, enriches it with source code and database context, and sends it to the configured AI agent
+- Loads a prompt template, enriches it with source code and database context, and dispatches it to the olium engine
 - The agent analyzes the provided context and returns structured JSON (findings or HTTP records)
 - Results are parsed and saved to the Vigolium database
-- No network scanning occurs -query mode purely analyzes what you give it
+- No network scanning occurs — query mode purely analyzes what you give it
 
-Query mode is not an agentic scan. It does not discover targets, send attack traffic, or iterate. It is a code analysis tool that leverages AI to find vulnerabilities, extract endpoints, or answer security questions from source code.
+Query mode is **not** an agentic scan. It does not discover targets, send attack traffic, or iterate. It is a code analysis tool that leverages AI to find vulnerabilities, extract endpoints, or answer security questions from source code.
 
 ## CLI Usage
 
@@ -23,13 +23,13 @@ Run a built-in or custom prompt template against source code:
 
 ```bash
 # Security code review
-vigolium agent --prompt-template security-code-review --source ./src
+vigolium agent query --prompt-template security-code-review --source ./src
 
 # Endpoint discovery from a Django project
-vigolium agent --prompt-template endpoint-discovery --source ~/projects/django-app
+vigolium agent query --prompt-template endpoint-discovery --source ~/projects/django-app
 
 # Review specific files only
-vigolium agent --prompt-template injection-sinks --source ./src --files db/query.go,api/handler.go
+vigolium agent query --prompt-template injection-sinks --source ./src --files db/query.go,api/handler.go
 ```
 
 ### Custom Prompt File
@@ -37,7 +37,7 @@ vigolium agent --prompt-template injection-sinks --source ./src --files db/query
 Use your own Markdown prompt file with YAML frontmatter:
 
 ```bash
-vigolium agent --prompt-file my-prompt.md --source ./src
+vigolium agent query --prompt-file my-prompt.md --source ./src
 ```
 
 ### Freeform Questions
@@ -61,13 +61,13 @@ echo "explain CSRF" | vigolium agent query --stdin
 
 ### Dry Run
 
-Render the full prompt without sending it to the agent -useful for debugging templates:
+Render the full prompt without sending it to the engine — useful for debugging templates:
 
 ```bash
-vigolium agent --prompt-template endpoint-discovery --source ./src --dry-run
+vigolium agent query --prompt-template endpoint-discovery --source ./src --dry-run
 ```
 
-### List Templates and Agents
+### List Templates and Providers
 
 ```bash
 vigolium agent --list-templates
@@ -77,40 +77,49 @@ vigolium agent --list-agents
 ### More Examples
 
 ```bash
-# Code review with additional focus instructions
-vigolium agent --prompt-template security-code-review --source ./src \
+# Code review with extra focus instructions
+vigolium agent query --prompt-template security-code-review --source ./src \
   --append "Pay special attention to deserialization and file upload handling"
 
-# Use a specific agent backend
-vigolium agent --prompt-template injection-sinks --source ./src --agent gemini
+# Use a specific olium provider for this run
+vigolium agent query --prompt-template injection-sinks --source ./src \
+  --provider anthropic-api-key --model claude-opus-4-7
 
-# Save agent output to a file
-vigolium agent --prompt-template security-code-review --source ./src --output review-results.json
+# Save raw agent output to a file
+vigolium agent query --prompt-template security-code-review --source ./src \
+  --output review-results.json
 
-# Scope to a specific project
-vigolium agent --prompt-template security-code-review --source ./src --project my-api
-
-# Chain with jq to extract high-severity findings
-vigolium agent --prompt-template security-code-review --source ./src --json \
-  | jq '.[] | select(.severity == "high")'
+# Tag ingested HTTP records with a custom source label
+vigolium agent query --prompt-template endpoint-discovery --source ./src \
+  --source-label agent-review
 
 # Detect hardcoded secrets in config files
-vigolium agent --prompt-template secret-detection --source ./src --files config/,deploy/
+vigolium agent query --prompt-template secret-detection --source ./src --files config/,deploy/
 ```
 
 ## Key Flags
 
 | Flag | Description |
 |------|-------------|
-| `--prompt-template` | Template ID to use (e.g., `security-code-review`, `endpoint-discovery`) |
+| `--prompt-template` | Template ID to use (e.g. `security-code-review`, `endpoint-discovery`) |
 | `--prompt-file` | Path to a custom prompt Markdown file |
-| `--source` | Path to source code directory |
+| `-p, --prompt` | Inline prompt text |
+| `--stdin` | Read prompt from stdin |
+| `--source` | Path to source code directory (or git URL — auto-cloned) |
 | `--files` | Specific files to include, relative to `--source` (comma-separated) |
-| `--agent` | Agent backend to use (overrides `agent.default_agent` from config) |
 | `--append` | Extra text appended to the rendered prompt |
+| `--instruction` / `--instruction-file` | Custom instruction appended to the prompt |
+| `--source-label` | Label for records ingested from agent output (e.g. `agent-review`) |
 | `--output` | Write raw agent output to a file |
+| `--max-duration` | Wall-clock cap (default 5m) |
+| `--upload-results` | Upload the session bundle to cloud storage on completion |
 | `--dry-run` | Render the prompt without executing it |
-| `--source-label` | Label for records ingested from agent output (e.g., `agent-review`) |
+| `--show-prompt` | Print rendered prompt to stderr before executing |
+| `--provider` | Olium provider override (`codex-oauth` / `anthropic-api-key` / `claude-oauth` / `openai-api-key` / `claude-code-cli`) |
+| `--model` | Olium model id override |
+| `--oauth-cred` / `--oauth-token` | OAuth credential overrides for codex / claude providers |
+| `--llm-api-key` | API key override for key-based providers |
+| `--agent-label` | Label recorded on the AgenticScan DB row (cosmetic; dispatch always uses olium) |
 
 ## API
 
@@ -120,32 +129,33 @@ POST /api/agent/run/query
 
 ```json
 {
-  "agent": "claude",
   "prompt_template": "security-code-review",
-  "source": "/path/to/repo",
+  "source": "/home/user/src/my-app",
   "files": ["main.go", "handlers.go"],
   "append": "Focus on authentication logic",
   "stream": true
 }
 ```
 
-At least one of `prompt_template`, `prompt_file`, or `prompt` is required. When `stream` is `true`, the response uses Server-Sent Events for real-time output.
+At least one of `prompt_template`, `prompt_file`, or `prompt` is required. The legacy `repo_path` JSON field is still accepted as an alias for `source`. When `stream` is `true`, the response uses Server-Sent Events for real-time output.
+
+> Provider/model overrides are CLI-only — the server resolves them once from `agent.olium.*` in `vigolium-configs.yaml`. To switch providers on a server-side workload, edit the YAML and reload.
 
 ## Use Cases
 
-- **Code review** -run `security-code-review` before deployment to catch injection sinks, hardcoded secrets, and auth bypasses
-- **Endpoint discovery** -extract API routes from source code (Express, Spring, Django, etc.) and ingest them as HTTP records for subsequent scanning
-- **Secret detection** -scan config files, deploy scripts, and environment templates for hardcoded credentials
-- **CI/CD integration** -single AI call completes in seconds, making it suitable for pipeline gates
-- **Triage questions** -ask the agent about a specific vulnerability pattern or security concept
+- **Code review** — run `security-code-review` before deployment to catch injection sinks, hardcoded secrets, and auth bypasses
+- **Endpoint discovery** — extract API routes from source code (Express, Spring, Django, etc.) and ingest them as HTTP records for subsequent scanning
+- **Secret detection** — scan config files, deploy scripts, and environment templates for hardcoded credentials
+- **CI/CD integration** — single LLM call completes in seconds, making it suitable for pipeline gates
+- **Triage questions** — ask the agent about a specific vulnerability pattern or security concept
 
 ## Pros and Cons
 
 | Pros | Cons |
 |------|------|
-| Fast -single AI call, completes in seconds | No network scanning -code analysis only |
-| Low cost -one prompt, one response | Requires source code access for most templates |
-| Deterministic scope -same template produces consistent coverage | Findings are unverified (no live confirmation) |
-| Good for CI/CD -predictable runtime, structured output | Limited to what the template asks for |
+| Fast — single LLM call, completes in seconds | No network scanning — code analysis only |
+| Low cost — one prompt, one response | Requires source code access for most templates |
+| Deterministic scope — same template produces consistent coverage | Findings are unverified (no live confirmation) |
+| Good for CI/CD — predictable runtime, structured output | Limited to what the template asks for |
 | Works without a running target | Cannot discover runtime-only vulnerabilities |
-| Supports structured output schemas (findings, HTTP records) | Freeform questions return unstructured text |
+| Supports structured output schemas (`findings`, `http_records`) | Freeform questions return unstructured text |

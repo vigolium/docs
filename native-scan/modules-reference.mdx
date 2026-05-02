@@ -1,10 +1,12 @@
 ---
 title: "Scanner Modules Reference"
-description: "Complete reference for Vigolium's 210 scanner modules -127 active and 83 passive -covering the OWASP Top 10 and beyond."
+description: "Reference for Vigolium's 235 scanner modules — 144 active and 91 passive — covering the OWASP Top 10 and beyond."
 icon: "cubes"
 ---
 
-Vigolium ships with **210 scanner modules** - 127 active and 83 passive - covering the OWASP Top 10 and beyond.
+Vigolium ships with **235 scanner modules** — 144 active and 91 passive — covering the OWASP Top 10 and beyond. Run `vigolium module ls` for the up-to-date enabled list (the registry can grow between releases without a docs refresh).
+
+Active modules send modified requests to detect vulnerabilities; passive modules analyze existing request/response pairs without generating traffic. Recent additions include the MCP scanner suite, sensitive-header-leak detector, and DOM XSS confirm module — see `vigolium module ls --tag mcp` and `--tag xss` to view them.
 
 ## Severity Scale
 
@@ -18,9 +20,9 @@ Vigolium ships with **210 scanner modules** - 127 active and 83 passive - coveri
 
 ---
 
-## Active Modules (127)
+## Active Modules (144)
 
-Active modules send modified requests to detect vulnerabilities via fuzzing, injection, and behavioral analysis.
+Active modules send modified requests to detect vulnerabilities via fuzzing, injection, and behavioral analysis. The list below is a curated highlight — run `vigolium module ls --type active` for the full list.
 
 ### XSS
 
@@ -295,7 +297,7 @@ Active modules send modified requests to detect vulnerabilities via fuzzing, inj
 
 ---
 
-## Passive Modules (83)
+## Passive Modules (91)
 
 Passive modules analyze existing request/response pairs without sending new traffic.
 

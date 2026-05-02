@@ -247,9 +247,9 @@ vigolium scan https://app.com --auth-config ./auth-config.json
 
 JSON is a good choice when:
 
-- **AI agents generate session configs** — most LLMs produce cleaner JSON than YAML, and agent modes (pipeline, swarm) already output session config as JSON natively.
+- **AI agents generate session configs** — most LLMs produce cleaner JSON than YAML, and agent modes (swarm, autopilot) already output session config as JSON natively.
 - **Programmatic generation** — scripts, CI pipelines, or tools that build session configs are often simpler in JSON.
-- **Embedding in other JSON payloads** — e.g., the REST API `POST /api/agent/run/pipeline` body includes session config as a nested JSON object.
+- **Embedding in other JSON payloads** — e.g., the REST API `POST /api/agent/run/swarm` body includes session config as a nested JSON object.
 
 YAML remains convenient for hand-written configs where comments and multi-line strings help readability.
 

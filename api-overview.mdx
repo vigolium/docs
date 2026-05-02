@@ -81,15 +81,20 @@ Server startup, authentication, and general endpoints.
 |--------|----------|-------------|
 | GET | `/api/modules` | List scanner modules |
 
-### [Source Repos](/api-references/source-repos)
+### [Storage](/api-references/storage)
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/source-repos` | List source repos |
-| POST | `/api/source-repos` | Create source repo |
-| GET | `/api/source-repos/:id` | Get source repo |
-| PUT | `/api/source-repos/:id` | Update source repo |
-| DELETE | `/api/source-repos/:id` | Delete source repo |
+| POST | `/api/storage/upload-source` | Upload source code archive to cloud storage |
+| GET | `/api/storage/source/:key` | Download a previously uploaded source file |
+| GET | `/api/storage/results/:scan-uuid` | Download a scan result bundle (.tar.gz) |
+| POST | `/api/storage/presign` | Generate a presigned upload/download URL |
+
+### [Diagnostics](/api-references/diagnostics)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/diagnostics` | System readiness check (DB, agent provider, tools, dirs) |
 
 ### [OAST Interactions](/api-references/oast-interactions)
 
@@ -114,7 +119,12 @@ Server startup, authentication, and general endpoints.
 |--------|----------|-------------|
 | POST | `/api/agent/run/query` | Single-shot agent prompt execution |
 | POST | `/api/agent/run/autopilot` | Autonomous AI-driven scanning session |
-| POST | `/api/agent/run/pipeline` | Multi-phase scanning pipeline |
+| POST | `/api/agent/run/swarm` | AI-guided multi-phase vulnerability swarm |
 | GET | `/api/agent/status/list` | List agent runs |
 | GET | `/api/agent/status/:id` | Agent run status |
+| GET | `/api/agent/sessions` | Paginated session history |
+| GET | `/api/agent/sessions/:id` | Full session detail |
+| GET | `/api/agent/sessions/:id/logs` | Read or tail `runtime.log` (SSE supported) |
+| GET | `/api/agent/sessions/:id/artifacts` | List session artifact files |
+| GET | `/api/agent/sessions/:id/artifacts/{name}` | Read a specific artifact |
 | POST | `/api/agent/chat/completions` | OpenAI-compatible chat completions |
