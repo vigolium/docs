@@ -1,0 +1,315 @@
+---
+title: "CLI References"
+description: "Common usage examples for the vigolium CLI — scanning, agentic runs, ingestion, server, database, and more."
+icon: "terminal"
+---
+
+A curated tour of the most common `vigolium` invocations, grouped by command. For the full flag list of any command, run `vigolium <command> --help`. For the same examples in your terminal, run `vigolium --full-example`.
+
+## Top-Level Commands
+
+```bash
+vigolium --help              # All available commands and global flags
+vigolium <command> --help    # Flags and help for a specific command
+vigolium --full-example      # Curated tour of all common usage
+vigolium version             # Build and version info
+```
+
+## Scanning
+
+Run the full native pipeline against one or more targets.
+
+```bash
+# Single target
+vigolium scan -t https://example.com
+
+# Multiple targets
+vigolium scan -t https://example.com -t https://api.example.com
+vigolium scan -T targets.txt
+
+# Scanning profiles and strategies
+vigolium scan -t https://example.com --strategy deep
+vigolium scan -t https://example.com --scanning-profile quick
+vigolium scan -t https://example.com --scanning-profile full
+
+# Phase control
+vigolium scan -t https://example.com --only dynamic-assessment
+vigolium scan -t https://example.com --skip discovery,spidering
+
+# Module selection
+vigolium scan -t https://example.com -m xss-reflected,sqli-error
+vigolium scan -t https://example.com --module-tag spring --module-tag injection
+
+# Output and reporting
+vigolium scan -t https://example.com --format jsonl -o results.jsonl
+vigolium scan -t https://example.com --format html -o report.html
+
+# Network controls
+vigolium scan -t https://example.com --proxy http://127.0.0.1:8080
+vigolium scan -t https://example.com -c 100 --rate-limit 200
+vigolium scan -t https://example.com --scanning-max-duration 2h
+
+# Custom JS extensions
+vigolium scan -t https://example.com --ext custom-check.js
+vigolium scan -t https://example.com --ext-dir ./my-extensions
+vigolium scan -t https://example.com --only extension --ext custom-check.js
+
+# Project scoping
+vigolium scan -t https://example.com --project-name my-project
+
+# OAST and known-issue scanning
+vigolium scan -t https://example.com --oast-url https://interact.sh/abc123
+vigolium scan -t https://example.com --known-issue-scan-tags cve,misconfig --known-issue-scan-severities critical,high
+```
+
+## Running a Single Phase
+
+`vigolium run <phase>` is an alias for `scan --only <phase>` — useful when you want one specific stage of the pipeline.
+
+```bash
+vigolium run discover -t https://example.com
+vigolium run spidering -t https://example.com
+vigolium run dynamic-assessment -t https://example.com
+vigolium run dynamic-assessment -t https://example.com --module-tag spring
+vigolium run external-harvest -t https://example.com
+vigolium run known-issue-scan -t https://example.com
+vigolium run known-issue-scan -t https://example.com --known-issue-scan-tags cve --known-issue-scan-severities critical,high
+vigolium run extension -t https://example.com --ext custom-check.js
+vigolium run deparos -t https://example.com
+vigolium run dast -t https://example.com
+```
+
+## Input Modes
+
+Feed traffic into a scan from OpenAPI, Burp, curl, HAR, or stdin.
+
+```bash
+vigolium scan -I openapi -i openapi.yaml -t https://api.example.com
+vigolium scan -I burp    -i burp-export.xml -t https://example.com
+vigolium scan -I curl    -i requests.txt
+vigolium scan -I har     -i traffic.har
+cat urls.txt | vigolium scan -i -
+```
+
+Run `vigolium --list-input-mode` to see every supported input format with examples.
+
+## Ingestion
+
+Push HTTP traffic into the database without running a scan — useful for building a project corpus before scanning, or for sending traffic to a remote server.
+
+```bash
+vigolium ingest -t https://example.com -I openapi -i spec.yaml
+vigolium ingest -t https://example.com -I burp    -i export.xml
+cat urls.txt | vigolium ingest -i -
+
+# Send to a remote Vigolium server
+vigolium ingest -s http://server:9002 -i api.yaml -I openapi
+```
+
+## Server
+
+Start the REST API and ingest proxy.
+
+```bash
+vigolium server                                              # Default host/port from config
+vigolium server --host 0.0.0.0 --service-port 8443
+vigolium server --no-auth                                    # Local use only — disables bearer auth
+vigolium server -t https://example.com --scan-on-receive     # Auto-scan ingested traffic
+```
+
+## Database & Results
+
+Browse, export, and prune scan data.
+
+```bash
+# Browse
+vigolium db ls
+vigolium db ls --table findings
+vigolium db stats
+vigolium db stats --detailed
+vigolium traffic                  # Alias for `db ls --table http_records`
+vigolium traffic login            # Filter to login-related records
+vigolium finding                  # Fuzzy-search findings
+
+# Export
+vigolium export --format jsonl -o full-export.jsonl
+vigolium export --format jsonl --only findings
+vigolium export --format jsonl --only findings,http
+vigolium export --format html -o report.html
+
+# Cleanup
+vigolium db clean --scan-uuid my-scan
+```
+
+## Strategies & Phases
+
+Inspect scanning strategy presets and the phases that make up a scan.
+
+```bash
+vigolium strategy
+vigolium strategy ls
+vigolium phase
+```
+
+## Modules
+
+Manage the active and passive scanner modules.
+
+```bash
+vigolium module ls
+vigolium module ls xss             # Search by keyword
+vigolium module enable xss
+vigolium module disable sqli
+vigolium scan -M                   # List all modules from the scan command
+```
+
+## Extensions
+
+Run and manage JavaScript extensions that hook into the scanner.
+
+```bash
+vigolium ext ls
+vigolium ext docs
+vigolium ext preset
+vigolium ext eval 'vigolium.log("hello")'
+vigolium ext eval --ext-file script.js
+```
+
+## Scope & Source
+
+Control what's in-scope and attach source code to a host for whitebox-aware scanning.
+
+```bash
+# Scope rules
+vigolium scope view
+vigolium scope set host.include '*.example.com'
+
+# Source code attachment
+vigolium source ls
+vigolium source add --hostname api.example.com --path ./api-source
+vigolium source scan 1
+```
+
+## Agent (AI)
+
+Run agentic and source-audit modes. See [Agent Mode](/agentic-scan/agent-mode) for the full list of subcommands.
+
+### `agent query` — single-shot prompts
+
+```bash
+vigolium agent query --source ./src --prompt-template security-code-review
+vigolium agent query --source ./src --prompt-template endpoint-discovery
+vigolium agent query 'review this code for vulnerabilities'
+vigolium agent query --agent-label code-review --prompt-file custom-prompt.md
+vigolium agent --list-templates
+```
+
+### `agent swarm` — AI-guided multi-phase scan
+
+```bash
+vigolium agent swarm -t https://example.com --discover
+vigolium agent swarm -t https://example.com --discover --focus 'API injection'
+```
+
+### `agent autopilot` — autonomous agentic scan
+
+```bash
+# Natural-language prompt — target, source, and focus auto-extracted
+vigolium agent autopilot "scan VAmPI source at ~/src/VAmPI on localhost:3005"
+vigolium agent autopilot "test auth bypass on https://app.example.com"
+
+# Plain target
+vigolium agent autopilot -t https://example.com/api
+
+# Source-aware (auto-runs archon-audit first to build context)
+vigolium agent autopilot -t https://example.com --source ./src
+vigolium agent autopilot -t https://example.com --source ./src --archon=off   # disable archon
+
+# Pipe a curl command or raw HTTP request via stdin
+curl -s https://example.com/api/users | vigolium agent autopilot
+cat request.txt | vigolium agent autopilot -t https://example.com
+
+# Pass curl/raw HTTP as input
+vigolium agent autopilot --input "curl -X POST -H 'Content-Type: application/json' \
+  -d '{\"user\":\"admin\"}' https://example.com/api/login"
+
+# Focus the agent on specific vulnerability classes
+vigolium agent autopilot -t https://example.com --focus "auth bypass and IDOR"
+
+# Intensity presets — quick (CI/PR), balanced (default), deep (pentest)
+vigolium agent autopilot -t https://example.com --intensity deep
+vigolium agent autopilot -t https://example.com --source ./src --intensity quick
+
+# Narrow source scope
+vigolium agent autopilot -t https://example.com --source ./src \
+  --files "routes/api.js,controllers/auth.js" \
+  --instruction "Focus on the new payment endpoint"
+
+# PR / diff-aware scan
+vigolium agent autopilot -t https://example.com --source ./src --diff "main...feature-branch"
+vigolium agent autopilot -t https://example.com --source ./src --last-commits 3
+
+# Backend / browser / auth
+vigolium agent autopilot -t https://example.com --provider anthropic-api-key
+vigolium agent autopilot -t https://example.com --browser --credentials "admin/admin123"
+
+# Limits and previews
+vigolium agent autopilot -t https://example.com --max-commands 200 --max-duration 4h
+vigolium agent autopilot -t https://example.com --token-budget 2000000
+vigolium agent autopilot -t https://example.com --source ./src --dry-run
+vigolium agent autopilot -t https://example.com --source ./src --show-prompt
+```
+
+### `agent audit` — unified source audit (archon + piolium)
+
+Runs archon and/or piolium back-to-back against a single source tree under one AgenticScan, with per-driver session subdirs and a post-pass findings dedup.
+
+```bash
+# Default: archon then piolium under one AgenticScan, balanced mode
+vigolium agent audit --source .
+
+# Single driver (equivalent to agent piolium / agent archon)
+vigolium agent audit --driver piolium --source ./backend --mode lite
+vigolium agent audit --driver archon  --source ./backend --agent claude
+
+# Both drivers, deep intensity, against a remote git URL
+vigolium agent audit --source git@github.com:org/repo.git --intensity deep
+vigolium agent audit --source https://github.com/org/repo.git --commit-depth 0   # full history
+
+# Override pi's provider/model for the piolium leg
+vigolium agent audit --source ./backend \
+  --pi-provider vertex-anthropic --pi-model claude-opus-4-6
+
+# Driver-specific modes (piolium=longshot/smoke, archon=mock)
+vigolium agent audit --driver piolium --source ./mono-repo --mode longshot \
+  --plm-longshot-langs python,go --plm-longshot-limit 200
+vigolium agent audit --driver archon --source ./backend --mode mock
+
+# Cap commit-history scan window
+vigolium agent audit --driver piolium --source ./backend --plm-scan-since "60 days ago"
+vigolium agent audit --driver piolium --source ./backend --plm-scan-limit 500
+
+# Skip post-pass dedup or preflight checks
+vigolium agent audit --source ./backend --no-dedup
+vigolium agent audit --source ./backend --no-preflight
+
+# Pull source from a cloud-storage archive, upload results when done
+vigolium agent audit --source gs://my-bucket/snapshots/repo.tar.gz
+vigolium agent audit --source ./backend --upload-results
+```
+
+## Configuration
+
+```bash
+vigolium config ls
+vigolium config clean
+vigolium init                     # Initialize ~/.vigolium with defaults
+vigolium doctor                   # Diagnose configuration and tool readiness
+vigolium auth                     # Authentication management utilities
+vigolium project                  # Manage multi-tenant projects
+vigolium license                  # Show license status
+```
+
+<Note>
+This page covers the most common invocations. Every command supports `--help` for the full flag reference, and most commands accept the global flags shown by `vigolium --help`.
+</Note>

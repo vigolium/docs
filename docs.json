@@ -44,7 +44,6 @@
               "agentic-scan/agent-mode",
               "agentic-scan/autopilot",
               "agentic-scan/swarm",
-              "agentic-scan/query",
               "agentic-scan/archon-audit",
               "agentic-scan/piolium-audit",
               "agentic-scan/olium",
@@ -109,6 +108,7 @@
             "icon": "bug",
             "pages": [
               "others/audit-report",
+              "others/cli-references",
               "others/api-references"
             ]
           }
