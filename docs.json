@@ -198,7 +198,7 @@
   },
   "seo": {
     "metatags": {
-        "og:image": "https://avatars.githubusercontent.com/u/266502139?s=200&v=4",
+        "og:image": "https://docs.vigolium.com/images/vigolium-main-workbench.png",
         "og:description": "Vigolium - High-fidelity vulnerability scanner fusing agentic AI with native speed, modularity, and precision"
       }
   },
