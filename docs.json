@@ -31,7 +31,8 @@
             "icon": "rocket",
             "pages": [
               "getting-started/overview",
-              "getting-started/getting-started",
+              "getting-started/quick-start",
+              "getting-started/self-hosted",
               "getting-started/configuration",
               "getting-started/output-and-reporting"
             ]
