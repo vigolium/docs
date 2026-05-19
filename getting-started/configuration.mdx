@@ -296,10 +296,10 @@ agent:
 
   # Olium engine — used by every agent subcommand
   olium:
-    provider: codex-oauth          # codex-oauth | anthropic-api-key | claude-oauth | openai-api-key | claude-code-cli
+    provider: openai-codex-oauth   # openai-codex-oauth | anthropic-api-key | anthropic-oauth | openai-api-key | anthropic-cli | anthropic-vertex | google-vertex | openai-compatible
     model: gpt-5.5                 # empty = provider default
-    oauth_cred_path: ~/.codex/auth.json    # codex-oauth provider
-    oauth_token: ""                # claude-oauth bearer token (from `claude setup-token`); supports ${ENV_VAR}
+    oauth_cred_path: ~/.codex/auth.json    # openai-codex-oauth provider
+    oauth_token: ""                # anthropic-oauth bearer token (from `claude setup-token`); supports ${ENV_VAR}
     llm_api_key: ""                # for anthropic-api-key / openai-api-key; supports ${ENV_VAR}; falls back to provider env
     reasoning_effort: medium       # minimal | low | medium | high | xhigh (codex)
     system_prompt: ""              # override built-in olium system prompt
@@ -309,6 +309,21 @@ agent:
     cache_size: 1024               # LRU entries; 0 disables
     max_concurrent: 4              # global cap on simultaneous in-flight provider calls
     call_timeout_sec: 600          # per-call deadline; -1 = no enforced timeout
+
+    # Custom OpenAI-compatible backend (used when provider == openai-compatible).
+    # Drives Ollama, OpenRouter, LM Studio, vLLM, etc.
+    custom_provider:
+      base_url: ""                 # e.g. http://localhost:11434/v1 (Ollama)
+      model_id: ""                 # backend-specific model id, e.g. gemma4:latest
+      api_key: ""                  # optional; leave empty to skip Authorization header
+      headers: {}                  # extra HTTP headers
+      timeout_sec: 0               # per-call timeout override; 0 = inherit call_timeout_sec
+
+    # Vertex AI (anthropic-vertex / google-vertex)
+    vertex:
+      project_id: ""               # GCP project id
+      region: us-central1          # GCP region hosting the model
+      credentials_path: ""         # path to service-account JSON; empty = ADC
 
   # LLM config for JavaScript extension agent API (vigolium.agent.* in extensions)
   llm:
@@ -353,13 +368,16 @@ Provider quick reference:
 
 | Provider | Default model | Credential source |
 |----------|--------------|--------------------|
-| `codex-oauth` | `gpt-5.5` | `oauth_cred_path` (`~/.codex/auth.json`) |
+| `openai-codex-oauth` *(default)* | `gpt-5.5` | `oauth_cred_path` (`~/.codex/auth.json`) |
 | `anthropic-api-key` | `claude-opus-4-7` | `llm_api_key` or `$ANTHROPIC_API_KEY` |
-| `claude-oauth` | `claude-opus-4-7` | `oauth_token` (from `claude setup-token`); falls back to `$ANTHROPIC_API_KEY` |
+| `anthropic-oauth` | `claude-opus-4-7` | `oauth_token` (from `claude setup-token`); falls back to `$ANTHROPIC_API_KEY` |
 | `openai-api-key` | `gpt-5.5` | `llm_api_key` or `$OPENAI_API_KEY` |
-| `claude-code-cli` | `claude-opus-4-7` | local `claude` binary on `$PATH` |
+| `anthropic-cli` | `claude-opus-4-7` | local `claude` binary on `$PATH` |
+| `anthropic-vertex` | `claude-opus-4-6` | GCP service-account JSON (or ADC) via `agent.olium.vertex` |
+| `google-vertex` | `gemini-2.5-pro` | GCP service-account JSON (or ADC) via `agent.olium.vertex` |
+| `openai-compatible` | none — pick one | `agent.olium.custom_provider` (Ollama, OpenRouter, LM Studio, vLLM, …) |
 
-CLI flags `--provider`, `--model`, `--oauth-cred`, `--oauth-token`, `--llm-api-key` override these per-invocation. The REST API does **not** mirror these overrides — server-side workloads use the YAML config exclusively. See [Olium Agent](/agentic-scan/olium) for full provider details.
+CLI flags `--provider`, `--model`, `--oauth-cred`, `--oauth-token`, `--llm-api-key`, `--base-url` override these per-invocation. The REST API does **not** mirror these overrides — server-side workloads use the YAML config exclusively. See [Setting Up the Agent](/getting-started/setup-agent) for a step-by-step walkthrough or [Olium Agent](/agentic-scan/olium) for full provider details.
 
 ### `database`
 

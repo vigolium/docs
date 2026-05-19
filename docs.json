@@ -31,10 +31,24 @@
             "icon": "rocket",
             "pages": [
               "getting-started/overview",
-              "getting-started/quick-start",
-              "getting-started/self-hosted",
+              "getting-started/quickstart",
+              "getting-started/choosing-a-mode",
+              "getting-started/native-scan",
+              "getting-started/setup-agent",
               "getting-started/configuration",
               "getting-started/output-and-reporting"
+            ]
+          },
+          {
+            "group": "Native Scan",
+            "icon": "radar",
+            "pages": [
+              "native-scan/scanning-modes-overview",
+              "native-scan/how-it-works",
+              "native-scan/strategies",
+              "native-scan/modules-reference",
+              "native-scan/authentication",
+              "native-scan/scan-scope"
             ]
           },
           {
@@ -51,18 +65,7 @@
               "agentic-scan/using-vigolium-in-your-agent"
             ]
           },
-          {
-            "group": "Native Scan",
-            "icon": "radar",
-            "pages": [
-              "native-scan/scanning-modes-overview",
-              "native-scan/how-it-works",
-              "native-scan/strategies",
-              "native-scan/modules-reference",
-              "native-scan/authentication",
-              "native-scan/scan-scope"
-            ]
-          },
+
           {
             "group": "Native Scanning Phases",
             "icon": "layer-group",
@@ -178,15 +181,7 @@
     }
   },
   "contextual": {
-    "options": [
-     "copy",
-     "view",
-     "chatgpt",
-     "claude",
-     "mcp",
-     "cursor",
-     "vscode"
-   ]
+    "options": ["copy", "view", "chatgpt", "claude", "mcp", "cursor", "vscode"]
   },
   "footer": {
     "socials": {
@@ -199,9 +194,9 @@
   },
   "seo": {
     "metatags": {
-        "og:image": "https://docs.vigolium.com/images/vigolium-main-workbench-og-image.png",
-        "og:description": "Vigolium - High-fidelity vulnerability scanner fusing agentic AI with native speed, modularity, and precision"
-      }
+      "og:image": "https://docs.vigolium.com/images/vigolium-main-workbench-og-image.png",
+      "og:description": "Vigolium - High-fidelity vulnerability scanner fusing agentic AI with native speed, modularity, and precision"
+    }
   },
   "errors": {
     "404": {

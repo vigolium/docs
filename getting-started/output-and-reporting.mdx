@@ -4,6 +4,15 @@ description: "Vigolium supports multiple output formats for scan results, discov
 icon: "file-export"
 ---
 
+<Columns cols={2}>
+  <Frame caption="Project overview with scan summary">
+    <img src="/images/vigolium-static-report-1.png" alt="Workbench project overview showing scan summary and severity counts" />
+  </Frame>
+  <Frame caption="Findings list with filtering options">
+    <img src="/images/vigolium-static-report-1.png" alt="Workbench findings list with severity filters and search" />
+  </Frame>
+</Columns>
+
 ## Output Formats
 
 The `--format` flag controls the output format. Three formats are available:
@@ -36,6 +45,14 @@ Example usage with `jq`:
 ```bash
 vigolium scan --target https://example.com --format jsonl | jq 'select(.severity == "high")'
 ```
+
+For CI/CD pipelines, `--ci-output-format` is a shorthand that forces clean JSONL with no banners or color codes — drop-in safe for parsing in build scripts:
+
+```bash
+vigolium scan --stateless -t https://example.com --ci-output-format -o findings
+```
+
+See [CI/CD Integration](/guides/ci-cd-integration) for full pipeline examples.
 
 ### HTML
 
@@ -164,10 +181,10 @@ All scan data is stored in the database (SQLite by default). You can query store
 
 ```bash
 # List all findings
-vigolium findings list
+vigolium finding list
 
 # List findings for a specific project
-vigolium findings list --project my-project
+vigolium finding list --project my-project
 ```
 
 ### Listing Traffic

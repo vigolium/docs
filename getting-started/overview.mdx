@@ -31,17 +31,18 @@ The platform is built around three key components that work together to provide 
 
 ### Agentic Scan
 
-Agentic scanning uses AI agents to drive or augment the scanning process. Invoked via `vigolium agent <mode>`. All AI dispatch is routed through the in-process **olium** engine, which supports five providers: `codex-oauth`, `anthropic-api-key`, `claude-oauth`, `openai-api-key`, and `claude-code-cli`.
+Agentic scanning uses AI agents to drive or augment the scanning process. Invoked via `vigolium agent <mode>`. All AI dispatch is routed through the in-process **olium** engine, which supports eight providers: `openai-codex-oauth`, `anthropic-api-key`, `anthropic-oauth`, `openai-api-key`, `anthropic-cli`, `anthropic-vertex`, `google-vertex`, and `openai-compatible` (Ollama / OpenRouter / LM Studio / vLLM).
 
 | Mode | Command | Description |
 |------|---------|-------------|
 | **Query** | `vigolium agent query` | Single-shot prompt execution. Good for code review, endpoint discovery, secret detection. No network scanning. |
 | **Autopilot** | `vigolium agent autopilot` | Autonomous AI-driven pentest. The olium engine drives bash, file ops, and the vigolium CLI until it calls `halt_scan`. |
 | **Swarm** | `vigolium agent swarm` | 10-phase pipeline where native Go handles heavy lifting and AI intervenes at checkpoints — planning attacks, triaging results, generating custom JS scanner extensions. |
-| **Archon** | `vigolium agent archon` | Multi-phase whitebox security audit (lite / balanced / deep). Runs as a foreground audit driver or in the background alongside swarm/autopilot. |
+| **Archon** | `vigolium agent archon` | Multi-phase whitebox security audit (lite / balanced / deep). Embedded driver — no extra install. Runs as a foreground audit or in the background alongside swarm/autopilot. |
+| **Piolium** | `vigolium agent piolium` | Pi-native whitebox audit driver — up to 17 phases at `deep`. Requires the `pi` runtime and the `piolium` extension installed separately. |
 | **Olium** | `vigolium olium` / `vigolium ol` | Interactive TUI chat or one-shot non-interactive prompt — the underlying agent runtime. |
 
-All scan-oriented modes support `--source` for source-aware analysis and store session artifacts (plans, extensions, output) under `~/.vigolium/agent-sessions/`.
+All scan-oriented modes support `--source` for source-aware analysis and store session artifacts (plans, extensions, output) under `~/.vigolium/agent-sessions/`. See [Setting Up the Agent](/getting-started/setup-agent) for provider setup.
 
 
 ### Native Scan
@@ -152,20 +153,23 @@ A cloud-based solution for teams that want the power of Vigolium without managin
 
 | I want to... | Start here |
 |--------------|------------|
-| Get up and running quickly | [Getting Started](/getting-started/getting-started) |
+| Install the CLI and run my first scan | [Quickstart](/getting-started/quickstart) |
+| Pick the right mode for the job | [Choosing a Scan Mode](/getting-started/choosing-a-mode) |
+| Run one-shot scans (CI, ad-hoc) | [Native Scan & Stateless Scanning](/getting-started/native-scan) |
+| Wire up AI providers | [Setting Up the Agent](/getting-started/setup-agent) |
 | Understand how native scanning works | [How It Works](/native-scan/how-it-works) |
 | Pick the right scanning strategy | [Strategies](/native-scan/strategies) |
-| Dive into individual scan phases | [Phases](/native-scan/phases/) — discovery, spidering, audit, extension, SPA |
+| Dive into individual scan phases | [Phases](/native-scan/phases/discovery) — discovery, spidering, audit, extension |
 | Try agentic scanning | [Agent Mode](/agentic-scan/agent-mode) |
 | Let AI drive scans autonomously | [Autopilot](/agentic-scan/autopilot) |
 | Run multi-phase AI + native pipelines | [Swarm](/agentic-scan/swarm) |
-| Audit source code in depth | [Archon Audit](/agentic-scan/archon-audit) |
+| Audit source code in depth | [Archon Audit](/agentic-scan/archon-audit) — or [Piolium Audit](/agentic-scan/piolium-audit) |
 | Chat with the agent runtime | [Olium](/agentic-scan/olium) |
-| Run Vigolium as an API server | [Server Mode](/server-mode/) |
+| Run Vigolium as an API server | [Server Mode](/server-mode/running-the-server) |
 | Tweak scan settings | [Configuration](/getting-started/configuration) |
 | Export and format results | [Output & Reporting](/getting-started/output-and-reporting) |
 | Write custom JS extensions | [Writing Extensions](/customization/writing-extensions) |
-| Browse the REST API | [API References](/api-references/) |
+| Browse the REST API | [API Overview](/api-overview) |
 
 ---
 
