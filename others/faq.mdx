@@ -1,0 +1,159 @@
+---
+title: "FAQ"
+description: "Frequently asked questions about Vigolium — operating modes, scanning paradigms, AI providers, the database, multi-tenancy, storage, and troubleshooting."
+icon: "circle-question"
+---
+
+Answers to the questions that come up most often. For a system-level picture, start with the [Architecture Overview](/architecture/overview).
+
+## General
+
+<AccordionGroup>
+  <Accordion title="What is Vigolium?">
+    Vigolium is a high-fidelity web vulnerability scanner written in Go. It combines deterministic, module-based scanning with AI-driven agentic analysis to provide broad and deep coverage of web application security issues. It ships 245 modules (152 active, 93 passive) covering injection flaws, misconfigurations, information disclosure, authentication issues, and more.
+  </Accordion>
+  <Accordion title="What are the ways to run Vigolium?">
+    Three operating modes:
+
+    | Mode | Binary | Description |
+    |------|--------|-------------|
+    | **CLI Scanner** | `vigolium scan` | One-off scans against targets, input files (OpenAPI, Postman, Burp, cURL, HAR), or source code paths. |
+    | **Server Mode** | `vigolium server` | A REST API server with Swagger UI — ingest traffic, trigger scans, query findings, run agent sessions over HTTP. |
+    | **Ingestor Client** | `vigolium-ingestor` | A lightweight client that captures and forwards HTTP traffic to a running server. |
+
+    See [Choosing a Mode](/getting-started/choosing-a-mode).
+  </Accordion>
+  <Accordion title="What's the difference between native scan and agentic scan?">
+    The **native scan** pipeline is fully deterministic — pure Go, no AI. Requests flow through a fixed sequence of phases (Heuristics → External Harvesting → Spidering → Discovery → DynamicAssessment → KnownIssueScan → Extension).
+
+    **Agentic scan** uses AI agents to drive or augment scanning (`vigolium agent <mode>`). Both write into the same database, so native and AI findings coexist and dedup together. See [Native Scan](/architecture/native-scan) and [Agentic Scan](/architecture/agentic-scan).
+  </Accordion>
+  <Accordion title="What Go version is required to build from source?">
+    Go 1.26+. The module path is `github.com/vigolium/vigolium`.
+  </Accordion>
+</AccordionGroup>
+
+## Scanning
+
+<AccordionGroup>
+  <Accordion title="What scanning strategies are available?">
+    Strategies control which phases run and how aggressively:
+
+    | Strategy | Behavior |
+    |----------|----------|
+    | Lite | Fast surface-level scan; skips heavy crawling and discovery |
+    | Balanced | Default. Runs all phases with sensible limits |
+    | Deep | Exhaustive scanning with higher limits, broader wordlists, and external harvesting |
+
+    See [Strategies](/native-scan/strategies).
+  </Accordion>
+  <Accordion title="Can I run just one phase of a scan?">
+    Yes. `--only <phase>` enables a single phase and disables all others; `--skip <phase>` disables specific phases (the two are mutually exclusive). Phase aliases are normalized — e.g. `deparos`/`discover` → `discovery`, `spitolas` → `spidering`, `ext` → `extension`. `vigolium run <phase>` is an alias for `scan --only <phase>`.
+  </Accordion>
+  <Accordion title="What input formats can I feed a scan?">
+    URLs, OpenAPI/Swagger, Postman collections, cURL commands, Burp raw requests, Burp XML exports, Nuclei JSONL output, and Deparos discovery output. Run `vigolium --list-input-mode` for every supported format with examples.
+  </Accordion>
+  <Accordion title="Why am I seeing duplicate-looking findings collapsed together?">
+    By design. Vigolium has three levels of deduplication: request-level (the `DedupManager`), inline finding-level (the `finding_hash` unique constraint with `INSERT ON CONFLICT DO NOTHING`), and post-phase grouping (`DeduplicateFindings()` merges findings sharing the same module/severity/URL, folding extra request/response pairs into the survivor's `AdditionalEvidence`, capped at 10). See [Native Scan → Deduplication](/architecture/native-scan).
+  </Accordion>
+</AccordionGroup>
+
+## Agentic / AI Providers
+
+<AccordionGroup>
+  <Accordion title="Which AI providers does the agent support?">
+    All AI dispatch runs through the in-process **olium** engine. Supported providers:
+
+    | Provider | Auth source |
+    |---|---|
+    | `openai-codex-oauth` | `oauth_cred_path` (JSON from `codex login`) |
+    | `anthropic-api-key` | `llm_api_key` or `$ANTHROPIC_API_KEY` |
+    | `anthropic-oauth` | `oauth_token` (from `claude setup-token`); falls back to `$ANTHROPIC_API_KEY` |
+    | `openai-api-key` | `llm_api_key` or `$OPENAI_API_KEY` |
+    | `anthropic-cli` | shells out to the `claude` binary |
+    | `anthropic-vertex` | GCP service-account creds + project/location |
+    | `google-vertex` | same GCP creds; routes `gemini-*` models |
+    | `openai-compatible` | `custom_provider.base_url` (Ollama / OpenRouter / LM Studio / vLLM / …) |
+
+    Configure under `agent.olium` in `vigolium-configs.yaml`. See [Setting Up the Agent](/getting-started/setup-agent).
+  </Accordion>
+  <Accordion title="Can I use a local model (Ollama, LM Studio, vLLM)?">
+    Yes — use the `openai-compatible` provider, which speaks the OpenAI Chat Completions wire format. Set `custom_provider.base_url` to the endpoint (`/v1` root or full `/v1/chat/completions` URL — both work) and leave `api_key` empty for unauthenticated local servers.
+
+    Note: OpenAI-style function tools are supported by the wire format but not by every model. Models that work well locally: `qwen2.5-coder`, `llama3.1` instruct, `mistral-nemo`. If the agent never calls tools, it's likely a model that silently ignores tool definitions — switch to a tool-trained model.
+  </Accordion>
+  <Accordion title="What's the difference between query, autopilot, swarm, and archon?">
+    - **Query** — single-shot prompt; no network scanning. Good for code review, endpoint discovery, secret detection.
+    - **Autopilot** — one long-running LLM session with full tool access that decides what to scan and iterates until it halts.
+    - **Swarm** — a multi-phase pipeline where native Go does the heavy lifting and AI intervenes at checkpoints (planning, triage, custom extension generation).
+    - **Archon** — a foreground multi-phase AI source-code audit.
+
+    All scan-oriented modes support `--source` for source-aware analysis. See [Agent Mode](/agentic-scan/agent-mode).
+  </Accordion>
+  <Accordion title="Where do agent sessions get stored?">
+    Every swarm and autopilot run writes a session directory under `agent.sessions_dir` (default `~/.vigolium/agent-sessions/<run-uuid>/`), containing the checkpoint, serialized plan, session config, compiled extensions, archon-audit output, rendered prompts, and the agent transcript.
+  </Accordion>
+</AccordionGroup>
+
+## Data & Multi-Tenancy
+
+<AccordionGroup>
+  <Accordion title="What database does Vigolium use?">
+    The repository pattern over Bun ORM, with two interchangeable backends: **SQLite** (default — single-binary, zero-config, local scans) and **PostgreSQL** (shared/server deployments with concurrent writers). The schema is intentionally denormalized — JSONB columns carry structured sub-data instead of separate hosts/parameters tables.
+  </Accordion>
+  <Accordion title="How does multi-tenancy / project scoping work?">
+    All scan data is partitioned by **project** — there is no separate database per project. Isolation is a `project_uuid` column on every major table, filtered on every read and stamped on every write. The default project is `00000000-0000-0000-0000-000000000001`, created during `vigolium init`.
+
+    Selection precedence: `--project-uuid` > `--project-name` > `VIGOLIUM_PROJECT_UUID` > `VIGOLIUM_PROJECT` (legacy) > default. On the server, the `X-Project-UUID` header plays the same role. See [Data & Storage](/architecture/data-and-storage).
+  </Accordion>
+  <Accordion title="I upgraded — what happens to my existing scan data?">
+    Existing databases are migrated in place. The `project_uuid` column is added with the default-project UUID as its default, so pre-multi-tenancy data lands in the default project.
+  </Accordion>
+  <Accordion title="How does cloud storage work?">
+    Storage is disabled by default. When enabled (`storage.enabled: true`), a single S3 client talks to GCS, S3, or self-hosted MinIO. The project UUID is the in-bucket prefix (not the bucket name), so one bucket safely holds many projects: `gs://<project-uuid>/<key>` maps to `s3://<bucket>/<project-uuid>/<key>`. `gs://` URLs are first-class scan inputs and export targets. See [Storage API](/api-references/storage).
+  </Accordion>
+</AccordionGroup>
+
+## Server & API
+
+<AccordionGroup>
+  <Accordion title="Does the server behave differently from the CLI?">
+    No. The server owns no scan logic of its own — it wraps the same native pipeline and the same agent orchestrators the CLI uses, so behavior is identical whichever entry point launches a scan.
+  </Accordion>
+  <Accordion title="How do I authenticate against the API?">
+    `Authorization: Bearer <key>`, where the key resolves `VIGOLIUM_API_KEY` env > `server.auth_api_key` config. `vigolium server -A` disables auth (development only). The meta endpoints (`/`, `/health`, `/metrics`, `/swagger/*`) require no auth.
+  </Accordion>
+  <Accordion title="Why does my scan/agent request return 202 instead of results?">
+    Scan and agent runs are long-lived, so the API is launch-and-poll. A run endpoint returns `202 Accepted` with a UUID (or `409 Conflict` if one is already active — only one agent run at a time). Poll the status endpoint until it leaves `running`, then fetch artifacts. Opt into `"stream": true` for Server-Sent Events instead.
+  </Accordion>
+  <Accordion title="Can I capture traffic without instrumenting my tools?">
+    Yes. `vigolium server --ingest-proxy-port 9003` opens a recording HTTP proxy — plain HTTP routed through it is captured into the DB (HTTPS `CONNECT` tunnels pass through without recording). Point `curl -x`, `httpx -proxy`, `nuclei -proxy`, etc. at it. See [Server & API](/architecture/server-and-api).
+  </Accordion>
+</AccordionGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="The agent never calls tools / just replies in prose">
+    Almost always the model. OpenAI-style function tools are part of the wire format but not every model honors them — smaller local models often ignore tool definitions. Switch to a tool-trained model (`qwen2.5-coder`, `llama3.1` instruct, `mistral-nemo`, or a hosted Claude/GPT model).
+  </Accordion>
+  <Accordion title="SQLite concurrency / busy-timeout settings don't seem to apply">
+    The default modernc SQLite driver needs pragmas in `_pragma=name(value)` form. The `mattn`-style `_busy_timeout=` DSN parameter is silently ignored. Adjust the DSN accordingly when tuning concurrent-writer behavior.
+  </Accordion>
+  <Accordion title="A host stopped getting scanned mid-run">
+    Vigolium has a per-host circuit breaker (`hosterrors.Cache`). After `MaxHostError` consecutive errors (default 30) the host is quarantined and the executor skips further items for it. A successful response resets the counter (unless already at threshold). This protects scan throughput against unresponsive hosts.
+  </Accordion>
+  <Accordion title="Scans seem rate-limited per host">
+    By design. The `HostRateLimiter` gives each host a buffered-channel semaphore with capacity = max-per-host (default 2 concurrent per host). Adjust scanning pace via config or CLI concurrency flags.
+  </Accordion>
+  <Accordion title="A noisy module produces only a handful of findings then stops">
+    Expected. The executor enforces a per-module finding cap (`MaxFindingsPerModule`, default 10) — once a module emits that many findings, further results from it are suppressed and a one-time warning is logged. This keeps injection-style modules from flooding output.
+  </Accordion>
+  <Accordion title="Where can I see all available commands and examples?">
+    `vigolium --help` lists all commands and global flags; `vigolium <command> --help` for a specific command; `vigolium --full-example` for a curated tour. `vigolium doctor` diagnoses configuration and tool readiness. See [CLI References](/others/cli-references).
+  </Accordion>
+</AccordionGroup>
+
+---
+
+Still stuck? Reach us at [contact@vigolium.com](mailto:contact@vigolium.com).

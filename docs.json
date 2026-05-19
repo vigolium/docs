@@ -65,7 +65,17 @@
               "agentic-scan/using-vigolium-in-your-agent"
             ]
           },
-
+          {
+            "group": "Architecture",
+            "icon": "sitemap",
+            "pages": [
+              "architecture/overview",
+              "architecture/native-scan",
+              "architecture/agentic-scan",
+              "architecture/data-and-storage",
+              "architecture/server-and-api"
+            ]
+          },
           {
             "group": "Native Scanning Phases",
             "icon": "layer-group",
@@ -101,7 +111,8 @@
             "pages": [
               "others/audit-report",
               "others/cli-references",
-              "others/api-references"
+              "others/api-references",
+              "others/faq"
             ]
           }
         ]
