@@ -88,18 +88,6 @@
             ]
           },
           {
-            "group": "Guides",
-            "icon": "book",
-            "pages": [
-              "guides/native-scan-phases",
-              "guides/agentic-scan",
-              "guides/stateless-scan",
-              "guides/scanning-an-api",
-              "guides/scanning-a-spa",
-              "guides/ci-cd-integration"
-            ]
-          },
-          {
             "group": "Customization",
             "icon": "wrench",
             "pages": [
