@@ -31,7 +31,7 @@
             "icon": "rocket",
             "pages": [
               "getting-started/overview",
-              "getting-started/quickstart",
+              "getting-started/installation",
               "getting-started/choosing-a-mode",
               "getting-started/native-scan",
               "getting-started/setup-agent",
@@ -185,10 +185,11 @@
   "footer": {
     "socials": {
       "website": "https://www.vigolium.com/",
-      "twitter": "https://x.com/j3ssie",
+      "twitter": "https://x.com/vigolium.com",
       "github": "https://github.com/vigolium",
+      "discord": "https://discord.gg/aHFypbAu6Y",
       "x": "https://x.com/j3ssie",
-      "linkedin": "https://www.linkedin.com/in/jessie-aiho/"
+      "linkedin": "https://www.linkedin.com/company/vigolium"
     }
   },
   "seo": {
