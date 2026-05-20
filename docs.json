@@ -31,7 +31,7 @@
             "icon": "rocket",
             "pages": [
               "getting-started/overview",
-              "getting-started/installation",
+              "getting-started/quickstart",
               "getting-started/choosing-a-mode",
               "getting-started/native-scan",
               "getting-started/setup-agent",
