@@ -112,6 +112,7 @@
               "others/audit-report",
               "others/cli-references",
               "others/api-references",
+              "others/security-warning",
               "others/faq"
             ]
           }
@@ -157,6 +158,11 @@
           "anchor": "Schedule A Demo",
           "href": "https://www.vigolium.com/request-demo",
           "icon": "calendar"
+        },
+        {
+          "anchor": "Vigolium Cloud Console",
+          "href": "https://console.vigolium.com/",
+          "icon": "cloud"
         },
         {
           "anchor": "See Vigolium Static Audit Showcases",

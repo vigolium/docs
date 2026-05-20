@@ -4,7 +4,7 @@ description: "Covers every customization mechanism in Vigolium, from JS and YAML
 icon: "puzzle-piece"
 ---
 
-Vigolium is designed for extensibility. Whether you need to add a new vulnerability check, reshape scan behavior, or integrate AI-driven analysis, there are multiple extension points — each with different trade-offs.
+Vigolium is designed for extensibility. Whether you need to add a new vulnerability check, reshape scan behavior, or integrate AI-driven analysis, there are multiple extension points, each with different trade-offs.
 
 This guide covers every customization mechanism, explains when to use each one, and helps you pick the right approach for your use case.
 
@@ -42,14 +42,14 @@ This guide covers every customization mechanism, explains when to use each one, 
 
 ## 1. JavaScript Extensions
 
-JavaScript extensions are the most flexible way to add custom scanning logic without recompiling Vigolium. They run inside an embedded JS engine (Grafana Sobek) and have access to the full `vigolium.*` API — HTTP requests, database queries, parsing utilities, AI integration, and more.
+JavaScript extensions are the most flexible way to add custom scanning logic without recompiling Vigolium. They run inside an embedded JS engine (Grafana Sobek) and have access to the full `vigolium.*` API, HTTP requests, database queries, parsing utilities, AI integration, and more.
 
 ### What you can build
 
-- **Active modules** — send payloads to insertion points (parameters, headers, cookies, paths) and analyze responses for vulnerabilities.
-- **Passive modules** — analyze captured HTTP traffic without generating new requests.
-- **Pre-hooks** — mutate requests before they reach scanner modules (inject auth headers, skip paths).
-- **Post-hooks** — filter, tag, or escalate findings after detection.
+- **Active modules**: send payloads to insertion points (parameters, headers, cookies, paths) and analyze responses for vulnerabilities.
+- **Passive modules**: analyze captured HTTP traffic without generating new requests.
+- **Pre-hooks**: mutate requests before they reach scanner modules (inject auth headers, skip paths).
+- **Post-hooks**: filter, tag, or escalate findings after detection.
 
 ### Minimal example (active module)
 
@@ -113,18 +113,18 @@ Drop `.js` files into `~/.vigolium/extensions/` and verify with `vigolium extens
 
 ### Pros
 
-- **No recompilation** — drop a file and scan.
-- **Full API access** — HTTP, database, AI, source code, parsing, and system utilities.
-- **AI-augmented scanning** — use `vigolium.agent.generatePayloads()` and `vigolium.agent.analyzeResponse()` for LLM-powered detection.
-- **Rapid iteration** — edit, save, rescan.
-- **Sandboxed execution** — file I/O constrained to `sandbox_dir`, `exec()` gated behind config.
+- **No recompilation**: drop a file and scan.
+- **Full API access**: HTTP, database, AI, source code, parsing, and system utilities.
+- **AI-augmented scanning**: use `vigolium.agent.generatePayloads()` and `vigolium.agent.analyzeResponse()` for LLM-powered detection.
+- **Rapid iteration**: edit, save, rescan.
+- **Sandboxed execution**: file I/O constrained to `sandbox_dir`, `exec()` gated behind config.
 
 ### Cons
 
-- **Slower than Go** — interpreted JS engine adds overhead per invocation.
-- **No Go standard library** — limited to `vigolium.*` APIs, no arbitrary imports.
-- **Single-threaded per VM** — each extension instance runs in its own VM (thread-safe via pooling, but no parallelism within a single extension).
-- **Limited debugging** — no step-through debugger, `vigolium.log.*` is your main tool.
+- **Slower than Go**: interpreted JS engine adds overhead per invocation.
+- **No Go standard library**: limited to `vigolium.*` APIs, no arbitrary imports.
+- **Single-threaded per VM**: each extension instance runs in its own VM (thread-safe via pooling, but no parallelism within a single extension).
+- **Limited debugging**: no step-through debugger, `vigolium.log.*` is your main tool.
 
 ### When to use
 
@@ -216,17 +216,17 @@ escalate:
 
 ### Pros
 
-- **Zero coding** — pure declarative YAML.
-- **Fast to write** — a payload list + matcher regex is often all you need.
-- **Easy to audit** — non-technical team members can review rules.
-- **Same pipeline integration** — loaded alongside JS extensions, same lifecycle.
+- **Zero coding**: pure declarative YAML.
+- **Fast to write**: a payload list + matcher regex is often all you need.
+- **Easy to audit**: non-technical team members can review rules.
+- **Same pipeline integration**: loaded alongside JS extensions, same lifecycle.
 
 ### Cons
 
-- **Limited logic** — no conditionals, loops, or state beyond what matchers offer.
-- **No API access** — no database queries, HTTP follow-ups, or AI calls (unless you use the `script` escape hatch, which is effectively JS).
-- **No multi-step checks** — can't chain requests or compare responses across steps.
-- **Coarser insertion control** — payload injection is straightforward but you can't dynamically generate payloads based on context.
+- **Limited logic**: no conditionals, loops, or state beyond what matchers offer.
+- **No API access**: no database queries, HTTP follow-ups, or AI calls (unless you use the `script` escape hatch, which is effectively JS).
+- **No multi-step checks**: can't chain requests or compare responses across steps.
+- **Coarser insertion control**: payload injection is straightforward but you can't dynamically generate payloads based on context.
 
 ### When to use
 
@@ -295,7 +295,7 @@ Only variables listed in the frontmatter `variables` array trigger database quer
 
 ### Output schemas
 
-**`findings`** — for code review, vulnerability detection:
+**`findings`**: for code review, vulnerability detection:
 ```json
 {
   "findings": [{
@@ -311,7 +311,7 @@ Only variables listed in the frontmatter `variables` array trigger database quer
 }
 ```
 
-**`http_records`** — for endpoint discovery, API input generation:
+**`http_records`**: for endpoint discovery, API input generation:
 ```json
 {
   "http_records": [{
@@ -360,18 +360,18 @@ vigolium agent --prompt-template my-custom-review --repo /path/to/source --dry-r
 
 ### Pros
 
-- **No code** — Markdown files with template syntax.
-- **Context-aware** — automatic enrichment with database findings, endpoints, scan stats.
-- **Multiple AI backends** — works with Claude, Codex, OpenCode, Gemini, or any custom agent.
-- **Iterative refinement** — autopilot and pipeline modes pass prior findings back for verification.
-- **Two output modes** — emit findings for code review or HTTP records for endpoint discovery.
+- **No code**: Markdown files with template syntax.
+- **Context-aware**: automatic enrichment with database findings, endpoints, scan stats.
+- **Multiple AI backends**: works with Claude, Codex, OpenCode, Gemini, or any custom agent.
+- **Iterative refinement**: autopilot and pipeline modes pass prior findings back for verification.
+- **Two output modes**: emit findings for code review or HTTP records for endpoint discovery.
 
 ### Cons
 
-- **AI dependency** — requires a configured agent backend and API access.
-- **Non-deterministic** — LLM output varies between runs; false positives require tuning.
-- **Latency** — agent invocations are slower than pattern matching (seconds to minutes per run).
-- **Token costs** — large codebases consume significant tokens per analysis.
+- **AI dependency**: requires a configured agent backend and API access.
+- **Non-deterministic**: LLM output varies between runs; false positives require tuning.
+- **Latency**: agent invocations are slower than pattern matching (seconds to minutes per run).
+- **Token costs**: large codebases consume significant tokens per analysis.
 
 ### When to use
 
@@ -438,16 +438,16 @@ Profiles are resolved from `~/.vigolium/profiles/` or `public/presets/profiles/`
 
 ### Pros
 
-- **Reusable presets** — define once, use across targets and teams.
-- **Composable** — overlay on top of base config; only override what you need.
-- **No code** — pure YAML.
-- **Team-friendly** — share profiles in version control for consistent scan policies.
+- **Reusable presets**: define once, use across targets and teams.
+- **Composable**: overlay on top of base config; only override what you need.
+- **No code**: pure YAML.
+- **Team-friendly**: share profiles in version control for consistent scan policies.
 
 ### Cons
 
-- **Config-only** — can't add new scanning logic, only tune existing settings.
-- **No per-target logic** — same profile applies to all targets in a scan.
-- **Limited validation** — typos in field names silently ignored.
+- **Config-only**: can't add new scanning logic, only tune existing settings.
+- **No per-target logic**: same profile applies to all targets in a scan.
+- **Limited validation**: typos in field names silently ignored.
 
 ### When to use
 
@@ -510,15 +510,15 @@ vigolium.scan.setScope({
 
 ### Pros
 
-- **Precision targeting** — scan only what matters, skip noise.
-- **Multiple filter types** — host globs, path patterns, status codes, content types, body strings.
-- **Runtime adjustable** — extensions can modify scope during a scan.
-- **Safety net** — prevents accidental scanning of out-of-scope systems.
+- **Precision targeting**: scan only what matters, skip noise.
+- **Multiple filter types**: host globs, path patterns, status codes, content types, body strings.
+- **Runtime adjustable**: extensions can modify scope during a scan.
+- **Safety net**: prevents accidental scanning of out-of-scope systems.
 
 ### Cons
 
-- **Config-only complexity** — complex scope rules can be hard to debug.
-- **No request-level conditions** — you can't scope by request header values or authentication state (use pre-hooks for that).
+- **Config-only complexity**: complex scope rules can be hard to debug.
+- **No request-level conditions**: you can't scope by request header values or authentication state (use pre-hooks for that).
 
 ### When to use
 
@@ -599,16 +599,16 @@ module.exports = {
 
 ### Pros
 
-- **Pipeline integration** — runs automatically on every request/finding.
-- **Composable** — multiple hooks chain sequentially.
-- **Both JS and YAML** — simple rules in YAML, complex logic in JS.
-- **Non-invasive** — doesn't modify module code.
+- **Pipeline integration**: runs automatically on every request/finding.
+- **Composable**: multiple hooks chain sequentially.
+- **Both JS and YAML**: simple rules in YAML, complex logic in JS.
+- **Non-invasive**: doesn't modify module code.
 
 ### Cons
 
-- **Sequential overhead** — hooks run on the hot path; slow hooks slow everything.
-- **Order-dependent** — hook execution order matters but isn't always obvious.
-- **Pre-hooks can't see responses** — they only have access to the outbound request.
+- **Sequential overhead**: hooks run on the hot path; slow hooks slow everything.
+- **Order-dependent**: hook execution order matters but isn't always obvious.
+- **Pre-hooks can't see responses**: they only have access to the outbound request.
 
 ### When to use
 
@@ -623,7 +623,7 @@ See the full guide: [Writing Extensions](/customization/writing-extensions)
 
 ## 7. Agent Providers (Olium)
 
-Every agent invocation in Vigolium is dispatched through the in-process **olium** runtime (`pkg/olium/`). There are no external SDK or ACP subprocess backends — instead you choose a *provider* (the LLM API olium dispatches to) and configure its credential.
+Every agent invocation in Vigolium is dispatched through the in-process **olium** runtime (`pkg/olium/`). There are no external SDK or ACP subprocess backends, instead you choose a *provider* (the LLM API olium dispatches to) and configure its credential.
 
 ### Built-in providers
 
@@ -671,7 +671,7 @@ The olium engine exposes eight built-in tools to the model: `bash`, `read_file`,
 
 ### LLM config (for JS extensions only)
 
-The `agent.llm` section configures the LLM provider used by `vigolium.agent.*` APIs inside JavaScript extensions — separate from the olium engine that powers `vigolium agent` subcommands.
+The `agent.llm` section configures the LLM provider used by `vigolium.agent.*` APIs inside JavaScript extensions, separate from the olium engine that powers `vigolium agent` subcommands.
 
 ```yaml
 agent:
@@ -687,25 +687,25 @@ agent:
 
 ### Pros
 
-- **Five providers** — pick the credential model that fits (OAuth for ChatGPT Plus / Claude Max, API keys for raw API access, CLI shellout for `claude-code-cli`).
-- **Single in-process runtime** — no subprocess startup overhead, prompt caching is reused across phases that share an engine.
-- **Per-invocation overrides** — every CLI subcommand exposes `--provider`, `--model`, `--oauth-cred`, `--oauth-token`, `--llm-api-key`.
-- **Global concurrency cap** — `max_concurrent` keeps tier-1 plans from hitting 429s under fan-out.
+- **Five providers**: pick the credential model that fits (OAuth for ChatGPT Plus / Claude Max, API keys for raw API access, CLI shellout for `claude-code-cli`).
+- **Single in-process runtime**: no subprocess startup overhead, prompt caching is reused across phases that share an engine.
+- **Per-invocation overrides**: every CLI subcommand exposes `--provider`, `--model`, `--oauth-cred`, `--oauth-token`, `--llm-api-key`.
+- **Global concurrency cap**: `max_concurrent` keeps tier-1 plans from hitting 429s under fan-out.
 
 ### Cons
 
-- **Provider lock-in to supported drivers** — only the five drivers above are recognised; arbitrary custom CLIs are not pluggable as backends anymore.
-- **Cost** — LLM API calls still have token costs; `--token-budget` (autopilot) caps the spend.
+- **Provider lock-in to supported drivers**: only the five drivers above are recognised; arbitrary custom CLIs are not pluggable as backends anymore.
+- **Cost**: LLM API calls still have token costs; `--token-budget` (autopilot) caps the spend.
 
 ### When to use
 
-- Always — every agent subcommand goes through olium. The choice you actually make is **which provider and model**, not whether to use olium.
+- Always, every agent subcommand goes through olium. The choice you actually make is **which provider and model**, not whether to use olium.
 
 ---
 
 ## 8. Configuration Overrides
 
-The main `vigolium-configs.yaml` is the central control plane for all scan behavior. Every aspect of the scanner — phases, pace, modules, database, notifications, and more — is configurable.
+The main `vigolium-configs.yaml` is the central control plane for all scan behavior. Every aspect of the scanner, phases, pace, modules, database, notifications, and more, is configurable.
 
 ### Key configuration sections
 
@@ -738,15 +738,15 @@ agent:
 
 ### Pros
 
-- **Comprehensive** — controls every scanner behavior.
-- **Environment-aware** — variable expansion for secrets.
-- **Layered** — base config + profiles + CLI flags, in order of precedence.
+- **Comprehensive**: controls every scanner behavior.
+- **Environment-aware**: variable expansion for secrets.
+- **Layered**: base config + profiles + CLI flags, in order of precedence.
 
 ### Cons
 
-- **No logic** — pure configuration, can't express conditional behavior.
-- **Silent failures** — unrecognized keys are ignored, not flagged.
-- **Single file** — large configs can become unwieldy.
+- **No logic**: pure configuration, can't express conditional behavior.
+- **Silent failures**: unrecognized keys are ignored, not flagged.
+- **Single file**: large configs can become unwieldy.
 
 ### When to use
 

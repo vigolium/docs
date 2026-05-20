@@ -1,12 +1,12 @@
 ---
-title: "Vigolium API Reference — OAST Interactions"
+title: "Vigolium API Reference, OAST Interactions"
 description: "List, retrieve, and delete out-of-band application security testing interactions from interactsh callbacks."
 icon: "satellite-dish"
 ---
 
 Out-of-band Application Security Testing (OAST) interactions recorded from interactsh callbacks. These represent DNS, HTTP, or other protocol interactions triggered by payloads injected during active scanning.
 
-## GET /api/oast-interactions — List OAST Interactions
+## GET /api/oast-interactions, List OAST Interactions
 
 Returns paginated OAST interactions. Heavy fields (`raw_request`, `raw_response`) are excluded from list responses for performance.
 
@@ -65,7 +65,7 @@ curl -s 'http://localhost:9002/api/oast-interactions?search=example.com' | jq .
 
 ---
 
-## GET /api/oast-interactions/:id — Get OAST Interaction Detail
+## GET /api/oast-interactions/:id, Get OAST Interaction Detail
 
 Returns a single OAST interaction by its numeric ID, including full `raw_request` and `raw_response` fields.
 
@@ -103,7 +103,7 @@ curl -s http://localhost:9002/api/oast-interactions/1 | jq .
 
 ---
 
-## DELETE /api/oast-interactions/:id — Delete OAST Interaction
+## DELETE /api/oast-interactions/:id, Delete OAST Interaction
 
 Deletes a single OAST interaction by its numeric ID. Returns `404` if the interaction does not exist.
 

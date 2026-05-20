@@ -1,6 +1,6 @@
 ---
 title: "Setting Up the Agent"
-description: "Vigolium's AI features (autopilot, swarm, source-code audit, query) all run through one in-process runtime called olium. This page walks you through wiring each piece up — pick the section that matches your setup."
+description: "Vigolium's AI features (autopilot, swarm, source-code audit, query) all run through one in-process runtime called olium. This page walks you through wiring each piece up, pick the section that matches your setup."
 icon: "robot"
 ---
 
@@ -13,14 +13,14 @@ icon: "robot"
   </Frame>
 </Columns>
 
-olium talks to a provider (Claude / OpenAI / a local model), and two specialised drivers — **vigolium-audit** and **piolium** — run on top of it for source-code audits.
+olium talks to a provider (Claude / OpenAI / a local model), and two specialised drivers, **vigolium-audit** and **piolium**, run on top of it for source-code audits.
 
 | What | Section | When you need it |
 |---|---|---|
-| olium provider | [Olium agent](#1-olium-agent-the-engine-everything-runs-on) | Always — every agent command needs one provider. |
+| olium provider | [Olium agent](#1-olium-agent-the-engine-everything-runs-on) | Always, every agent command needs one provider. |
 | Codex (OpenAI OAuth) | [Codex](#2-codex-cheapest-with-a-chatgpt-subscription-recommended) | You have a ChatGPT Plus/Pro/Team subscription. |
 | Local model (Ollama, etc.) | [Local / OpenAI-compatible](#3-local-models-ollama-openrouter-lm-studio) | You want to run agents offline or against OpenRouter / vLLM / LM Studio. |
-| Claude | [Claude](#4-claude-anthropic) | You have an Anthropic API key, a Claude subscription, or the `claude` CLI installed (not recommended — see section). |
+| Claude | [Claude](#4-claude-anthropic) | You have an Anthropic API key, a Claude subscription, or the `claude` CLI installed (not recommended, see section). |
 | Vigolium Audit | [Vigolium audit](#5-vigolium-audit-source-code-driver) | You want a whitebox source-code audit with no extra install. |
 | Piolium audit | [Piolium audit](#6-piolium-audit-pi-native-driver) | You want piolium's 17-phase Pi-native audit (separate install). |
 
@@ -28,7 +28,7 @@ All settings live in `~/.vigolium/vigolium-configs.yaml`. You can edit it direct
 
 ---
 
-## 1. Olium agent — the engine everything runs on
+## 1. Olium agent, the engine everything runs on
 
 olium is the in-process agent runtime (`pkg/olium/`) that backs every `vigolium agent …` subcommand. Setting it up means picking one provider and giving it credentials.
 
@@ -43,7 +43,7 @@ The supported providers:
 | `anthropic-cli` | `claude` binary on `$PATH` | `claude-opus-4-7` | Shells out to Claude Code. |
 | `anthropic-vertex` | GCP service-account JSON | `claude-opus-4-6` | Claude on Vertex AI. |
 | `google-vertex` | GCP service-account JSON | `gemini-2.5-pro` | Gemini on Vertex AI. |
-| `openai-compatible` | optional `api_key` | none — pick one | Ollama, OpenRouter, LM Studio, vLLM, … |
+| `openai-compatible` | optional `api_key` | none, pick one | Ollama, OpenRouter, LM Studio, vLLM, … |
 
 Verify any setup with:
 
@@ -55,7 +55,7 @@ If that returns a model name, the provider is wired correctly. From there, `vigo
 
 ---
 
-## 2. Codex — cheapest with a ChatGPT subscription (Recommended)
+## 2. Codex, cheapest with a ChatGPT subscription (Recommended)
 
 If you already use OpenAI's **Codex CLI**, vigolium reuses the same OAuth credential file. No API key needed, refresh handled automatically.
 
@@ -94,7 +94,7 @@ vigolium config set agent.olium.custom_provider.model_id gemma4:latest
 vigolium ol -p 'what model are you running'
 ```
 
-Empty `api_key` means no `Authorization` header is sent — required for Ollama.
+Empty `api_key` means no `Authorization` header is sent, required for Ollama.
 
 ### OpenRouter
 
@@ -126,7 +126,7 @@ vigolium ol \
 ```
 
 <Callout icon="triangle-exclamation" color="#FFC107" iconType="regular">
-  **Tool-calling caveat.** OpenAI-style function tools are part of the wire format but only some models actually emit them. `gemma4`, `qwen2.5-coder`, `llama3.1-instruct`, and `mistral-nemo` work well. Smaller models often ignore tool definitions and reply in prose — if the agent never calls tools, switch model.
+  **Tool-calling caveat.** OpenAI-style function tools are part of the wire format but only some models actually emit them. `gemma4`, `qwen2.5-coder`, `llama3.1-instruct`, and `mistral-nemo` work well. Smaller models often ignore tool definitions and reply in prose, if the agent never calls tools, switch model.
 </Callout>
 
 ---
@@ -134,7 +134,7 @@ vigolium ol \
 ## 4. Claude (Anthropic)
 
 <Callout icon="circle-info" color="#3B82F6" iconType="regular">
-  **Not recommended for olium.** Anthropic's Pro/Max subscriptions aren't really designed for use outside the official Claude Code client — driving the same token from vigolium (or any third-party agent) lands you in rate-limit / overage territory almost immediately, and the API-key path bills per token at the highest rates of any provider listed here. Prefer Codex ([section 2](#2-codex-cheapest-with-a-chatgpt-subscription-recommended)) or a local model ([section 3](#3-local-models-ollama-openrouter-lm-studio)) for day-to-day agent work. The Claude options below exist for parity and for users who already pay for the API anyway.
+  **Not recommended for olium.** Anthropic's Pro/Max subscriptions aren't really designed for use outside the official Claude Code client, driving the same token from vigolium (or any third-party agent) lands you in rate-limit / overage territory almost immediately, and the API-key path bills per token at the highest rates of any provider listed here. Prefer Codex ([section 2](#2-codex-cheapest-with-a-chatgpt-subscription-recommended)) or a local model ([section 3](#3-local-models-ollama-openrouter-lm-studio)) for day-to-day agent work. The Claude options below exist for parity and for users who already pay for the API anyway.
 </Callout>
 
 Three options, in order of preference:
@@ -159,7 +159,7 @@ vigolium ol -p 'what model are you running'
 `anthropic-oauth` reads `agent.olium.oauth_token` first, then falls back to `$ANTHROPIC_API_KEY`. The env var is the path of least resistance.
 
 <Callout icon="triangle-exclamation" color="#FFC107" iconType="regular">
-  **Heads-up — enable extra usage on your Claude account.** Pro/Max subscriptions ship with the OAuth token capped to the in-app Claude Code allowance. Driving the same token from vigolium (or any third-party client) hits the Messages API directly and is rejected with `429 rate_limit_error` until you turn on **extra usage / pay-as-you-go overage** in the Anthropic Console (Settings → Billing → Usage limits). Without that toggle the verify call above will fail even with a valid token.
+  **Heads-up, enable extra usage on your Claude account.** Pro/Max subscriptions ship with the OAuth token capped to the in-app Claude Code allowance. Driving the same token from vigolium (or any third-party client) hits the Messages API directly and is rejected with `429 rate_limit_error` until you turn on **extra usage / pay-as-you-go overage** in the Anthropic Console (Settings → Billing → Usage limits). Without that toggle the verify call above will fail even with a valid token.
 </Callout>
 
 ### 4b. Anthropic API key
@@ -189,14 +189,14 @@ vigolium config set agent.olium.model claude-opus-4-7
 This mode is slower than the API-key/OAuth paths (subprocess overhead) but useful when you want a single source of auth across `claude` and `vigolium`.
 
 <Callout icon="circle-info" color="#3B82F6" iconType="regular">
-  **Note on permissions.** vigolium invokes `claude -p` with `--permission-mode bypassPermissions` so Bash / Read / WebFetch tool calls execute without interactive approval (the wrapper is non-interactive — there's no TTY for you to confirm prompts on). This is equivalent to running `claude --dangerously-skip-permissions` and applies for the duration of the subprocess only.
+  **Note on permissions.** vigolium invokes `claude -p` with `--permission-mode bypassPermissions` so Bash / Read / WebFetch tool calls execute without interactive approval (the wrapper is non-interactive, there's no TTY for you to confirm prompts on). This is equivalent to running `claude --dangerously-skip-permissions` and applies for the duration of the subprocess only.
 </Callout>
 
 ---
 
-## 5. Vigolium audit — source-code driver
+## 5. Vigolium audit, source-code driver
 
-`vigolium agent vigolium-audit` runs a whitebox source-code audit. The harness (agents, commands, skills) ships **embedded in the vigolium binary** — no extra install. It drives the `claude` CLI under the hood, so you need a working Claude setup from [section 4](#4-claude-anthropic).
+`vigolium agent vigolium-audit` runs a whitebox source-code audit. The harness (agents, commands, skills) ships **embedded in the vigolium binary**, no extra install. It drives the `claude` CLI under the hood, so you need a working Claude setup from [section 4](#4-claude-anthropic).
 
 ```bash
 # 1. Make sure `claude` is installed and authenticated.
@@ -218,9 +218,9 @@ Findings land under `~/.vigolium/agent-sessions/<scan-uuid>/archon-audit/`. See 
 
 ---
 
-## 6. Piolium audit — Pi-native driver
+## 6. Piolium audit, Pi-native driver
 
-`vigolium agent piolium` runs a separate, more thorough audit (17 phases at `deep`) via the **Pi coding-agent runtime**. Unlike vigolium-audit, piolium is **not** embedded — you install it once and vigolium drives the `pi` binary.
+`vigolium agent piolium` runs a separate, more thorough audit (17 phases at `deep`) via the **Pi coding-agent runtime**. Unlike vigolium-audit, piolium is **not** embedded, you install it once and vigolium drives the `pi` binary.
 
 ```bash
 # 1. Install Pi runtime.
@@ -253,13 +253,13 @@ By default vigolium uses pi's per-user install at `~/.pi/agent`. To use a system
 
 | | Vigolium Audit | Piolium |
 |---|---|---|
-| Install | Embedded — zero setup | Requires `pi` + `pi install …` |
+| Install | Embedded, zero setup | Requires `pi` + `pi install …` |
 | Driver | `claude` CLI | `pi --mode json -p /piolium-<mode>` |
 | Modes | lite (3), balanced (6), deep (11) | lite (4), balanced (9), deep (17), revisit, confirm, merge, diff, longshot |
 | Provider | Whatever `claude` is configured with | Whatever `pi` is configured with (separate from olium) |
 | Best for | "I want a source audit, no extra setup" | "I want the most thorough audit available" |
 
-You can also run both side-by-side with `vigolium agent audit --driver both --source …` — that dispatches vigolium-audit then piolium under a single parent scan with project-wide deduplication.
+You can also run both side-by-side with `vigolium agent audit --driver both --source …`, that dispatches vigolium-audit then piolium under a single parent scan with project-wide deduplication.
 
 ---
 
@@ -284,14 +284,14 @@ vigolium agent vigolium-audit --source . --mode lite
 vigolium agent piolium --source . --mode lite
 ```
 
-If any of these errors out, the message points at the missing piece — usually an unset env var, a wrong `agent.olium.provider`, or a missing binary.
+If any of these errors out, the message points at the missing piece, usually an unset env var, a wrong `agent.olium.provider`, or a missing binary.
 
 ---
 
 ## Where to go next
 
-- [Olium Agent](/agentic-scan/olium) — what olium is and what its tools do.
-- [Autopilot](/agentic-scan/autopilot) — autonomous scanning.
-- [Swarm](/agentic-scan/swarm) — guided multi-phase scanning.
-- [Agentic Security Audit](/getting-started/agentic-security-audit) — vigolium-audit + piolium reference.
-- [Configuration Reference](/getting-started/configuration) — every config knob with inline docs.
+- [Olium Agent](/agentic-scan/olium), what olium is and what its tools do.
+- [Autopilot](/agentic-scan/autopilot), autonomous scanning.
+- [Swarm](/agentic-scan/swarm), guided multi-phase scanning.
+- [Agentic Security Audit](/getting-started/agentic-security-audit), vigolium-audit + piolium reference.
+- [Configuration Reference](/getting-started/configuration), every config knob with inline docs.

@@ -1,10 +1,10 @@
 ---
 title: "Architecture Overview"
-description: "The Vigolium system at a glance — operating modes, the two scanning paradigms, and how the pieces fit together."
+description: "The Vigolium system at a glance, operating modes, the two scanning paradigms, and how the pieces fit together."
 icon: "sitemap"
 ---
 
-This is the entry point to Vigolium's architecture documentation. This page covers the system at a glance — operating modes, the two scanning paradigms, and how the pieces fit together. The sibling documents drill into each subsystem.
+This is the entry point to Vigolium's architecture documentation. This page covers the system at a glance, operating modes, the two scanning paradigms, and how the pieces fit together. The sibling documents drill into each subsystem.
 
 <CardGroup cols={2}>
   <Card title="Native Scan" icon="radar" href="/architecture/native-scan">
@@ -37,7 +37,7 @@ Vigolium can operate as a CLI tool for one-off scans, as a persistent REST API s
 
 ### Native Scan
 
-The native scan pipeline is fully deterministic — pure Go, no AI involvement. Requests flow through a fixed sequence of phases, each handling a distinct stage of reconnaissance or testing.
+The native scan pipeline is fully deterministic, pure Go, no AI involvement. Requests flow through a fixed sequence of phases, each handling a distinct stage of reconnaissance or testing.
 
 **Phases (in order):**
 
@@ -51,7 +51,7 @@ Heuristics -> External Harvesting -> Spidering -> Discovery -> DynamicAssessment
 | External Harvesting | Wayback Machine and other passive source enumeration |
 | Spidering | Active crawling, JS analysis, link and form extraction |
 | Discovery | Endpoint and content discovery via wordlists |
-| DynamicAssessment | Core vulnerability testing — injection, XSS, SSRF, etc. (CLI aliases: `audit`, `dast`, `assessment`) |
+| DynamicAssessment | Core vulnerability testing, injection, XSS, SSRF, etc. (CLI aliases: `audit`, `dast`, `assessment`) |
 | KnownIssueScan | Checks for known CVEs and common misconfigurations |
 | Extension | User-supplied JavaScript scanning extensions |
 
@@ -71,7 +71,7 @@ Agentic scanning uses AI agents to drive or augment the scanning process. Invoke
 |------|---------|-------------|
 | **Query** | `vigolium agent query` | Single-shot prompt execution. Good for code review, endpoint discovery, secret detection. No network scanning. |
 | **Autopilot** | `vigolium agent autopilot` | One long-running LLM session with full bash/file/web tools plus `report_finding` and `halt_scan`. The agent decides what to scan, runs scans, inspects results, and iterates until it halts. |
-| **Swarm** | `vigolium agent swarm` | Multi-phase pipeline where native Go handles heavy lifting and AI intervenes at checkpoints — planning attacks, triaging results, and generating custom JS scanner extensions. |
+| **Swarm** | `vigolium agent swarm` | Multi-phase pipeline where native Go handles heavy lifting and AI intervenes at checkpoints, planning attacks, triaging results, and generating custom JS scanner extensions. |
 | **Vigolium Audit** | `vigolium agent vigolium-audit` | Foreground multi-phase AI source-code audit. Drives a separate Claude Code / Codex harness against a source tree. |
 | **Olium** | `vigolium agent olium` (or `vigolium ol`) | Direct interactive TUI access to the olium engine. Use `-p` for a non-interactive one-shot prompt. |
 

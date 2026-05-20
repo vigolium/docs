@@ -23,7 +23,7 @@ vigolium scan -T targets.txt
 
 Use `--strategy` to control how much reconnaissance Vigolium performs before dynamic testing.
 
-### Lite — Fast, Minimal Discovery
+### Lite, Fast, Minimal Discovery
 
 Runs only the audit phase against the provided targets. No crawling, no content discovery.
 
@@ -33,7 +33,7 @@ vigolium scan -t https://example.com --strategy lite
 
 Best for: quick checks, CI pipelines, known endpoints.
 
-### Balanced — Default
+### Balanced, Default
 
 Runs content discovery, browser spidering, known-issue-scan analysis, and audit.
 
@@ -45,7 +45,7 @@ vigolium scan -t https://example.com --strategy balanced
 
 Best for: general-purpose scanning with good coverage.
 
-### Deep — Maximum Recon
+### Deep, Maximum Recon
 
 Adds external intelligence harvesting (Wayback Machine, CommonCrawl, etc.) on top of balanced.
 
@@ -138,18 +138,18 @@ vigolium scan -t https://example.com --spider --no-forms
 ```
 
 Spider flags:
-- `-b` / `--browsers` — number of browser instances (default: 1)
-- `-E` / `--browser-engine` — `chromium`, `ungoogled`, or `fingerprint` (default: `chromium`)
-- `--headless` — headless mode (default: true)
-- `--no-cdp` — disable CDP event listener detection
-- `--no-forms` — disable automatic form filling
-- `--spider-max-time` — max duration (default: 30m)
+- `-b` / `--browsers`, number of browser instances (default: 1)
+- `-E` / `--browser-engine`, `chromium`, `ungoogled`, or `fingerprint` (default: `chromium`)
+- `--headless`: headless mode (default: true)
+- `--no-cdp`: disable CDP event listener detection
+- `--no-forms`: disable automatic form filling
+- `--spider-max-time`: max duration (default: 30m)
 
 ### Known Issue Scan
 
 Runs Nuclei templates and Kingfisher secret scanning against discovered hosts and response bodies. Enabled by `--strategy balanced`/`deep` or by the strategy.
 
-By default, known-issue-scan enriches its target list with path prefixes discovered in previous phases (discovery, spidering). This increases coverage — Nuclei templates run against individual path prefixes (e.g., `https://example.com/api/v1/`) rather than just the host root. Disable this for faster but less granular scans:
+By default, known-issue-scan enriches its target list with path prefixes discovered in previous phases (discovery, spidering). This increases coverage, Nuclei templates run against individual path prefixes (e.g., `https://example.com/api/v1/`) rather than just the host root. Disable this for faster but less granular scans:
 
 ```yaml
 # vigolium-configs.yaml
@@ -266,7 +266,7 @@ vigolium scan -t https://example.com -j -o findings.jsonl
 
 For quick, targeted scans of individual URLs or raw requests.
 
-### `scan-url` — Single URL
+### `scan-url`: Single URL
 
 ```bash
 # Basic GET scan
@@ -288,7 +288,7 @@ vigolium scan-url https://example.com/api/users --json
 vigolium scan-url https://example.com --discover
 ```
 
-### `scan-request` — Raw HTTP Request
+### `scan-request`: Raw HTTP Request
 
 ```bash
 # From stdin
@@ -333,7 +333,7 @@ vigolium scan -t https://example.com --module-tag rails --module-tag django
 vigolium scan -t https://example.com -m xss-reflected --module-tag spring
 ```
 
-Tags are matched with OR logic — a module runs if it matches *any* of the specified tags. When both `-m` and `--module-tag` are provided, the results are merged (union).
+Tags are matched with OR logic, a module runs if it matches *any* of the specified tags. When both `-m` and `--module-tag` are provided, the results are merged (union).
 
 ## Custom Extensions
 

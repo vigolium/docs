@@ -1,6 +1,6 @@
 ---
 title: "CLI References"
-description: "Common usage examples for the vigolium CLI — scanning, agentic runs, ingestion, server, database, and more."
+description: "Common usage examples for the vigolium CLI, scanning, agentic runs, ingestion, server, database, and more."
 icon: "terminal"
 ---
 
@@ -64,7 +64,7 @@ vigolium scan -t https://example.com --known-issue-scan-tags cve,misconfig --kno
 
 ## Running a Single Phase
 
-`vigolium run <phase>` is an alias for `scan --only <phase>` — useful when you want one specific stage of the pipeline.
+`vigolium run <phase>` is an alias for `scan --only <phase>`, useful when you want one specific stage of the pipeline.
 
 ```bash
 vigolium run discover -t https://example.com
@@ -95,7 +95,7 @@ Run `vigolium --list-input-mode` to see every supported input format with exampl
 
 ## Ingestion
 
-Push HTTP traffic into the database without running a scan — useful for building a project corpus before scanning, or for sending traffic to a remote server.
+Push HTTP traffic into the database without running a scan, useful for building a project corpus before scanning, or for sending traffic to a remote server.
 
 ```bash
 vigolium ingest -t https://example.com -I openapi -i spec.yaml
@@ -194,7 +194,7 @@ vigolium source scan 1
 
 Run agentic and source-audit modes. See [Agent Mode](/agentic-scan/agent-mode) for the full list of subcommands.
 
-### `agent query` — single-shot prompts
+### `agent query`: single-shot prompts
 
 ```bash
 vigolium agent query --source ./src --prompt-template security-code-review
@@ -204,14 +204,14 @@ vigolium agent query --agent-label code-review --prompt-file custom-prompt.md
 vigolium agent --list-templates
 ```
 
-### `agent swarm` — AI-guided multi-phase scan
+### `agent swarm`: AI-guided multi-phase scan
 
 ```bash
 vigolium agent swarm -t https://example.com --discover
 vigolium agent swarm -t https://example.com --discover --focus 'API injection'
 ```
 
-### `agent autopilot` — autonomous agentic scan
+### `agent autopilot`: autonomous agentic scan
 
 ```bash
 # Natural-language prompt — target, source, and focus auto-extracted
@@ -260,7 +260,7 @@ vigolium agent autopilot -t https://example.com --source ./src --dry-run
 vigolium agent autopilot -t https://example.com --source ./src --show-prompt
 ```
 
-### `agent audit` — unified source audit (vigolium-audit + piolium)
+### `agent audit`: unified source audit (vigolium-audit + piolium)
 
 Runs vigolium-audit and/or piolium back-to-back against a single source tree under one AgenticScan, with per-driver session subdirs and a post-pass findings dedup.
 

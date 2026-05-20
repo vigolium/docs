@@ -1,5 +1,5 @@
 ---
-title: "Vigolium API Reference — Cloud Storage"
+title: "Vigolium API Reference, Cloud Storage"
 description: "Cloud object storage integration for source code upload/download and scan result archival via S3-compatible APIs (GCS, AWS S3, MinIO)."
 icon: "cloud-arrow-up"
 ---
@@ -23,9 +23,9 @@ Storage is **disabled by default**. Enable it by setting `storage.enabled: true`
 
 All storage operations enforce project-level isolation:
 
-- Every object path is prefixed with the authenticated project UUID (`<bucket>/<project-uuid>/<key>`). The project UUID comes from the `X-Project-UUID` header, set by server middleware — clients cannot override the prefix.
+- Every object path is prefixed with the authenticated project UUID (`<bucket>/<project-uuid>/<key>`). The project UUID comes from the `X-Project-UUID` header, set by server middleware, clients cannot override the prefix.
 - Keys and UUIDs are validated against path traversal (`../`, `..\\`, `..`) before any storage operation. Malicious keys are rejected with `400 Bad Request`.
-- Presigned URLs are scoped to the requesting project — a presigned URL for project A cannot access objects in project B.
+- Presigned URLs are scoped to the requesting project, a presigned URL for project A cannot access objects in project B.
 
 ---
 
@@ -48,7 +48,7 @@ SA_EMAIL=$(jq -r '.client_email' /path/to/gcs-readwrite-key.json)
 gcloud storage hmac create "$SA_EMAIL"
 ```
 
-This outputs an `accessId` and `secret`. Save both — the secret is only shown once.
+This outputs an `accessId` and `secret`. Save both, the secret is only shown once.
 
 ### Step 2: Create a GCS Bucket
 
@@ -320,7 +320,7 @@ curl -s -X POST http://localhost:9002/api/storage/presign \
 }
 ```
 
-Keys are validated against path traversal — requests with `../` or similar sequences are rejected with `400`.
+Keys are validated against path traversal, requests with `../` or similar sequences are rejected with `400`.
 
 ---
 

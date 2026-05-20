@@ -4,11 +4,11 @@ description: "High-fidelity vulnerability scanner fusing agentic AI with native 
 mode: "wide"
 ---
 
-<Frame caption="Vigolium Workbench — scan overview with severity breakdown and finding details">
+<Frame caption="Vigolium Workbench, scan overview with severity breakdown and finding details">
   <img src="/images/vigolium-main-workbench.png" alt="Vigolium Workbench showing scan overview with severity breakdown and individual finding details" />
 </Frame>
 
-Vigolium is a high-fidelity web vulnerability scanner that fuses agentic AI with native speed, modularity, and precision. It combines deterministic multi-phase scanning with AI-driven autonomous analysis to deliver comprehensive security coverage — from injection flaws and access control issues to framework-specific vulnerabilities and blind out-of-band attacks.
+Vigolium is a high-fidelity web vulnerability scanner that fuses agentic AI with native speed, modularity, and precision. It combines deterministic multi-phase scanning with AI-driven autonomous analysis to deliver comprehensive security coverage, from injection flaws and access control issues to framework-specific vulnerabilities and blind out-of-band attacks.
 
 The platform is built around three key components that work together to provide a complete vulnerability scanning solution.
 
@@ -16,7 +16,7 @@ The platform is built around three key components that work together to provide 
 
 <Columns cols={3}>
   <Card title="Vigolium CLI" icon="terminal">
-    The core scanning engine. Handles all scanning logic, module execution, and heavy lifting — from content discovery and browser-based spidering to active fuzzing and agentic AI scanning.
+    The core scanning engine. Handles all scanning logic, module execution, and heavy lifting, from content discovery and browser-based spidering to active fuzzing and agentic AI scanning.
   </Card>
   <Card title="Vigolium Workbench" icon="desktop">
     A self-hosted dashboard for visualizing scan results, managing projects, and tracking findings across your infrastructure. Deploy it on your own servers for full control over your data.
@@ -37,16 +37,16 @@ Agentic scanning uses AI agents to drive or augment the scanning process. Invoke
 |------|---------|-------------|
 | **Query** | `vigolium agent query` | Single-shot prompt execution. Good for code review, endpoint discovery, secret detection. No network scanning. |
 | **Autopilot** | `vigolium agent autopilot` | Autonomous AI-driven pentest. The olium engine drives bash, file ops, and the vigolium CLI until it calls `halt_scan`. |
-| **Swarm** | `vigolium agent swarm` | 10-phase pipeline where native Go handles heavy lifting and AI intervenes at checkpoints — planning attacks, triaging results, generating custom JS scanner extensions. |
+| **Swarm** | `vigolium agent swarm` | 10-phase pipeline where native Go handles heavy lifting and AI intervenes at checkpoints, planning attacks, triaging results, generating custom JS scanner extensions. |
 | **Vigolium Audit** | `vigolium agent vigolium-audit` | Multi-phase whitebox security audit (lite / balanced / deep). Runs as a foreground audit driver or in the background alongside swarm/autopilot. |
-| **Olium** | `vigolium olium` / `vigolium ol` | Interactive TUI chat or one-shot non-interactive prompt — the underlying agent runtime. |
+| **Olium** | `vigolium olium` / `vigolium ol` | Interactive TUI chat or one-shot non-interactive prompt, the underlying agent runtime. |
 
 All scan-oriented modes support `--source` for source-aware analysis and store session artifacts (plans, extensions, output) under `~/.vigolium/agent-sessions/`.
 
 
 ### Native Scan
 
-Deterministic, multi-phase vulnerability scanning via `vigolium scan`. Fast, modular, and repeatable — runs content discovery, browser spidering, SPA crawling, and active/passive `dynamic-assessment` phases with **235 scanner modules** (144 active, 91 passive).
+Deterministic, multi-phase vulnerability scanning via `vigolium scan`. Fast, modular, and repeatable, runs content discovery, browser spidering, SPA crawling, and active/passive `dynamic-assessment` phases with **235 scanner modules** (144 active, 91 passive).
 
 | Category | Coverage |
 |----------|----------|
@@ -67,17 +67,17 @@ The CLI is the heart of Vigolium, powering all scanning operations with two comp
 
 ### CLI Highlights
 
-- **Value-aware mutation** — classify parameter values by semantic type and generate intelligent mutations
-- **Multi-phase pipeline** — external harvesting, content discovery, SPA crawling, and audit controlled by strategy presets
-- **Scanning profiles** — bundle strategy, pace, scope, and module config into a single YAML file
-- **Multiple input formats** — URLs, OpenAPI/Swagger, Postman, Burp Suite, cURL, Nuclei JSONL
-- **Browser-based spider** — Chromium-driven crawler with SPA support, form filling, and JS analysis
-- **Multi-session authentication** — inline sessions, session files, or full auth configs with login flows and token extraction
-- **JavaScript extensions** — custom modules and hooks via embedded JS engine
-- **Source-aware agentic scan** — pair `--source` with `swarm`, `autopilot`, or `vigolium-audit` for code-context-aware AI scanning and audit
-- **Concurrent architecture** — configurable worker pool with per-host rate limiting and hybrid queue
-- **HTML reports** — self-contained HTML reports with sortable/filterable tables
-- **API server mode** — REST API with Swagger UI, multi-format ingestion, transparent HTTP proxy
+- **Value-aware mutation**: classify parameter values by semantic type and generate intelligent mutations
+- **Multi-phase pipeline**: external harvesting, content discovery, SPA crawling, and audit controlled by strategy presets
+- **Scanning profiles**: bundle strategy, pace, scope, and module config into a single YAML file
+- **Multiple input formats**: URLs, OpenAPI/Swagger, Postman, Burp Suite, cURL, Nuclei JSONL
+- **Browser-based spider**: Chromium-driven crawler with SPA support, form filling, and JS analysis
+- **Multi-session authentication**: inline sessions, session files, or full auth configs with login flows and token extraction
+- **JavaScript extensions**: custom modules and hooks via embedded JS engine
+- **Source-aware agentic scan**: pair `--source` with `swarm`, `autopilot`, or `vigolium-audit` for code-context-aware AI scanning and audit
+- **Concurrent architecture**: configurable worker pool with per-host rate limiting and hybrid queue
+- **HTML reports**: self-contained HTML reports with sortable/filterable tables
+- **API server mode**: REST API with Swagger UI, multi-format ingestion, transparent HTTP proxy
 
 ---
 
@@ -116,10 +116,10 @@ A self-hosted web dashboard that provides a visual interface for managing and an
 </Columns>
 
 <Columns cols={2}>
-  <Frame caption="HTML report — summary with severity chart">
+  <Frame caption="HTML report, summary with severity chart">
     <img src="/images/vigolium-static-report-1.png" alt="Self-contained HTML report showing vulnerability summary with severity chart" />
   </Frame>
-  <Frame caption="HTML report — sortable findings table">
+  <Frame caption="HTML report, sortable findings table">
     <img src="/images/vigolium-static-report-2.png" alt="Self-contained HTML report with sortable and filterable findings table" />
   </Frame>
 </Columns>
@@ -128,7 +128,7 @@ A self-hosted web dashboard that provides a visual interface for managing and an
 
 ## <Icon icon="cloud" /> Vigolium Cloud Console
 
-A cloud-based solution for teams that want the power of Vigolium without managing infrastructure. Console is the **upgraded, fully-featured version of Vigolium** — managed scanning, centralized reporting, team collaboration, and extra features layered on top of the open-source core, so you can focus on fixing vulnerabilities instead of maintaining tooling.
+A cloud-based solution for teams that want the power of Vigolium without managing infrastructure. Console is the **upgraded, fully-featured version of Vigolium**, managed scanning, centralized reporting, team collaboration, and extra features layered on top of the open-source core, so you can focus on fixing vulnerabilities instead of maintaining tooling.
 
 <Callout icon="rocket" color="#FFC107" iconType="regular">
   Check out the Cloud Console at [console.vigolium.com](https://console.vigolium.com/).
@@ -165,7 +165,7 @@ A cloud-based solution for teams that want the power of Vigolium without managin
 | Get up and running quickly | [Getting Started](/getting-started/getting-started) |
 | Understand how native scanning works | [How It Works](/native-scan/how-it-works) |
 | Pick the right scanning strategy | [Strategies](/native-scan/strategies) |
-| Dive into individual scan phases | [Phases](/native-scan/phases/) — discovery, spidering, audit, extension, SPA |
+| Dive into individual scan phases | [Phases](/native-scan/phases/), discovery, spidering, audit, extension, SPA |
 | Try agentic scanning | [Agent Mode](/agentic-scan/agent-mode) |
 | Let AI drive scans autonomously | [Autopilot](/agentic-scan/autopilot) |
 | Run multi-phase AI + native pipelines | [Swarm](/agentic-scan/swarm) |

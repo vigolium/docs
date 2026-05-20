@@ -1,16 +1,16 @@
 ---
 title: "Agentic Scanning"
-description: "Drive vulnerability scanning with AI — autopilot (autonomous operator), swarm (AI-guided pipeline), or query (single-shot prompts). All dispatched through the in-process olium runtime."
+description: "Drive vulnerability scanning with AI, autopilot (autonomous operator), swarm (AI-guided pipeline), or query (single-shot prompts). All dispatched through the in-process olium runtime."
 icon: "robot"
 ---
 
 Vigolium's agent mode runs vulnerability scans with an LLM in the loop. Three subcommands cover the spectrum from single-shot prompts to fully autonomous pentests:
 
-- **`vigolium agent query`** — one-shot prompt against code or a target. Code review, endpoint discovery, secret hunt. No scanning loop.
-- **`vigolium agent swarm`** — multi-phase pipeline where native Go does the heavy lifting and AI intervenes at checkpoints (planning attacks, triaging results, generating custom JS extensions).
-- **`vigolium agent autopilot`** — one long-running LLM session with full tool access. The agent decides what to scan, runs scans, inspects results, and iterates until it halts.
+- **`vigolium agent query`**: one-shot prompt against code or a target. Code review, endpoint discovery, secret hunt. No scanning loop.
+- **`vigolium agent swarm`**: multi-phase pipeline where native Go does the heavy lifting and AI intervenes at checkpoints (planning attacks, triaging results, generating custom JS extensions).
+- **`vigolium agent autopilot`**: one long-running LLM session with full tool access. The agent decides what to scan, runs scans, inspects results, and iterates until it halts.
 
-All three dispatch through the in-process **olium** runtime — one unified provider interface, one conversation state. There are no subprocess SDK backends.
+All three dispatch through the in-process **olium** runtime, one unified provider interface, one conversation state. There are no subprocess SDK backends.
 
 <Callout icon="message" color="#FFC107" iconType="regular">Autopilot and Swarm are still maturing. We greatly appreciate feedback on false positives and bug reports.</Callout>
 
@@ -31,7 +31,7 @@ If that returns a model name, you're wired up.
 
 ---
 
-## Autopilot — autonomous AI pentest
+## Autopilot, autonomous AI pentest
 
 Hand the agent a target and walk away. It opens a shell, reads files, runs the vigolium CLI, decides which modules to invoke, and iterates until it calls `halt_scan` or hits the max-turns / max-duration cap.
 
@@ -72,7 +72,7 @@ Reach for autopilot when the target is fuzzy, JS-heavy, auth-walled, or you want
 
 ---
 
-## Swarm — AI-guided multi-phase scan
+## Swarm, AI-guided multi-phase scan
 
 The agent **directs** the native scanner instead of becoming it. A state-machine pipeline runs: normalize → auth → source-analysis → code-audit → discover → plan (AI) → extension → native scan → triage (AI) → optional rescan loop.
 
@@ -161,8 +161,8 @@ vigolium finding list --source swarm
 
 ## Next steps
 
-- [Autopilot](/agentic-scan/autopilot) — autonomous operator: full flag reference, intensity presets, halt conditions.
-- [Swarm](/agentic-scan/swarm) — multi-phase pipeline: phases, extension generation, triage loop.
-- [Agent Mode](/agentic-scan/agent-mode) — the full reference for every `vigolium agent` subcommand.
-- [Agentic Security Audit](/getting-started/agentic-security-audit) — whitebox source-code audit (vigolium-audit + piolium).
-- [Setting Up the Agent](/getting-started/setup-agent) — provider/credential setup.
+- [Autopilot](/agentic-scan/autopilot), autonomous operator: full flag reference, intensity presets, halt conditions.
+- [Swarm](/agentic-scan/swarm), multi-phase pipeline: phases, extension generation, triage loop.
+- [Agent Mode](/agentic-scan/agent-mode), the full reference for every `vigolium agent` subcommand.
+- [Agentic Security Audit](/getting-started/agentic-security-audit), whitebox source-code audit (vigolium-audit + piolium).
+- [Setting Up the Agent](/getting-started/setup-agent), provider/credential setup.

@@ -1,10 +1,10 @@
 ---
-title: "Vigolium API Reference — Findings"
+title: "Vigolium API Reference, Findings"
 description: "List, retrieve, and delete vulnerability findings with filtering, pagination, and severity-based queries."
 icon: "list"
 ---
 
-## GET /api/findings — List Findings
+## GET /api/findings, List Findings
 
 Returns paginated vulnerability findings.
 
@@ -81,7 +81,7 @@ curl -s 'http://localhost:9002/api/findings?search=reflected' | jq .
 
 ---
 
-## GET /api/findings/:id — Get Finding Detail
+## GET /api/findings/:id, Get Finding Detail
 
 Returns a single finding by its numeric ID.
 
@@ -126,7 +126,7 @@ curl -s http://localhost:9002/api/findings/1 | jq .
 
 ---
 
-## DELETE /api/findings/:id — Delete Finding
+## DELETE /api/findings/:id, Delete Finding
 
 Deletes a single finding by its numeric ID. Associated `finding_records` junction rows are also removed.
 
@@ -162,8 +162,8 @@ Stores extra HTTP request/response pairs associated with a finding. Each entry i
 
 This field is populated in two ways:
 
-1. **Modules and extensions** — A module or JS extension can attach supplementary evidence when creating a finding (e.g., multiple payloads tried, confirmation requests, or baseline comparisons).
-2. **Deduplication** — When duplicate findings are merged (same `module_id`, `severity`, and `matched_at` URL), the `request`/`response` pairs from the removed duplicates are automatically collected into the surviving finding's `additional_evidence`.
+1. **Modules and extensions**: A module or JS extension can attach supplementary evidence when creating a finding (e.g., multiple payloads tried, confirmation requests, or baseline comparisons).
+2. **Deduplication**: When duplicate findings are merged (same `module_id`, `severity`, and `matched_at` URL), the `request`/`response` pairs from the removed duplicates are automatically collected into the surviving finding's `additional_evidence`.
 
 **Example entry format:**
 
@@ -173,4 +173,4 @@ GET /api?id=1'+OR+1=1 HTTP/1.1\r\nHost: example.com\r\n\r\n
 HTTP/1.1 500 Internal Server Error\r\n\r\n{"error":"syntax error"}
 ```
 
-To parse an entry, split on `\n---------\n` — the first part is the request, the second is the response.
+To parse an entry, split on `\n---------\n`, the first part is the request, the second is the response.

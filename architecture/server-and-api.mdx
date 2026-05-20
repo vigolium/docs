@@ -1,6 +1,6 @@
 ---
 title: "Server & API Architecture"
-description: "The Fiber REST service — its process model, traffic ingestion paths, the REST surface, and the agent run API."
+description: "The Fiber REST service, its process model, traffic ingestion paths, the REST surface, and the agent run API."
 icon: "server"
 ---
 
@@ -8,7 +8,7 @@ icon: "server"
 Architecture series: [Overview](/architecture/overview) · [Native Scan](/architecture/native-scan) · [Agentic Scan](/architecture/agentic-scan) · [Data & Storage](/architecture/data-and-storage) · **Server & API**
 </Note>
 
-Vigolium runs as a long-lived service via `vigolium server`: a Fiber REST API that ingests traffic, triggers native and agentic scans, and serves results — all sharing the same project-scoped persistence layer as the CLI. This document explains the service's shape and request lifecycle. For curl-by-curl recipes see [Server & Ingestion](/getting-started/server-and-ingestion); for the full endpoint catalogue see [API Overview](/api-overview) and the [API Reference](/api-references/overview).
+Vigolium runs as a long-lived service via `vigolium server`, a Fiber REST API that ingests traffic, triggers native and agentic scans, and serves results, all sharing the same project-scoped persistence layer as the CLI. This document explains the service's shape and request lifecycle. For curl-by-curl recipes see [Server & Ingestion](/getting-started/server-and-ingestion); for the full endpoint catalogue see [API Overview](/api-overview) and the [API Reference](/api-references/overview).
 
 ---
 
@@ -33,15 +33,15 @@ Vigolium runs as a long-lived service via `vigolium server`: a Fiber REST API th
             │ (--ingest-proxy-port :9003)      │ (remote client)
 ```
 
-The server is `pkg/server/` (Fiber). It owns no scan logic of its own — it wraps the same `internal/runner` native pipeline and the same `pkg/agent` orchestrators the CLI uses, so behavior is identical whichever entry point launches a scan. Three traffic sources feed the same `RecordWriter` → repository path: the `/api/ingest-http` endpoint, the optional transparent HTTP proxy, and the standalone `vigolium-ingestor` client.
+The server is `pkg/server/` (Fiber). It owns no scan logic of its own, it wraps the same `internal/runner` native pipeline and the same `pkg/agent` orchestrators the CLI uses, so behavior is identical whichever entry point launches a scan. Three traffic sources feed the same `RecordWriter` → repository path: the `/api/ingest-http` endpoint, the optional transparent HTTP proxy, and the standalone `vigolium-ingestor` client.
 
 ### Middleware chain
 
 Every request (except `/`, `/health`, `/metrics`, `/swagger/*`) passes:
 
-1. **CORS** — `server.cors_allowed_origins`: `reflect-origin` (default, credentialed echo), `*` (wildcard, no credentials), explicit comma-separated allowlist, or empty (disabled).
-2. **Auth** — `Authorization: Bearer <key>`; key resolves `VIGOLIUM_API_KEY` env > `server.auth_api_key` config. `vigolium server -A` disables auth (development only).
-3. **Project resolution** — `X-Project-UUID` header selects the tenant (default project if absent); `X-User-Email` drives optional per-project access control (`403` on denial). See [Data & Storage](/architecture/data-and-storage).
+1. **CORS**: `server.cors_allowed_origins`, `reflect-origin` (default, credentialed echo), `*` (wildcard, no credentials), explicit comma-separated allowlist, or empty (disabled).
+2. **Auth**: `Authorization: Bearer <key>`; key resolves `VIGOLIUM_API_KEY` env > `server.auth_api_key` config. `vigolium server -A` disables auth (development only).
+3. **Project resolution**: `X-Project-UUID` header selects the tenant (default project if absent); `X-User-Email` drives optional per-project access control (`403` on denial). See [Data & Storage](/architecture/data-and-storage).
 
 ---
 
@@ -87,17 +87,17 @@ Endpoints group by concern; each group has a dedicated page under the [API Refer
 
 Scan and agent runs are long-lived, so the API is **launch-and-poll**, not request/response:
 
-1. `POST /api/scans/run` or `/api/agent/run/*` → `202 Accepted` with a UUID (`409 Conflict` if one is already active — only one agent run at a time).
+1. `POST /api/scans/run` or `/api/agent/run/*` → `202 Accepted` with a UUID (`409 Conflict` if one is already active, only one agent run at a time).
 2. Poll `GET /api/scan/status` or `GET /api/agent/status/:id` until status leaves `running`.
 3. Fetch artifacts: `GET /api/agent/sessions/:id/{logs,artifacts,artifacts/*}` (logs SSE-capable; artifact reads support nested paths and a `?max_bytes=` cap).
 
-Opting into `"stream": true` on a run endpoint switches to Server-Sent Events instead — `data:` lines carrying `{"type":"chunk|phase|done|error", …}`. Most consumers should prefer the async poll-and-tail flow to keep warm sessions and prompt caches stable.
+Opting into `"stream": true` on a run endpoint switches to Server-Sent Events instead, `data:` lines carrying `{"type":"chunk|phase|done|error", …}`. Most consumers should prefer the async poll-and-tail flow to keep warm sessions and prompt caches stable.
 
 ---
 
 ## 4. Agent run API
 
-`pkg/server/handlers_agent.go` mirrors the `vigolium agent` subcommands over HTTP. It does not re-implement agent logic — it invokes the same orchestrators documented in [Agentic Scan](/architecture/agentic-scan), with one deliberate constraint:
+`pkg/server/handlers_agent.go` mirrors the `vigolium agent` subcommands over HTTP. It does not re-implement agent logic, it invokes the same orchestrators documented in [Agentic Scan](/architecture/agentic-scan), with one deliberate constraint:
 
 - **Provider is server-config only.** The CLI's per-invocation provider flags (`--provider`, `--model`, `--oauth-token`, …) are *not* mirrored on the REST schemas. The server resolves the provider once from `agent.olium.*` in `vigolium-configs.yaml` and reuses it, keeping warm sessions and prompt caches stable. Switching providers means editing YAML and reloading.
 - **Backward-compatible source field.** Request types expose `EffectiveSourcePath()` to accept both `source` and legacy `repo_path` JSON keys.

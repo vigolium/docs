@@ -285,7 +285,7 @@ server:
 
 ### `agent`
 
-AI agent integration. Every agent invocation is dispatched through the in-process **olium** runtime — there are no subprocess SDK or ACP backends.
+AI agent integration. Every agent invocation is dispatched through the in-process **olium** runtime, there are no subprocess SDK or ACP backends.
 
 ```yaml
 agent:
@@ -375,9 +375,9 @@ Provider quick reference:
 | `anthropic-cli` | `claude-opus-4-7` | local `claude` binary on `$PATH` |
 | `anthropic-vertex` | `claude-opus-4-6` | GCP service-account JSON (or ADC) via `agent.olium.vertex` |
 | `google-vertex` | `gemini-2.5-pro` | GCP service-account JSON (or ADC) via `agent.olium.vertex` |
-| `openai-compatible` | none — pick one | `agent.olium.custom_provider` (Ollama, OpenRouter, LM Studio, vLLM, …) |
+| `openai-compatible` | none, pick one | `agent.olium.custom_provider` (Ollama, OpenRouter, LM Studio, vLLM, …) |
 
-CLI flags `--provider`, `--model`, `--oauth-cred`, `--oauth-token`, `--llm-api-key`, `--base-url` override these per-invocation. The REST API does **not** mirror these overrides — server-side workloads use the YAML config exclusively. See [Setting Up the Agent](/getting-started/setup-agent) for a step-by-step walkthrough or [Olium Agent](/agentic-scan/olium) for full provider details.
+CLI flags `--provider`, `--model`, `--oauth-cred`, `--oauth-token`, `--llm-api-key`, `--base-url` override these per-invocation. The REST API does **not** mirror these overrides, server-side workloads use the YAML config exclusively. See [Setting Up the Agent](/getting-started/setup-agent) for a step-by-step walkthrough or [Olium Agent](/agentic-scan/olium) for full provider details.
 
 ### `database`
 
@@ -474,7 +474,7 @@ oast:
 
 ### `source_aware`
 
-Storage location for cloned source repositories. Used when `--source` receives a git URL (autopilot, swarm, vigolium-audit, query). Static analysis tooling (ast-grep, semgrep, etc.) has been removed — for AI-driven code audit, use `vigolium agent vigolium-audit` or `vigolium agent swarm --source --code-audit`.
+Storage location for cloned source repositories. Used when `--source` receives a git URL (autopilot, swarm, vigolium-audit, query). Static analysis tooling (ast-grep, semgrep, etc.) has been removed, for AI-driven code audit, use `vigolium agent vigolium-audit` or `vigolium agent swarm --source --code-audit`.
 
 ```yaml
 source_aware:
@@ -484,7 +484,7 @@ source_aware:
 
 ### `storage`
 
-Cloud storage integration for source code upload/download and scan result archival. Uses an S3-compatible API — supports GCS (via HMAC), AWS S3, and MinIO.
+Cloud storage integration for source code upload/download and scan result archival. Uses an S3-compatible API, supports GCS (via HMAC), AWS S3, and MinIO.
 
 ```yaml
 storage:

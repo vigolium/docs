@@ -29,14 +29,14 @@ This document covers the benchmark testing system for validating Vigolium's dete
 
 ## Overview
 
-The benchmark system validates that Vigolium's active and passive scanner modules detect known vulnerabilities in controlled environments. It uses a **data-driven approach**: YAML files define target applications, endpoints, expected modules, and assertions. A shared Go test harness loads these definitions and drives execution.
+The benchmark system validates that Vigolium's active and passive scanner modules detect known vulnerabilities in controlled environments. It uses a **data-driven approach**, YAML files define target applications, endpoints, expected modules, and assertions. A shared Go test harness loads these definitions and drives execution.
 
 ### Test Categories
 
 | Category | Build Tag | Targets | Assertions | Requirements |
 |----------|-----------|---------|------------|--------------|
 | **Whitebox** | `canary` | Docker containers (DVWA, VAmPI, Juice Shop, OopsSec Store, NextJS VulnExamples, etc.) | Strict + Soft | Docker |
-| **crAPI** | `canary` | Docker Compose (crAPI — 10 services) | Soft | Docker + `make crapi-up` |
+| **crAPI** | `canary` | Docker Compose (crAPI, 10 services) | Soft | Docker + `make crapi-up` |
 | **XBOW** | `xbow` | CTF-style benchmarks built from source (XSS, SSTI, SQLi, LFI, CmdI, SSRF, XXE) | Strict + Soft | Docker + `XBOW_SOURCE_DIR` |
 | **Blackbox** | `blackbox` | External demo sites (Acunetix, PortSwigger, IBM) | Soft only | Internet |
 | **Coverage** | `canary` | None (analyzes YAML definitions) | N/A | None |
@@ -74,7 +74,7 @@ Vigolium benchmarks against a diverse set of intentionally vulnerable applicatio
 | **Vulnerable Java** | Java / Spring | SQLi, XSS, SSRF, Path Traversal | Docker image | 8080 |
 | **Vulnerable Nginx** | Nginx | Misconfigurations, Path Traversal, CRLF, Header Injection | Docker image | 80 |
 
-### NextJS VulnExamples — Detailed Breakdown
+### NextJS VulnExamples, Detailed Breakdown
 
 Source: [upleveled/security-vulnerability-examples-next-js-postgres](https://github.com/upleveled/security-vulnerability-examples-next-js-postgres)
 
@@ -82,8 +82,8 @@ This application is an educational project demonstrating six categories of secur
 
 | Example | Vulnerability | Vulnerable Route | Type | What's Wrong |
 |---------|--------------|-----------------|------|-------------|
-| 1 | Missing Authentication | `GET /api/example-1-.../vulnerable` | Route Handler | No session token check — returns blog posts to anyone |
-| 2 | Missing Authentication | `GET /example-2-.../vulnerable` | Server Component | No session check — queries DB and renders directly |
+| 1 | Missing Authentication | `GET /api/example-1-.../vulnerable` | Route Handler | No session token check, returns blog posts to anyone |
+| 2 | Missing Authentication | `GET /example-2-.../vulnerable` | Server Component | No session check, queries DB and renders directly |
 | 3 | Missing Authorization | `GET /api/example-3-.../vulnerable` | Route Handler | Checks auth but returns ALL users' unpublished posts |
 | 4 | Missing Authorization | `GET /example-4-.../vulnerable` | Server Component | No auth + returns all users' data |
 | 5 | Secrets Exposure | `GET /example-5-.../vulnerable` | Server Component | Leaks `process.env.API_KEY` and password hashes to client |
@@ -91,7 +91,7 @@ This application is an educational project demonstrating six categories of secur
 
 Seed data includes two users (alice/abc, bob/def) and 7 blog posts, including two with XSS payloads.
 
-Each example also has 1-3 **solution variants** that fix the vulnerability. These serve as negative test cases — the scanner should NOT flag them.
+Each example also has 1-3 **solution variants** that fix the vulnerability. These serve as negative test cases, the scanner should NOT flag them.
 
 ### Blackbox Targets (External Sites)
 
@@ -438,7 +438,7 @@ test_cases:
 | `docker` | Testcontainers-go starts/stops container automatically | Auto-assigned (mapped port) |
 | `compose` | Must be started externally (`make crapi-up`) | Specified in `base_url` |
 | `xbow` | Docker Compose CLI builds from source, starts/stops automatically | Auto-discovered via `docker compose port` |
-| `external` | No containers — uses public websites | Specified in `base_url` |
+| `external` | No containers, uses public websites | Specified in `base_url` |
 
 ### Scan Modes
 
@@ -529,7 +529,7 @@ test_cases:
     scan_mode: active
 ```
 
-2. **No Go code changes needed** — the existing `TestWhitebox_Active` runner automatically picks up new YAML files from the definitions directory.
+2. **No Go code changes needed**: the existing `TestWhitebox_Active` runner automatically picks up new YAML files from the definitions directory.
 
 3. **Run it**:
 ```bash
@@ -620,7 +620,7 @@ test_cases:
 ```
 
 2. **Important rules for blackbox definitions**:
-   - **All assertions must be `soft`** — external sites may change, go down, or add protections.
+   - **All assertions must be `soft`**: external sites may change, go down, or add protections.
    - **Set `rate_limit`** to be respectful (2 req/sec is a good default).
    - The test runner automatically skips if the site is unreachable.
 
@@ -683,7 +683,7 @@ This outputs a markdown table to stdout and writes `test/benchmark/coverage-repo
 ### Understanding Coverage
 
 - **Covered** means at least one YAML test case references the module ID.
-- **Coverage does NOT mean detection** — a soft-asserted test case counts as covered even if the module finds nothing.
+- **Coverage does NOT mean detection**: a soft-asserted test case counts as covered even if the module finds nothing.
 - Some modules are intentionally deferred (see [Hard-to-Benchmark Modules](#hard-to-benchmark-modules)).
 
 ---
@@ -694,7 +694,7 @@ This outputs a markdown table to stdout and writes `test/benchmark/coverage-repo
 |------|----------|----------|
 | `strict` | Test fails if `len(findings) < min_findings` | Known vulnerabilities in controlled Docker apps |
 | `soft` | Logs a warning but test passes regardless | Experimental tests, blackbox sites, modern apps with protections |
-| `negative` | Test fails if `len(findings) > 0` | False positive testing — endpoints that should NOT trigger |
+| `negative` | Test fails if `len(findings) > 0` | False positive testing, endpoints that should NOT trigger |
 
 ### Choosing the Right Assertion
 
@@ -718,7 +718,7 @@ The `test/benchmark/harness/` package is a shared Go library (not a test package
 
 | Type | Description |
 |------|-------------|
-| `BenchmarkDefinition` | Root struct parsed from YAML — contains `AppConfig` and `[]TestCase` |
+| `BenchmarkDefinition` | Root struct parsed from YAML, contains `AppConfig` and `[]TestCase` |
 | `AppConfig` | Target application configuration (image, port, type, env, build_context, service_name, internal_port) |
 | `ComposeApp` | Running Docker Compose project (project name, directory, base URL) |
 | `TestCase` | Single test case (endpoint, modules, assertion, scan mode) |
@@ -851,7 +851,7 @@ The `xbow` app type in the harness triggers a Docker Compose CLI lifecycle manag
 
 1. **Build**: `docker compose -f <dir>/docker-compose.yml -p xbow-<name> build --build-arg FLAG=test`
 2. **Start**: `docker compose ... up -d --wait`
-3. **Port discovery**: `docker compose ... port <service> <internal_port>` — parses the ephemeral host port
+3. **Port discovery**: `docker compose ... port <service> <internal_port>`, parses the ephemeral host port
 4. **Health check**: Polls `wait_endpoint` until it responds with status < 500
 5. **Test execution**: Runs active test cases (GET or POST) through the standard harness
 6. **Teardown**: `docker compose ... down -v --remove-orphans`
@@ -971,7 +971,7 @@ test_cases:
 make test-xbow XBOW_SOURCE_DIR=/path/to/validation-benchmarks
 ```
 
-No Go code changes are needed — the test runner automatically picks up new YAML files.
+No Go code changes are needed, the test runner automatically picks up new YAML files.
 
 ---
 
@@ -1042,7 +1042,7 @@ External site http://testphp.vulnweb.com is unreachable
 ```
 
 - Check internet connectivity
-- The site may be temporarily down — blackbox tests are designed to gracefully skip
+- The site may be temporarily down, blackbox tests are designed to gracefully skip
 
 ### No findings from a strict-asserted test
 

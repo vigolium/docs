@@ -6,7 +6,7 @@ icon: "key"
 
 Vigolium supports multi-session authenticated scanning via the `--session`, `--session-file`, and `--auth-config` flags. This enables scanning behind login walls and detecting authorization bypass vulnerabilities (IDOR/BOLA).
 
-Session config files can be written in **YAML or JSON** — the format is auto-detected by file extension (`.json`) or by content sniffing (leading `{` or `[`).
+Session config files can be written in **YAML or JSON**, the format is auto-detected by file extension (`.json`) or by content sniffing (leading `{` or `[`).
 
 ## Quick Start
 
@@ -37,8 +37,8 @@ All three flags can be combined. If no session is explicitly marked as `primary`
 
 Each session has a **role** that determines how it is used during the scan:
 
-- **`primary`** — The main session. Used for discovery, spidering, and as the default requester during the audit phase. There should be exactly one primary session.
-- **`compare`** — Comparison sessions for IDOR/BOLA testing. During the audit phase, every request made by the primary session is replayed with each compare session's credentials. If a compare session can access resources it shouldn't, the `authz-compare` module flags it.
+- **`primary`**: The main session. Used for discovery, spidering, and as the default requester during the audit phase. There should be exactly one primary session.
+- **`compare`**: Comparison sessions for IDOR/BOLA testing. During the audit phase, every request made by the primary session is replayed with each compare session's credentials. If a compare session can access resources it shouldn't, the `authz-compare` module flags it.
 
 ## Inline Sessions
 
@@ -57,7 +57,7 @@ vigolium scan https://app.com \
   --session "regular:Cookie:session=user_token"
 ```
 
-Values containing colons are handled correctly — only the first two colons are used as delimiters.
+Values containing colons are handled correctly, only the first two colons are used as delimiters.
 
 ## Session Files
 
@@ -247,9 +247,9 @@ vigolium scan https://app.com --auth-config ./auth-config.json
 
 JSON is a good choice when:
 
-- **AI agents generate session configs** — most LLMs produce cleaner JSON than YAML, and agent modes (swarm, autopilot) already output session config as JSON natively.
-- **Programmatic generation** — scripts, CI pipelines, or tools that build session configs are often simpler in JSON.
-- **Embedding in other JSON payloads** — e.g., the REST API `POST /api/agent/run/swarm` body includes session config as a nested JSON object.
+- **AI agents generate session configs**: most LLMs produce cleaner JSON than YAML, and agent modes (swarm, autopilot) already output session config as JSON natively.
+- **Programmatic generation**: scripts, CI pipelines, or tools that build session configs are often simpler in JSON.
+- **Embedding in other JSON payloads**: e.g., the REST API `POST /api/agent/run/swarm` body includes session config as a nested JSON object.
 
 YAML remains convenient for hand-written configs where comments and multi-line strings help readability.
 
@@ -257,11 +257,11 @@ YAML remains convenient for hand-written configs where comments and multi-line s
 
 The format is detected automatically:
 
-1. **File extension** — `.json` files are parsed as JSON; `.yaml` / `.yml` as YAML.
-2. **Content sniffing** — if the extension is ambiguous (or missing), content starting with `{` or `[` (after whitespace trimming) is parsed as JSON.
-3. **Fallback** — everything else is parsed as YAML.
+1. **File extension**: `.json` files are parsed as JSON; `.yaml` / `.yml` as YAML.
+2. **Content sniffing**: if the extension is ambiguous (or missing), content starting with `{` or `[` (after whitespace trimming) is parsed as JSON.
+3. **Fallback**: everything else is parsed as YAML.
 
-This means extensionless files work too — pipe JSON directly and it will be detected:
+This means extensionless files work too, pipe JSON directly and it will be detected:
 
 ```bash
 # Generate config from a script, write to a temp file, scan
@@ -308,7 +308,7 @@ All `${VAR}` references are expanded from the environment at load time, before f
 
 ## IDOR/BOLA Testing
 
-To test for authorization bypass vulnerabilities, define at least two sessions — one primary and one or more compare sessions.
+To test for authorization bypass vulnerabilities, define at least two sessions, one primary and one or more compare sessions.
 
 **YAML:**
 
@@ -430,8 +430,8 @@ scanning_strategy:
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `session_dir` | string | `~/.vigolium/sessions/` | Directory for session file lookup. `--session-file myapp` resolves to `<session_dir>/myapp.yaml` (tries `.yaml`, `.yml`, `.json` in order). Supports `~` expansion. |
-| `use_in_discovery` | bool | `true` | When `true`, the primary session's headers are injected into the requester used for discovery and spidering. When `false`, those phases run unauthenticated — useful for mapping the public attack surface first, then scanning authenticated. |
-| `compare_enabled` | bool | `true` | When `true`, compare sessions are created and the `authz-compare` module is activated for IDOR/BOLA testing. When `false`, compare sessions are ignored even if defined — handy when you only need authenticated scanning without authorization comparison. |
+| `use_in_discovery` | bool | `true` | When `true`, the primary session's headers are injected into the requester used for discovery and spidering. When `false`, those phases run unauthenticated, useful for mapping the public attack surface first, then scanning authenticated. |
+| `compare_enabled` | bool | `true` | When `true`, compare sessions are created and the `authz-compare` module is activated for IDOR/BOLA testing. When `false`, compare sessions are ignored even if defined, handy when you only need authenticated scanning without authorization comparison. |
 | `reauth_interval` | duration | `""` (disabled) | Go duration string (e.g. `"15m"`, `"1h"`). When set, login flows are re-executed at this interval to refresh tokens that expire mid-scan. |
 | `reauth_on_status` | []int | `[]` (disabled) | HTTP status codes that trigger reactive re-authentication. When the primary session receives one of these codes, its login flow is re-executed immediately and the request is retried. |
 | `validate_url` | string | `""` (disabled) | Relative or absolute URL to GET after login. The scanner checks for a 2xx response to confirm credentials are working before proceeding. Catches bad credentials early. |
@@ -501,7 +501,7 @@ scanning_strategy:
 
 Point all team members to a shared directory so `--session-file staging-admin` resolves the same file for everyone.
 
-Scanning profiles (`~/.vigolium/profiles/`) can also override session strategy values — useful for having a "quick unauthenticated" profile alongside a "deep authenticated" profile.
+Scanning profiles (`~/.vigolium/profiles/`) can also override session strategy values, useful for having a "quick unauthenticated" profile alongside a "deep authenticated" profile.
 
 ## Using Session Config with Agent Modes
 

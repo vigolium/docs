@@ -26,11 +26,11 @@ vigolium scan --target https://example.com
 Human-readable terminal output with color-coded severity levels. Findings are printed as they are discovered, with a summary table at the end of the scan. This is the default when no `--format` flag is specified.
 
 Severity colors:
-- **Critical** — Red
-- **High** — Orange/Yellow
-- **Medium** — Yellow
-- **Low** — Blue
-- **Info** — Gray
+- **Critical**: Red
+- **High**: Orange/Yellow
+- **Medium**: Yellow
+- **Low**: Blue
+- **Info**: Gray
 
 ### JSONL
 
@@ -46,7 +46,7 @@ Example usage with `jq`:
 vigolium scan --target https://example.com --format jsonl | jq 'select(.severity == "high")'
 ```
 
-For CI/CD pipelines, `--ci-output-format` is a shorthand that forces clean JSONL with no banners or color codes — drop-in safe for parsing in build scripts:
+For CI/CD pipelines, `--ci-output-format` is a shorthand that forces clean JSONL with no banners or color codes, drop-in safe for parsing in build scripts:
 
 ```bash
 vigolium scan --stateless -t https://example.com --ci-output-format -o findings
@@ -100,7 +100,7 @@ Each finding contains the following fields:
 | **Confidence** | Certain, Firm, or Tentative |
 | **URL** | The target URL where the vulnerability was detected |
 | **Parameter** | The specific parameter or insertion point that was tested (if applicable) |
-| **Evidence** | Proof of the vulnerability — response excerpts, payloads, or other confirming data |
+| **Evidence** | Proof of the vulnerability, response excerpts, payloads, or other confirming data |
 | **Description** | Human-readable explanation of the vulnerability and its potential impact |
 
 ## Saving Output
@@ -171,7 +171,7 @@ OAST findings appear in output with:
 
 OAST interactions may arrive after the initial scan phase completes, as some out-of-band triggers have delayed execution. Vigolium waits for a configurable period after scanning to collect late-arriving callbacks.
 
-If outbound DNS or HTTP is blocked by a firewall, OAST-based detections will not work. The scanner will still produce findings through other detection methods — OAST simply adds an additional layer of out-of-band detection.
+If outbound DNS or HTTP is blocked by a firewall, OAST-based detections will not work. The scanner will still produce findings through other detection methods, OAST simply adds an additional layer of out-of-band detection.
 
 ## Querying Results from Database
 

@@ -1,5 +1,5 @@
 ---
-title: "Vigolium API Reference — Overview"
+title: "Vigolium API Reference, Overview"
 description: "Base URL, authentication, project scoping, health checks, and common endpoints for the Vigolium API server."
 icon: "square-terminal"
 ---
@@ -45,7 +45,7 @@ This applies to all data endpoints: ingestion, findings, HTTP records, stats, sc
 
 ---
 
-## GET / — App Info
+## GET /, App Info
 
 Returns basic application metadata.
 
@@ -66,7 +66,7 @@ curl -s http://localhost:9002/ | jq .
 
 ---
 
-## GET /health — Health Check
+## GET /health, Health Check
 
 Returns server health status.
 
@@ -83,7 +83,7 @@ curl -s http://localhost:9002/health | jq .
 
 ---
 
-## GET /server-info — Server Info
+## GET /server-info, Server Info
 
 Returns detailed server information including uptime, database driver, queue depth, and record/finding totals.
 
@@ -111,7 +111,7 @@ curl -s http://localhost:9002/server-info | jq .
 
 ---
 
-## GET /swagger/* — Swagger UI
+## GET /swagger/*, Swagger UI
 
 Interactive API documentation. Open in a browser.
 
@@ -127,7 +127,7 @@ curl -s http://localhost:9002/swagger/doc.json | jq .info
 
 ---
 
-## GET /metrics — Prometheus Metrics
+## GET /metrics, Prometheus Metrics
 
 Returns Prometheus-formatted metrics. No authentication required. Only available when the server is started with `--enable-metrics`.
 

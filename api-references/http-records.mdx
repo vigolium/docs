@@ -1,10 +1,10 @@
 ---
-title: "Vigolium API Reference — HTTP Records"
+title: "Vigolium API Reference, HTTP Records"
 description: "List, retrieve, and delete HTTP request/response records with filtering, pagination, and sorting options."
 icon: "exchange"
 ---
 
-## GET /api/http-records — List HTTP Records
+## GET /api/http-records, List HTTP Records
 
 Returns paginated HTTP request/response records stored in the database. Response and request bodies are excluded from list responses for performance.
 
@@ -87,7 +87,7 @@ curl -s 'http://localhost:9002/api/http-records?domain=*.example.com' | jq .
 
 ---
 
-## GET /api/http-records/:uuid — Get HTTP Record Detail
+## GET /api/http-records/:uuid, Get HTTP Record Detail
 
 Returns a single HTTP record by UUID, including full blob fields (`raw_request`, `raw_response`, `request_body`, `response_body`).
 
@@ -123,7 +123,7 @@ curl -s http://localhost:9002/api/http-records/abc-123 | jq .
 
 ---
 
-## DELETE /api/http-records/:uuid — Delete HTTP Record
+## DELETE /api/http-records/:uuid, Delete HTTP Record
 
 Deletes a single HTTP record by UUID. Associated `finding_records` junction rows are also removed.
 

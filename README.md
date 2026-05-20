@@ -8,7 +8,7 @@ Vigolium is a high-fidelity web vulnerability scanner written in Go. It combines
 
 ## <Icon icon="cloud" /> Vigolium Cloud Console
 
-Vigolium Cloud Console provides managed scanning, reporting, and team collaboration — so you can focus on fixing vulnerabilities, not infrastructure.
+Vigolium Cloud Console provides managed scanning, reporting, and team collaboration, so you can focus on fixing vulnerabilities, not infrastructure.
 
 > Interested in Vigolium Console? [Request a Demo](https://www.vigolium.com/request-demo) to see it in action.
 

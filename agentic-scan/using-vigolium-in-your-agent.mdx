@@ -4,7 +4,7 @@ description: "Install and use the vigolium-scanner skill with AI coding agents f
 icon: "plug"
 ---
 
-This guide explains how to install and use the `vigolium-scanner` skill with AI coding agents — Claude Code and OpenAI Codex — to operate the Vigolium CLI for web vulnerability scanning, security testing, and custom extension authoring.
+This guide explains how to install and use the `vigolium-scanner` skill with AI coding agents, Claude Code and OpenAI Codex, to operate the Vigolium CLI for web vulnerability scanning, security testing, and custom extension authoring.
 
 **Skill repository:** [github.com/vigolium/skills](https://github.com/vigolium/skills)
 
@@ -27,7 +27,7 @@ The skill teaches the AI agent how to:
 3. **Follow scanning workflows** end-to-end (ingest -> scan -> triage -> export)
 4. **Write custom JavaScript extensions** using the `vigolium.*` API
 5. **Operate AI agent modes** (query, autopilot, swarm)
-6. **Manage data** — browse traffic, filter findings, export reports, clean databases
+6. **Manage data**: browse traffic, filter findings, export reports, clean databases
 
 The skill uses lazy-loaded references: the main `SKILL.md` stays small, and detailed docs are loaded on demand when the agent needs deep flag information or extension authoring guidance.
 
@@ -604,17 +604,17 @@ vigolium agent --list-agents
 ```
 
 **Built-in templates include:**
-- `security-code-review` — Comprehensive security review
-- `injection-sinks` — Find injection sinks
-- `auth-bypass` — Auth bypass vectors
-- `secret-detection` — Hardcoded secrets
-- `endpoint-discovery` — API endpoints from source
-- `api-input-gen` — Generate test inputs
-- `curl-command-gen` — Generate cURL commands
-- `attack-surface-mapper` — Map attack surface
-- `nextjs-security-audit` — Next.js security review
-- `react-xss-audit` — React XSS audit
-- `cors-csrf-review` — CORS/CSRF config audit
+- `security-code-review`: Comprehensive security review
+- `injection-sinks`: Find injection sinks
+- `auth-bypass`: Auth bypass vectors
+- `secret-detection`: Hardcoded secrets
+- `endpoint-discovery`: API endpoints from source
+- `api-input-gen`: Generate test inputs
+- `curl-command-gen`: Generate cURL commands
+- `attack-surface-mapper`: Map attack surface
+- `nextjs-security-audit`: Next.js security review
+- `react-xss-audit`: React XSS audit
+- `cors-csrf-review`: CORS/CSRF config audit
 
 #### Agent Query (Freeform Prompt)
 
@@ -729,12 +729,12 @@ vigolium agent swarm --discover -t https://example.com
 > **Note:** `vigolium agent pipeline` still works as a backward-compatible alias for `vigolium agent swarm --discover`.
 
 The swarm runs:
-1. **Discover** — Native content discovery + spidering (no AI)
-2. **Plan** — AI analyzes discovery results, produces an attack plan
-3. **Scan** — Native executor with agent-selected modules (no AI)
-4. **Triage** — AI reviews findings, confirms/dismisses, suggests follow-ups
-5. **Rescan** — Targeted re-scanning from triage recommendations (no AI)
-6. **Report** — Structured output from database (no AI)
+1. **Discover**: Native content discovery + spidering (no AI)
+2. **Plan**: AI analyzes discovery results, produces an attack plan
+3. **Scan**: Native executor with agent-selected modules (no AI)
+4. **Triage**: AI reviews findings, confirms/dismisses, suggests follow-ups
+5. **Rescan**: Targeted re-scanning from triage recommendations (no AI)
+6. **Report**: Structured output from database (no AI)
 
 **Swarm with focus area and source code:**
 ```
@@ -1490,13 +1490,13 @@ These are examples of natural language prompts you can give to Claude Code or Co
 
 ## Tips & Best Practices
 
-1. **Start with `scan -t`** — It's the most common command. Add flags incrementally.
-2. **Use strategies** — `lite` for quick checks, `balanced` for most cases, `deep` for full coverage, `whitebox` when you have source code.
-3. **Phase isolation** — Use `--only` or `vigolium run <phase>` to iterate on a single phase without re-running the entire pipeline.
-4. **Module tags** — Filter modules by technology (`spring`, `nodejs`) or vulnerability class (`xss`, `injection`) to reduce noise.
-5. **Watch mode** — Add `--watch 5s` to `traffic`, `finding`, or `db stats` for real-time monitoring during long scans.
-6. **Dry-run agents** — Always `--dry-run` first for agent commands to preview prompts before spending AI tokens.
-7. **Swarm over autopilot** — Use `agent swarm --discover` for structured scans (lower cost, reproducible). Use `agent autopilot` for exploratory, creative scanning.
-8. **Extensions for custom logic** — Write JS extensions instead of modifying core modules. They run alongside built-in modules with `--ext`.
-9. **Projects for isolation** — Use `vigolium project create` to keep scan data separate across engagements.
-10. **Export early** — Run `vigolium export --format html -o report.html` to share results as interactive reports.
+1. **Start with `scan -t`**: It's the most common command. Add flags incrementally.
+2. **Use strategies**: `lite` for quick checks, `balanced` for most cases, `deep` for full coverage, `whitebox` when you have source code.
+3. **Phase isolation**: Use `--only` or `vigolium run <phase>` to iterate on a single phase without re-running the entire pipeline.
+4. **Module tags**: Filter modules by technology (`spring`, `nodejs`) or vulnerability class (`xss`, `injection`) to reduce noise.
+5. **Watch mode**: Add `--watch 5s` to `traffic`, `finding`, or `db stats` for real-time monitoring during long scans.
+6. **Dry-run agents**: Always `--dry-run` first for agent commands to preview prompts before spending AI tokens.
+7. **Swarm over autopilot**: Use `agent swarm --discover` for structured scans (lower cost, reproducible). Use `agent autopilot` for exploratory, creative scanning.
+8. **Extensions for custom logic**: Write JS extensions instead of modifying core modules. They run alongside built-in modules with `--ext`.
+9. **Projects for isolation**: Use `vigolium project create` to keep scan data separate across engagements.
+10. **Export early**: Run `vigolium export --format html -o report.html` to share results as interactive reports.

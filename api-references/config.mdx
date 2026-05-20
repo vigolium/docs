@@ -1,10 +1,10 @@
 ---
-title: "Vigolium API Reference — Config"
+title: "Vigolium API Reference, Config"
 description: "View and update server configuration using dot-notation keys with hot reload support."
 icon: "gear"
 ---
 
-## GET /api/config — View Configuration
+## GET /api/config, View Configuration
 
 Returns the full server configuration as flattened dot-notation key-value pairs. Sensitive values (API keys, passwords, tokens) are redacted by default.
 
@@ -57,7 +57,7 @@ curl -s 'http://localhost:9002/api/config?show_sensitive=true' | jq .
 
 ---
 
-## POST /api/config — Update Configuration
+## POST /api/config, Update Configuration
 
 Updates one or more configuration values using dot-notation keys. Values are coerced to match the existing field type (bool, int, float, string, or comma-separated list). Changes are persisted to the config file on disk.
 
@@ -122,7 +122,7 @@ If some keys are valid and others are not, valid keys are still applied. The res
 
 ## Config Hot Reload
 
-The server watches the config file (`~/.vigolium/vigolium-configs.yaml`) for changes. When the file is modified — whether by a text editor, the CLI (`vigolium config set`), or any other tool — reloadable sections are automatically applied without restarting the server.
+The server watches the config file (`~/.vigolium/vigolium-configs.yaml`) for changes. When the file is modified, whether by a text editor, the CLI (`vigolium config set`), or any other tool, reloadable sections are automatically applied without restarting the server.
 
 **Reloadable sections:** `scope`, `notify`, `audit`, `mutation_strategy`
 

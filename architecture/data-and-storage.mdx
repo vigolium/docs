@@ -8,13 +8,13 @@ icon: "database"
 Architecture series: [Overview](/architecture/overview) · [Native Scan](/architecture/native-scan) · [Agentic Scan](/architecture/agentic-scan) · **Data & Storage** · [Server & API](/architecture/server-and-api)
 </Note>
 
-Every scan path in Vigolium — native, agentic, ingestion — converges on the same persistence layer. This document explains how data is **scoped** (multi-tenancy), **modeled** (the database schema), **written** (the repository pattern and async writer), and **moved between machines** (cloud storage). It is the architectural companion to the task-oriented [Projects API](/api-references/projects) and [Storage API](/api-references/storage) guides; reach for those for CLI/API recipes.
+Every scan path in Vigolium, native, agentic, ingestion, converges on the same persistence layer. This document explains how data is **scoped** (multi-tenancy), **modeled** (the database schema), **written** (the repository pattern and async writer), and **moved between machines** (cloud storage). It is the architectural companion to the task-oriented [Projects API](/api-references/projects) and [Storage API](/api-references/storage) guides; reach for those for CLI/API recipes.
 
 ---
 
 ## 1. Multi-Tenancy: the `project_uuid` spine
 
-All scan data is partitioned by **project** — a named container with a UUID, optional config overlay, and optional access-control lists. There is no separate database per project; isolation is a `project_uuid` column on every major table, filtered on every read and stamped on every write.
+All scan data is partitioned by **project**, a named container with a UUID, optional config overlay, and optional access-control lists. There is no separate database per project; isolation is a `project_uuid` column on every major table, filtered on every read and stamped on every write.
 
 ```
 Built-in defaults
@@ -24,16 +24,16 @@ Built-in defaults
         → CLI flags                            (highest precedence)
 ```
 
-- **Default project** — `00000000-0000-0000-0000-000000000001`, created during `vigolium init`. Used whenever no project is selected.
-- **Selection precedence** — `--project-uuid` > `--project-name` > `VIGOLIUM_PROJECT_UUID` > `VIGOLIUM_PROJECT` (legacy) > default. On the server, the `X-Project-UUID` request header plays the same role.
+- **Default project**: `00000000-0000-0000-0000-000000000001`, created during `vigolium init`. Used whenever no project is selected.
+- **Selection precedence**: `--project-uuid` > `--project-name` > `VIGOLIUM_PROJECT_UUID` > `VIGOLIUM_PROJECT` (legacy) > default. On the server, the `X-Project-UUID` request header plays the same role.
 - **Project config** is a partial YAML overlay (same shape as a scanning profile) at `~/.vigolium/projects/<uuid>/config.yaml`; only the keys it sets are overridden.
-- **Access control** — `allowed_emails` / `allowed_domains` on the project row gate server requests that carry `X-User-Email`: exact-email list wins, else domain list, else open; a missing email header skips the check; denial is `403`. `VIGOLIUM_PROJECT_READONLY=true` disables all mutating `project` CLI subcommands.
+- **Access control**: `allowed_emails` / `allowed_domains` on the project row gate server requests that carry `X-User-Email`, exact-email list wins, else domain list, else open; a missing email header skips the check; denial is `403`. `VIGOLIUM_PROJECT_READONLY=true` disables all mutating `project` CLI subcommands.
 
 ### Tables carrying `project_uuid`
 
 `scans` · `http_records` · `findings` · `scopes` · `source_repos` · `oast_interactions` · `scan_logs`
 
-Existing databases are migrated in place — the column is added with the default-project UUID as its default, so pre-multi-tenancy data lands in the default project.
+Existing databases are migrated in place, the column is added with the default-project UUID as its default, so pre-multi-tenancy data lands in the default project.
 
 ---
 
@@ -46,11 +46,11 @@ Vigolium uses the **repository pattern over Bun ORM**, with two interchangeable 
 | SQLite (default) | `sqliteshim` → modernc | Single-binary, zero-config, local scans |
 | PostgreSQL | `pgdriver` | Shared/server deployments, concurrent writers |
 
-The schema is intentionally **denormalized** — there are no separate hosts or parameters tables; JSONB columns carry structured sub-data. This keeps a single `http_records` row self-contained and avoids join fan-out on the hot ingestion path.
+The schema is intentionally **denormalized**, there are no separate hosts or parameters tables; JSONB columns carry structured sub-data. This keeps a single `http_records` row self-contained and avoids join fan-out on the hot ingestion path.
 
 ### Core models (`pkg/database/models.go`)
 
-**`HTTPRecord`** (table `http_records`) — the unit of ingested traffic:
+**`HTTPRecord`** (table `http_records`), the unit of ingested traffic:
 
 - *Identity*: `UUID` (PK), `RequestHash` (SHA-256 of the raw request, used for per-source dedup)
 - *Host*: `Scheme`, `Hostname`, `Port`, `IP`
@@ -59,7 +59,7 @@ The schema is intentionally **denormalized** — there are no separate hosts or 
 - *Derived*: `Parameters` (JSONB array of `EmbeddedParam`), `RiskScore`, `Remarks`
 - *Metadata*: `Source`, `SentAt`, `ReceivedAt`, `CreatedAt`
 
-**`Finding`** (table `findings`) — a detected issue:
+**`Finding`** (table `findings`), a detected issue:
 
 - *Identity*: `ID` (auto-increment), `FindingHash` (unique constraint → dedup key, set from the `ResultEvent` ID)
 - *Module*: `ModuleID`, `ModuleName`, `Description`, `Severity`, `Confidence`
@@ -70,7 +70,7 @@ Agent-produced findings (autopilot/swarm/vigolium-audit/piolium) flow into the *
 
 ### Converters (`pkg/database/converters.go`)
 
-The in-memory scan types never touch the DB directly. `HTTPRecord.FromHttpRequestResponse()` and `Finding.FromResultEvent()` are the only seam — they generate UUIDs, compute hashes, parse URLs, extract titles, and count words, keeping persistence concerns out of the executor and modules.
+The in-memory scan types never touch the DB directly. `HTTPRecord.FromHttpRequestResponse()` and `Finding.FromResultEvent()` are the only seam, they generate UUIDs, compute hashes, parse URLs, extract titles, and count words, keeping persistence concerns out of the executor and modules.
 
 ---
 
@@ -85,7 +85,7 @@ The in-memory scan types never touch the DB directly. `HTTPRecord.FromHttpReques
 | `GetRecordsWithResponseBody()` | UUID-cursor pagination for batch scanners (e.g. Kingfisher) |
 | `UpdateRiskScores()` | Batched `CASE/WHEN` UPDATE, 500 UUIDs per statement |
 
-### Async batched ingestion — `RecordWriter`
+### Async batched ingestion, `RecordWriter`
 
 High-throughput ingestion (proxy capture, bulk import, spidering) does **not** call the repository synchronously. `pkg/database/record_writer.go` fronts it with a buffered channel:
 
@@ -96,7 +96,7 @@ Write() ──► buffered chan (cap 4096) ──► single flushLoop goroutine
                                    repo.SaveRecordsBatch()  (one txn)
 ```
 
-Each caller blocks until its row is flushed and gets a `WriteResult{UUID, Err}` back on a per-request result channel — backpressure is the channel capacity, ordering is preserved, and the DB sees large batched transactions instead of a write per request.
+Each caller blocks until its row is flushed and gets a `WriteResult{UUID, Err}` back on a per-request result channel, backpressure is the channel capacity, ordering is preserved, and the DB sees large batched transactions instead of a write per request.
 
 <Note>
 **SQLite DSN note:** the modernc driver needs pragmas in `_pragma=name(value)` form; the `mattn`-style `_busy_timeout=` is silently ignored. Relevant when tuning concurrent-writer behavior.
@@ -108,14 +108,14 @@ Each caller blocks until its row is flushed and gets a `WriteResult{UUID, Err}` 
 
 Two layers, by design:
 
-1. **Per-source HTTP-record dedup** — `RequestHash` (SHA-256 of the raw request) plus `DeduplicateRecordsBySource` collapses re-ingested identical requests within a source.
-2. **Finding dedup** — the `finding_hash` unique constraint prevents exact duplicates at insert time; `DeduplicateFindings()` runs after a phase to *group* near-duplicates (same module/severity/URL), folding the extra request/response pairs into the survivor's `AdditionalEvidence` (capped). The multi-driver `audit` command runs an additional project-wide findings dedup pass once its drivers exit.
+1. **Per-source HTTP-record dedup**: `RequestHash` (SHA-256 of the raw request) plus `DeduplicateRecordsBySource` collapses re-ingested identical requests within a source.
+2. **Finding dedup**: the `finding_hash` unique constraint prevents exact duplicates at insert time; `DeduplicateFindings()` runs after a phase to *group* near-duplicates (same module/severity/URL), folding the extra request/response pairs into the survivor's `AdditionalEvidence` (capped). The multi-driver `audit` command runs an additional project-wide findings dedup pass once its drivers exit.
 
 ---
 
 ## 5. Cloud storage (optional)
 
-Storage is **disabled by default**. When enabled (`storage.enabled: true`), a single minio-go S3 client talks to GCS (HMAC), S3, or self-hosted MinIO — the driver differs, the rest is identical.
+Storage is **disabled by default**. When enabled (`storage.enabled: true`), a single minio-go S3 client talks to GCS (HMAC), S3, or self-hosted MinIO, the driver differs, the rest is identical.
 
 ```
 gs://<project-uuid>/<key>   ⇒   s3://<storage.bucket>/<project-uuid>/<key>

@@ -1,6 +1,6 @@
 ---
 title: "Choosing a Scan Mode"
-description: "Vigolium ships several scan modes — native, native-via-Burp, audit agent, autopilot, and swarm. This page helps you pick the right one for the job, plus the intensity preset (quick / balanced / deep) that controls how far it goes."
+description: "Vigolium ships several scan modes, native, native-via-Burp, audit agent, autopilot, and swarm. This page helps you pick the right one for the job, plus the intensity preset (quick / balanced / deep) that controls how far it goes."
 icon: "signs-post"
 ---
 
@@ -20,9 +20,9 @@ If you only remember one thing: **native scan covers breadth, audit agent covers
 
 ## 1. Native Scan
 
-Think of it as a supercharged version of **Burp Active Scanner + Nuclei + ffuf + Katana + Wayback Machine** — all driven by one binary, in parallel, with shared state.
+Think of it as a supercharged version of **Burp Active Scanner + Nuclei + ffuf + Katana + Wayback Machine**, all driven by one binary, in parallel, with shared state.
 
-Reach for it when you want the broadest possible blackbox sweep against a target as fast as possible: external-data harvest, content discovery, browser-driven spidering (SPA-aware), known-issue scanning, and active/passive dynamic assessment across **235 scanner modules** — all in one run.
+Reach for it when you want the broadest possible blackbox sweep against a target as fast as possible: external-data harvest, content discovery, browser-driven spidering (SPA-aware), known-issue scanning, and active/passive dynamic assessment across **235 scanner modules**, all in one run.
 
 ```bash
 # Balanced full pipeline
@@ -47,7 +47,7 @@ See [Native Scan & Stateless Scanning](/getting-started/native-scan) and [Strate
 
 ## 2. Native Scan via Burp Suite Plugin
 
-Same native scanner — but invoked from a Burp Suite tab against a single request or URL with **every parameter fuzzed** (headers, cookies, body fields, path segments). Use it when you already have the request in front of you in Burp and want a precise, single-shot scan rather than spidering the entire app.
+Same native scanner, but invoked from a Burp Suite tab against a single request or URL with **every parameter fuzzed** (headers, cookies, body fields, path segments). Use it when you already have the request in front of you in Burp and want a precise, single-shot scan rather than spidering the entire app.
 
 ```bash
 # Equivalent CLI: scan a raw request or curl from the clipboard
@@ -64,7 +64,7 @@ vigolium scan-url "https://example.com/api/users?id=1"
 - You're triaging a Burp finding and want an automated second opinion.
 - You want native scan output in your existing Burp workflow.
 
-The plugin is a thin wrapper around `scan-url` / `scan-request` — see [Native Scan & Stateless Scanning](/getting-started/native-scan).
+The plugin is a thin wrapper around `scan-url` / `scan-request`, see [Native Scan & Stateless Scanning](/getting-started/native-scan).
 
 ---
 
@@ -72,8 +72,8 @@ The plugin is a thin wrapper around `scan-url` / `scan-request` — see [Native 
 
 A whitebox source-code audit driven by frontier LLMs. Vigolium ships two drivers:
 
-- **[Vigolium Audit](https://www.npmjs.com/package/@vigolium/vigolium-audit)** — embedded driver that runs through the `claude` CLI (Claude / Codex). Up to 11 phases at `deep`. No extra install.
-- **[Piolium](https://www.npmjs.com/package/@vigolium/piolium)** — Pi-coding-agent extension. Up to 17 phases at `deep`. Requires the `pi` runtime + `pi install piolium`. Supports any provider Pi supports, including **local models**.
+- **[Vigolium Audit](https://www.npmjs.com/package/@vigolium/vigolium-audit)**: embedded driver that runs through the `claude` CLI (Claude / Codex). Up to 11 phases at `deep`. No extra install.
+- **[Piolium](https://www.npmjs.com/package/@vigolium/piolium)**: Pi-coding-agent extension. Up to 17 phases at `deep`. Requires the `pi` runtime + `pi install piolium`. Supports any provider Pi supports, including **local models**.
 
 ```bash
 # Vigolium-audit, single-shot audit
@@ -90,7 +90,7 @@ vigolium agent audit --driver both --source ~/src/your-app
 
 - You have access to the source and want the deepest possible vulnerability coverage.
 - You want findings tied back to specific file/line ranges, not just URLs.
-- You're willing to pay frontier-model token cost — or run Pi + Piolium against a local model if budget matters.
+- You're willing to pay frontier-model token cost, or run Pi + Piolium against a local model if budget matters.
 
 <Callout icon="circle-info" color="#3B82F6" iconType="regular">
   The audit agent only delivers its best results on frontier models (Claude Opus, GPT-5.x, etc.). The Piolium path is the only way to drive an audit against a local model, via Pi's own provider config.
@@ -104,7 +104,7 @@ See [Setting Up the Agent](/getting-started/setup-agent) and [Agentic Security A
 
 ## 4. Autopilot Agent
 
-Hands-off black-box scanning where the **olium** runtime drives a real Chromium browser, generates custom JavaScript scanner extensions on the fly, and decides itself which CLI subcommands and modules to run. You can hand it a source-code path too — autopilot becomes source-aware and uses code context to guide its scanning.
+Hands-off black-box scanning where the **olium** runtime drives a real Chromium browser, generates custom JavaScript scanner extensions on the fly, and decides itself which CLI subcommands and modules to run. You can hand it a source-code path too, autopilot becomes source-aware and uses code context to guide its scanning.
 
 ```bash
 # Pure black-box
@@ -120,7 +120,7 @@ vigolium agent autopilot -t https://example.com --source ~/src/your-app --vigoli
 **When to pick it**
 
 - You want to throw a target at the scanner and walk away.
-- The target is JS-heavy / auth-walled — a real browser is the only way to reach it.
+- The target is JS-heavy / auth-walled, a real browser is the only way to reach it.
 - You want the agent to write its own scanner extensions for app-specific quirks.
 
 See [Autopilot](/agentic-scan/autopilot).
@@ -158,10 +158,10 @@ See [Swarm](/agentic-scan/swarm).
 
 | | `quick` | `balanced` (default) | `deep` |
 |---|---|---|---|
-| **Native Scan** | `dynamic-assessment` only — no discovery, no spidering, no known-issue scan. Best for stateless / CI gates. | Full pipeline: discovery + spidering + known-issue + dynamic-assessment. Sensible defaults for everything. | Adds external harvest, recursive discovery, extra modules, longer per-phase durations. The full hammer. |
+| **Native Scan** | `dynamic-assessment` only, no discovery, no spidering, no known-issue scan. Best for stateless / CI gates. | Full pipeline: discovery + spidering + known-issue + dynamic-assessment. Sensible defaults for everything. | Adds external harvest, recursive discovery, extra modules, longer per-phase durations. The full hammer. |
 | **Native via Burp** | One-shot `scan-url` / `scan-request`, active modules only. | Active + passive, all insertion points. | Active + passive + heavy mutation strategy and longer timeouts. |
-| **Vigolium Audit** | **3 phases** — recon, triage, quick scan. CI-friendly. | **6 phases** — adds deep-dive, exploit-design, validation. | **11 phases** — full audit including secondary review and cross-file analysis. |
-| **Piolium Audit** | **4 phases** — quick triage. | **9 phases** — standard audit. | **17 phases** — exhaustive: recon, primary, longshot, revisit, confirm, merge, diff. |
+| **Vigolium Audit** | **3 phases**, recon, triage, quick scan. CI-friendly. | **6 phases**, adds deep-dive, exploit-design, validation. | **11 phases**, full audit including secondary review and cross-file analysis. |
+| **Piolium Audit** | **4 phases**, quick triage. | **9 phases**, standard audit. | **17 phases**, exhaustive: recon, primary, longshot, revisit, confirm, merge, diff. |
 | **Autopilot** | Short max-duration cap, conservative module budget, fewer turns. Smoke-test territory. | Default turn / duration budget. Real-browser pilot mode on. | Larger turn budget, JS-extension generation enabled, runs vigolium-audit in the background if `--source` is provided. |
 | **Swarm** | Single-pass payload generation, no discover, no triage. | Generates + triages payloads; one feedback round. | Full multi-round generate / triage / refine across every insertion point. |
 
@@ -173,7 +173,7 @@ See [Swarm](/agentic-scan/swarm).
 
 ### Combining intensity with strategy
 
-For native scans you can also reach for `--strategy lite|balanced|deep` directly — same phase-toggle effect, finer control over which phases run. `--intensity` is a higher-level alias that *also* tunes the scanning profile (pace, module budget, mutation aggression).
+For native scans you can also reach for `--strategy lite|balanced|deep` directly, same phase-toggle effect, finer control over which phases run. `--intensity` is a higher-level alias that *also* tunes the scanning profile (pace, module budget, mutation aggression).
 
 ```bash
 # Native scan, deep depth
@@ -195,8 +195,8 @@ vigolium scan -t https://example.com --strategy deep --profile aggressive
 
 ## Next steps
 
-- [Quickstart](/getting-started/quickstart) — run your first scan in under a minute.
-- [Native Scan & Stateless Scanning](/getting-started/native-scan) — every CLI scan recipe.
-- [Setting Up the Agent](/getting-started/setup-agent) — wire up providers before reaching for the agent modes.
-- [Strategies](/native-scan/strategies) — the full strategy / pace / profile reference.
-- [Scanning Modes Overview](/native-scan/scanning-modes-overview) — compare every native-scan command in detail.
+- [Quickstart](/getting-started/quickstart), run your first scan in under a minute.
+- [Native Scan & Stateless Scanning](/getting-started/native-scan), every CLI scan recipe.
+- [Setting Up the Agent](/getting-started/setup-agent), wire up providers before reaching for the agent modes.
+- [Strategies](/native-scan/strategies), the full strategy / pace / profile reference.
+- [Scanning Modes Overview](/native-scan/scanning-modes-overview), compare every native-scan command in detail.

@@ -1,6 +1,6 @@
 ---
 title: "Agentic Scanning"
-description: "Use AI-driven scanning modes — Query, Swarm, Autopilot, and Vigolium Audit — to autonomously discover, audit, and verify vulnerabilities."
+description: "Use AI-driven scanning modes, Query, Swarm, Autopilot, and Vigolium Audit, to autonomously discover, audit, and verify vulnerabilities."
 icon: "brain"
 ---
 
@@ -8,11 +8,11 @@ icon: "brain"
 
 Vigolium's agent mode uses AI to drive vulnerability scanning. Five subcommands cover the full spectrum:
 
-- **Query** — single-shot prompt; code review, endpoint discovery, secret hunt.
-- **Swarm** — AI-guided multi-phase scan that drives the native scanner (plan → modules → triage).
-- **Autopilot** — autonomous AI pentest; the agent drives bash, files, and the vigolium CLI itself.
-- **Vigolium Audit** — multi-phase whitebox security audit (lite / balanced / deep).
-- **Olium** — interactive TUI / one-shot prompt; the underlying agent runtime, also used by every mode above.
+- **Query**: single-shot prompt; code review, endpoint discovery, secret hunt.
+- **Swarm**: AI-guided multi-phase scan that drives the native scanner (plan → modules → triage).
+- **Autopilot**: autonomous AI pentest; the agent drives bash, files, and the vigolium CLI itself.
+- **Vigolium Audit**: multi-phase whitebox security audit (lite / balanced / deep).
+- **Olium**: interactive TUI / one-shot prompt; the underlying agent runtime, also used by every mode above.
 
 All AI dispatch goes through the in-process **olium** engine. Configure the provider once in `agent.olium.*`; per-run flags can override.
 
@@ -41,7 +41,7 @@ Or override per run with `--provider`, `--model`, `--llm-api-key`, `--oauth-cred
 
 ## Query: Single-Shot Analysis
 
-Query runs a single AI prompt and returns structured output. No network scanning — useful for code review, endpoint discovery, and secret detection.
+Query runs a single AI prompt and returns structured output. No network scanning, useful for code review, endpoint discovery, and secret detection.
 
 ### With a Built-in Template
 

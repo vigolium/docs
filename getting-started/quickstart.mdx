@@ -1,6 +1,6 @@
 ---
 title: "Installation & QuickStart"
-description: "Get up and running with Vigolium in a few minutes — install, verify, and run your first scan."
+description: "Get up and running with Vigolium in a few minutes, install, verify, and run your first scan."
 icon: "rocket"
 ---
 
@@ -37,7 +37,7 @@ icon: "rocket"
   docker pull j3ssie/vigolium:latest
   docker run --rm j3ssie/vigolium:latest scan -h
   ```
-  The container entrypoint is the `vigolium` binary — pass any subcommand directly.
+  The container entrypoint is the `vigolium` binary, pass any subcommand directly.
   </Tab>
 
   <Tab title="Build from Source" icon="bolt">
@@ -46,7 +46,7 @@ icon: "rocket"
   cd vigolium
   make build
   ```
-  Requires Go 1.26+, Bun 1.3.11+, `git`, and `make`. Always use `make build` (not `go build`) — it injects version metadata.
+  Requires Go 1.26+, Bun 1.3.11+, `git`, and `make`. Always use `make build` (not `go build`), it injects version metadata.
   </Tab>
 
   <Tab title="Windows">
@@ -173,7 +173,7 @@ vigolium scan -t https://example.com --format jsonl,html -o scan
 | `--format jsonl` / `-j` | One JSON object per line |
 | `--format html` | Interactive ag-grid report (requires `-o`) |
 | `-o, --output` | Output file path (base name; extension added per format) |
-| `--ci-output-format` | JSONL only, no banners or color — ideal for CI |
+| `--ci-output-format` | JSONL only, no banners or color, ideal for CI |
 | `--silent` | Suppress everything except findings |
 
 ## Step 8: Run a single phase
@@ -212,9 +212,9 @@ npm and Docker installs are upgraded through their own tooling (`npm update -g @
 
 ## Next steps
 
-- [Choosing a Scan Mode](/getting-started/choosing-a-mode) — pick the right mode for your job.
-- [Native Scan & Stateless Scanning](/getting-started/native-scan) — CLI scan recipes.
-- [Scanning Strategies](/native-scan/strategies) — strategies, profiles, pace.
-- [Authenticated Scanning](/native-scan/authentication) — sessions and login flows.
-- [Setting Up the Agent](/getting-started/setup-agent) — AI-driven autopilot and swarm scans.
-- [Configuration Reference](/getting-started/configuration) — full configuration options.
+- [Choosing a Scan Mode](/getting-started/choosing-a-mode), pick the right mode for your job.
+- [Native Scan & Stateless Scanning](/getting-started/native-scan), CLI scan recipes.
+- [Scanning Strategies](/native-scan/strategies), strategies, profiles, pace.
+- [Authenticated Scanning](/native-scan/authentication), sessions and login flows.
+- [Setting Up the Agent](/getting-started/setup-agent), AI-driven autopilot and swarm scans.
+- [Configuration Reference](/getting-started/configuration), full configuration options.

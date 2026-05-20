@@ -44,7 +44,7 @@ Extensions plug into the scanner pipeline at four points:
 | `pre_hook` | Before each request is sent | Modify requests, skip assets, inject headers |
 | `post_hook` | After a finding is emitted | Escalate severity, drop false positives |
 
-All four types are supported in JS, YAML, and (for active/passive) as quick checks or snippets. YAML is simpler for straightforward pattern matching. JS gives you full access to HTTP requests, regex, encoding utilities, the database API, OAST (out-of-band) testing, and optional AI-augmented analysis. Quick checks and snippets are even lighter — ideal for agent-generated or ad-hoc checks.
+All four types are supported in JS, YAML, and (for active/passive) as quick checks or snippets. YAML is simpler for straightforward pattern matching. JS gives you full access to HTTP requests, regex, encoding utilities, the database API, OAST (out-of-band) testing, and optional AI-augmented analysis. Quick checks and snippets are even lighter, ideal for agent-generated or ad-hoc checks.
 
 ---
 
@@ -106,11 +106,11 @@ JS extensions run inside an embedded Sobek (ES5.1-compatible) VM. The global `vi
 
 Active modules send modified requests to probe for vulnerabilities. Declare which scan granularity you need in `scanTypes`:
 
-- `per_insertion_point` — called once per parameter (query, body, header, cookie)
-- `per_request` — called once per request/response pair
-- `per_host` — called once per unique hostname
+- `per_insertion_point`: called once per parameter (query, body, header, cookie)
+- `per_request`: called once per request/response pair
+- `per_host`: called once per unique hostname
 
-**per_insertion_point example** — detect reflected input:
+**per_insertion_point example**: detect reflected input:
 
 ```javascript
 // File: ~/.vigolium/extensions/reflected_param_scanner.js
@@ -148,7 +148,7 @@ module.exports = {
 };
 ```
 
-**per_request example** — detect error messages in existing responses:
+**per_request example**: detect error messages in existing responses:
 
 ```javascript
 // File: ~/.vigolium/extensions/error_pattern_detector.js
@@ -392,10 +392,10 @@ rules:
 | `tags` | Classification tags for `--module-tag` filtering |
 | `scan_types` | `per_insertion_point`, `per_request`, `per_host` |
 | `payloads` | List of strings to inject (used with `per_insertion_point`) |
-| `matchers` | List of `MatcherDef` — all applied to the same finding |
-| `matchers_condition` | `or` (default) or `and` — how matchers combine |
+| `matchers` | List of `MatcherDef`, all applied to the same finding |
+| `matchers_condition` | `or` (default) or `and`, how matchers combine |
 | `finding` | Single finding emitted when matchers pass |
-| `rules` | List of `{match, finding}` pairs — evaluated independently |
+| `rules` | List of `{match, finding}` pairs, evaluated independently |
 
 Use `rules` when different patterns should emit different findings. Use `matchers` + `finding` when all conditions must be true together.
 
@@ -573,7 +573,7 @@ drop_when:
 
 ## Quick Checks
 
-Quick checks are the lightest extension format — declarative JSON objects that define "send payload, check response" patterns with zero JavaScript. They're ideal for agent-generated checks and rapid iteration.
+Quick checks are the lightest extension format, declarative JSON objects that define "send payload, check response" patterns with zero JavaScript. They're ideal for agent-generated checks and rapid iteration.
 
 ### Per Insertion Point
 
@@ -628,7 +628,7 @@ Match conditions use OR logic:
 
 ## Snippets
 
-Snippets are a middle ground between quick checks and full extensions — you write just the **function body** (no boilerplate), and it gets wrapped in a module scaffold automatically. Use snippets when you need custom logic or `vigolium.*` API access.
+Snippets are a middle ground between quick checks and full extensions, you write just the **function body** (no boilerplate), and it gets wrapped in a module scaffold automatically. Use snippets when you need custom logic or `vigolium.*` API access.
 
 ### Format
 
@@ -671,7 +671,7 @@ Inside the snippet body, you have access to:
 
 ## Context Objects Reference
 
-### `ctx` — passed to all active/passive module functions
+### `ctx`: passed to all active/passive module functions
 
 ```javascript
 ctx.request.url        // "https://example.com/api/users?id=1"
@@ -688,7 +688,7 @@ ctx.response.raw       // full raw HTTP response string
 ctx.response.title     // HTML page title (if applicable)
 ```
 
-### `insertion` — second arg to `scanPerInsertionPoint`
+### `insertion`: second arg to `scanPerInsertionPoint`
 
 ```javascript
 insertion.name              // "id" (parameter name)
@@ -697,7 +697,7 @@ insertion.type              // "url_param" | "body_param" | "header" | "cookie"
 insertion.buildRequest(val) // returns raw request string with val injected
 ```
 
-### `ctx.record` — current HTTP record context
+### `ctx.record`: current HTTP record context
 
 ```javascript
 ctx.record.uuid              // database UUID of the current record
@@ -1015,7 +1015,7 @@ vigolium scan --config vigolium-configs.yaml --only extension
 vigolium scan --config vigolium-configs.yaml --only ext
 ```
 
-This skips discovery, spidering, and standard audit modules — only your extensions run against traffic already in the database.
+This skips discovery, spidering, and standard audit modules, only your extensions run against traffic already in the database.
 
 ### Test against a live target
 
@@ -1139,7 +1139,7 @@ audit:
 
 ## Tips and Best Practices
 
-**Return `null`, not `[]`** — returning an empty array is treated the same as `null`, but `null` is the conventional no-finding signal.
+**Return `null`, not `[]`**: returning an empty array is treated the same as `null`, but `null` is the conventional no-finding signal.
 
 **Check for nil before accessing properties:**
 ```javascript
@@ -1148,7 +1148,7 @@ if (!ctx.response || !ctx.response.body) return null;
 
 **Use `vigolium.utils.randomString` for canaries** to avoid collisions between concurrent extension invocations.
 
-**Keep pre-hooks fast** — they run on every request before any module sees it. Avoid HTTP calls inside pre-hooks.
+**Keep pre-hooks fast**: they run on every request before any module sees it. Avoid HTTP calls inside pre-hooks.
 
 **YAML vs JS vs quick check decision guide:**
 - Use **quick checks** when you need simple payload-and-match patterns with no logic
@@ -1156,7 +1156,7 @@ if (!ctx.response || !ctx.response.body) return null;
 - Use **YAML** when you need regex/header/status matching with a fixed finding output
 - Use **JS** when you need: conditional logic, multiple HTTP requests, encoding/decoding, database lookups, session management, or AI-augmented analysis
 
-**Scope your passive module** — set `scope: "response"` if you only need response data. This avoids unnecessary invocations.
+**Scope your passive module**: set `scope: "response"` if you only need response data. This avoids unnecessary invocations.
 
 **Use `vigolium.config.*`** for secrets and environment-specific values instead of hardcoding them:
 ```javascript
@@ -1174,13 +1174,13 @@ vigolium.http.cache({ ttl_ms: 30000 });
 var baseline = vigolium.http.cachedGet(url);
 ```
 
-**Use sessions for multi-request flows** — sessions persist cookies and headers:
+**Use sessions for multi-request flows**: sessions persist cookies and headers:
 ```javascript
 var session = vigolium.http.session({ headers: { "Authorization": "Bearer " + token } });
 session.get(url1);
 session.post(url2, body); // cookies from url1 are sent automatically
 ```
 
-**Avoid hardcoding the extension id** if you plan to distribute extensions — the filename without extension is used as the default ID, which is usually fine.
+**Avoid hardcoding the extension id** if you plan to distribute extensions, the filename without extension is used as the default ID, which is usually fine.
 
-**Test incrementally** — start with `--only extension` and a small known dataset so your module's `console.log` output is easy to read.
+**Test incrementally**: start with `--only extension` and a small known dataset so your module's `console.log` output is easy to read.

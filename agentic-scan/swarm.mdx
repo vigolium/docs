@@ -17,7 +17,7 @@ This document covers what the pipeline looks like, how data flows between phases
 | Scenario | Use |
 |---|---|
 | You have a target URL, raw request, or HTTP record and want the agent to pick modules + write payloads | `swarm` |
-| You also have the application source — want routes + auth + extensions inferred from code | `swarm --source <path>` |
+| You also have the application source, want routes + auth + extensions inferred from code | `swarm --source <path>` |
 | You want false-positive verification and targeted re-scans on the model's say-so | `swarm --triage` |
 | You'd rather hand the agent a shell + the codebase and let it decide everything | `autopilot` |
 | You want a one-shot prompt with no scanning | `agent query` |
@@ -28,7 +28,7 @@ Swarm is the right mode when you want the AI to **drive the native scanner**, no
 
 ## Pipeline at a glance
 
-Ten phases run in strict order. Each phase is either **native** (deterministic Go) or **AI** (LLM call via the olium engine). Most phases are conditional — they only fire when their inputs are present or the user opts in.
+Ten phases run in strict order. Each phase is either **native** (deterministic Go) or **AI** (LLM call via the olium engine). Most phases are conditional, they only fire when their inputs are present or the user opts in.
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────┐
@@ -175,8 +175,8 @@ The discovered session config can come back malformed; the engine round-trips in
 
 The `plan` phase is two sub-calls:
 
-1. **Plan agent** — analyses the records, returns a `SwarmPlan` with module tags/IDs, focus areas, and an extensions spec. Markdown-section output, retried up to `MaxMasterRetries` (default 3) on parse or transient errors.
-2. **Extension agent** (conditional) — only fires if the plan declared extensions. Generates JS scanner code. If this call fails, the plan from step 1 is still valid (graceful degradation).
+1. **Plan agent**: analyses the records, returns a `SwarmPlan` with module tags/IDs, focus areas, and an extensions spec. Markdown-section output, retried up to `MaxMasterRetries` (default 3) on parse or transient errors.
+2. **Extension agent** (conditional), only fires if the plan declared extensions. Generates JS scanner code. If this call fails, the plan from step 1 is still valid (graceful degradation).
 
 When `len(records) > MasterBatchSize` (default 5), planning fans out:
 
@@ -244,7 +244,7 @@ Rescans set `IsRescan=true` on the `ScanRequest`, which forces `OnlyPhase = "dyn
 
 ## Native scanner handoff
 
-The swarm runner does not call modules itself — it hands off via callbacks the CLI installs on `SwarmConfig`:
+The swarm runner does not call modules itself, it hands off via callbacks the CLI installs on `SwarmConfig`:
 
 | Callback | Set when | What it does |
 |---|---|---|
@@ -335,7 +335,7 @@ vigolium agent swarm -t https://app.example.com \
 | Flag | Effect |
 |---|---|
 | `-t, --target` | Target URL for dynamic phases |
-| `--input` | Raw input (curl, HTTP, Burp XML, base64, URL) — auto-detected |
+| `--input` | Raw input (curl, HTTP, Burp XML, base64, URL), auto-detected |
 | `--record-uuid` | Use an HTTP record from the database as the seed input |
 | `--source` | Source-code path (or git URL); enables source analysis + code-audit |
 | `--code-audit` | Force code audit (auto-on with `--source` for balanced/deep) |
@@ -381,7 +381,7 @@ POST /api/agent/run/swarm
 }
 ```
 
-At least one of `input`, `inputs`, `target`, `record_uuid`, or `http_request_base64` is required. See [API Reference — Agent](/api-references/agent) for the full schema.
+At least one of `input`, `inputs`, `target`, `record_uuid`, or `http_request_base64` is required. See [API Reference, Agent](/api-references/agent) for the full schema.
 
 ---
 

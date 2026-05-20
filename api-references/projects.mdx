@@ -1,5 +1,5 @@
 ---
-title: "Vigolium API Reference — Projects"
+title: "Vigolium API Reference, Projects"
 description: "Manage projects for multi-tenant data isolation. All scan data is scoped to a project via project_uuid."
 icon: "folder-open"
 ---
@@ -8,7 +8,7 @@ Manage projects for multi-tenant data isolation. All scan data (HTTP records, fi
 
 > **Note:** These endpoints manage project records themselves. To scope API operations to a specific project, use the `X-Project-UUID` request header on other endpoints.
 
-## GET /api/projects — List Projects
+## GET /api/projects, List Projects
 
 Returns all projects with aggregated statistics. Optionally filter by owner UUID.
 
@@ -88,7 +88,7 @@ curl -s 'http://localhost:9002/api/projects?owner=00000000-0000-0000-0000-000000
 
 ---
 
-## POST /api/projects — Create Project
+## POST /api/projects, Create Project
 
 **Request body:**
 
@@ -124,7 +124,7 @@ curl -s -X POST http://localhost:9002/api/projects \
 
 ---
 
-## GET /api/projects/:uuid — Get Project
+## GET /api/projects/:uuid, Get Project
 
 Retrieve a single project by UUID with aggregated statistics.
 
@@ -173,7 +173,7 @@ curl -s http://localhost:9002/api/projects/a1b2c3d4-e5f6-7890-abcd-ef1234567890 
 
 ---
 
-## PUT /api/projects/:uuid — Update Project
+## PUT /api/projects/:uuid, Update Project
 
 Update fields on an existing project. Only non-empty fields are applied.
 
@@ -212,7 +212,7 @@ curl -s -X PUT http://localhost:9002/api/projects/a1b2c3d4-e5f6-7890-abcd-ef1234
 
 ---
 
-## DELETE /api/projects/:uuid — Delete Project
+## DELETE /api/projects/:uuid, Delete Project
 
 Delete a project by UUID. The default project (`00000000-0000-0000-0000-000000000001`) cannot be deleted. All data (scans, HTTP records, findings, scopes, source repos, OAST interactions, scan logs) belonging to the deleted project is automatically reassigned to the default project.
 

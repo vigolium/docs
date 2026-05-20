@@ -6,14 +6,14 @@ icon: "robot"
 
 Vigolium ships **eight agent subcommands** under `vigolium agent`. They split into four families:
 
-- **Agentic scan modes** — autonomous or AI-guided vulnerability scanning: `autopilot`, `swarm`
-- **Source audit modes** — multi-phase AI code audit: `vigolium-audit` (Claude/Codex/OpenCode), `piolium` (Pi-native), and `audit` (unified driver that runs both back-to-back)
-- **Single-shot / interactive** — `query`, `olium`
-- **Utility** — `session`
+- **Agentic scan modes**: autonomous or AI-guided vulnerability scanning: `autopilot`, `swarm`
+- **Source audit modes**: multi-phase AI code audit: `vigolium-audit` (Claude/Codex/OpenCode), `piolium` (Pi-native), and `audit` (unified driver that runs both back-to-back)
+- **Single-shot / interactive**: `query`, `olium`
+- **Utility**: `session`
 
 The parent `vigolium agent` command itself only supports `--list-templates` and `--list-agents`. All execution requires a subcommand.
 
-Every agent invocation is dispatched through the in-process **olium runtime** (`pkg/olium/`). There are no subprocess SDK or ACP backends — provider selection lives at `agent.olium.provider` in `vigolium-configs.yaml`. See [How It Works](/agentic-scan/how-it-works) for the provider list.
+Every agent invocation is dispatched through the in-process **olium runtime** (`pkg/olium/`). There are no subprocess SDK or ACP backends, provider selection lives at `agent.olium.provider` in `vigolium-configs.yaml`. See [How It Works](/agentic-scan/how-it-works) for the provider list.
 
 ---
 
@@ -27,20 +27,20 @@ Every agent invocation is dispatched through the in-process **olium runtime** (`
 | Audit source code deeply (secrets, SAST triage, PoC) before or alongside a scan | `vigolium-audit` | Multi-phase code audit on Claude/Codex/OpenCode (`lite`/`balanced`/`deep`); imports findings into the DB |
 | Same multi-phase audit driven through Pi (`pi install` model) | `piolium` | Pi-native piolium harness; same output schema as vigolium-audit, tagged separately in DB |
 | Run both vigolium-audit and piolium back-to-back on the same source under one AgenticScan | `audit` | Unified driver: sequential vigolium-audit→piolium with per-driver child rows + post-pass findings dedup; `--driver=piolium\|vigolium-audit` to force one |
-| Chat with an LLM interactively in a TUI (debug, explore, ad-hoc) | `olium` | Real-time multi-turn chat; not a security scan — general-purpose agent |
+| Chat with an LLM interactively in a TUI (debug, explore, ad-hoc) | `olium` | Real-time multi-turn chat; not a security scan, general-purpose agent |
 | Review past agent runs | `session` | Lists prior runs, shows raw output and artifacts |
 
 ---
 
 ## Mode reference
 
-### `query` — single-shot prompt
+### `query`: single-shot prompt
 
 - **Use for:** code review, endpoint discovery, secret detection, ad-hoc prompts.
 - **Not for:** network scanning or multi-phase orchestration.
 - **Key flags:** `--prompt-template`, `-p/--prompt`, `--stdin`, `--source`, `--files`, `--source-label`, `--output`, `--dry-run`, `--provider`, `--model`, `--oauth-cred`, `--oauth-token`, `--llm-api-key`.
 
-### `autopilot` — autonomous agentic scan
+### `autopilot`: autonomous agentic scan
 
 - **Use for:** pentest-style engagements where you want the agent to be creative and decide what to do.
 - **How it works:** one long-running LLM session with full CLI tool access until the agent calls `halt_scan` or hits limits. When `--source` is provided, vigolium-audit runs first to prepare a frozen whitebox context bundle.
@@ -48,15 +48,15 @@ Every agent invocation is dispatched through the in-process **olium runtime** (`
 
 See [Autopilot](/agentic-scan/autopilot).
 
-### `swarm` — AI-guided multi-phase scan
+### `swarm`: AI-guided multi-phase scan
 
 - **Use for:** target-specific scanning when you want structure (planning → native scan → triage), source-aware route discovery, or verification loops.
-- **How it works:** 10-phase pipeline — normalize → auth (opt) → source-analysis (opt) → code-audit (opt) → discover (opt) → plan (AI) → extension → native scan → triage (opt) → rescan (opt).
+- **How it works:** 10-phase pipeline, normalize → auth (opt) → source-analysis (opt) → code-audit (opt) → discover (opt) → plan (AI) → extension → native scan → triage (opt) → rescan (opt).
 - **Key flags:** `-t/--target` (required with `--source`), `--input`, `--record-uuid`, `--source`, `--discover`, `--code-audit`, `--triage`, `--max-iterations`, `-m/--modules`, `--vuln-type`, `--focus`, `--vigolium-audit {lite|balanced|deep|off}`, `--intensity`, `--only`/`--skip`/`--start-from`, `--force-extensions`.
 
 See [Swarm](/agentic-scan/swarm).
 
-### `vigolium-audit` — AI security source audit (Claude/Codex/OpenCode)
+### `vigolium-audit`: AI security source audit (Claude/Codex/OpenCode)
 
 - **Use for:** deep code audit standalone, or as the source-aware companion to `autopilot`/`swarm`.
 - **Modes:** `lite` (3 phases), `balanced`/`scan` (6), `deep` (10), `revisit`, `confirm`, `merge`, `diff`, `status`, `mock`.
@@ -64,7 +64,7 @@ See [Swarm](/agentic-scan/swarm).
 
 See [Agentic Security Audit](/getting-started/agentic-security-audit).
 
-### `piolium` — AI security source audit (Pi-native)
+### `piolium`: AI security source audit (Pi-native)
 
 - **Use for:** the same multi-phase audit as `vigolium-audit` but running through the Pi runtime + the user-installed piolium extension. Useful when the host already has Pi configured for non-Anthropic providers (OpenAI/Codex, Gemini).
 - **Modes:** `lite` (4), `balanced` (9), `deep` (17), `revisit` (9), `confirm` (7), `merge` (7), `diff` (1), `longshot` (3), `status`, `smoke`.
@@ -72,21 +72,21 @@ See [Agentic Security Audit](/getting-started/agentic-security-audit).
 
 See [Agentic Security Audit](/getting-started/agentic-security-audit).
 
-### `audit` — unified driver (vigolium-audit + piolium)
+### `audit`: unified driver (vigolium-audit + piolium)
 
 - **Use for:** scoring a single source tree under both audit harnesses with one AgenticScan. Sequential execution (vigolium-audit first, piolium second), per-driver session subdirs (`{session}/archon/`, `{session}/piolium/`), per-driver child AgenticScan rows under one parent, and a post-pass project-wide findings dedup once both drivers exit.
 - **Modes:** when `--driver=both`, only the shared modes are accepted: `lite`, `balanced`, `deep`, `revisit`, `confirm`, `merge`. Use `--driver=piolium` for `longshot`/`smoke` or `--driver=vigolium-audit` for `mock`.
 - **Key flags:** `--driver {piolium|vigolium-audit|both}`, `--mode`, `--intensity`, `--source`, `--commit-depth`, `--no-stream`, `--no-dedup`, `--upload-results`, `--agent` (vigolium-audit platform), plus the `--pi-*` and `--plm-*` flags from `agent piolium`.
 - **REST equivalent:** `POST /api/agent/run/audit` with `driver: "piolium"|"vigolium-audit"|"both"` (default `"both"`).
 
-### `olium` — interactive TUI chat
+### `olium`: interactive TUI chat
 
 - **Aliases:** top-level `vigolium olium` / `vigolium ol`.
 - **Use for:** interactive debugging, exploration, or one-shot non-interactive prompts. Provider-agnostic.
-- **Not for:** orchestrated scanning — there are no scan phases.
+- **Not for:** orchestrated scanning, there are no scan phases.
 - **Key flags:** `--provider`, `--model`, `--llm-api-key`, `--oauth-cred`/`--oauth-token`, `--system`, `-p/--prompt` (one-shot non-interactive), `--stdin`.
 
-### `session` — agent run history
+### `session`: agent run history
 
 - **Aliases:** `sessions`, `sess`.
 - **Use for:** auditing prior runs, debugging failed scans.
@@ -98,8 +98,8 @@ See [Agentic Security Audit](/getting-started/agentic-security-audit).
 
 Both are agentic scan modes. The distinction:
 
-- **`autopilot`** — the agent **is** the scanner. It opens a shell, reads files, runs tools, and decides everything. Best when the target is fuzzy or you want creative, exploratory testing.
-- **`swarm`** — the agent **directs** the native scanner. It plans, picks modules, generates JS extensions, and the deterministic Go pipeline does the heavy traffic. Best when you want structured, repeatable results with optional verification loops.
+- **`autopilot`**: the agent **is** the scanner. It opens a shell, reads files, runs tools, and decides everything. Best when the target is fuzzy or you want creative, exploratory testing.
+- **`swarm`**: the agent **directs** the native scanner. It plans, picks modules, generates JS extensions, and the deterministic Go pipeline does the heavy traffic. Best when you want structured, repeatable results with optional verification loops.
 
 If you have **source code** and a **target URL**, both work; `swarm --source --target ... --code-audit --triage` gives you the most structured output, while `autopilot --source ...` gives the agent more freedom (and runs a vigolium-audit prep first).
 
@@ -110,7 +110,7 @@ If you have **source code** and a **target URL**, both work; `swarm --source --t
 - **Session dir:** `~/.vigolium/agent-sessions/` (override via `agent.sessions_dir` in `vigolium-configs.yaml`).
 - **Prompt templates:** `~/.vigolium/prompts/` or embedded under `public/presets/prompts/`.
 - **Output schemas:** `findings`, `http_records`, `attack_plan`, `triage_result`, `source_analysis`.
-- **Engine:** every agent run is dispatched through the in-process olium runtime (`pkg/olium/`). Provider selection lives at `agent.olium.provider` in `vigolium-configs.yaml` — see [How It Works](/agentic-scan/how-it-works) for the provider list.
+- **Engine:** every agent run is dispatched through the in-process olium runtime (`pkg/olium/`). Provider selection lives at `agent.olium.provider` in `vigolium-configs.yaml`, see [How It Works](/agentic-scan/how-it-works) for the provider list.
 - **Source flag:** `--source` is the canonical source-code flag across all modes; the legacy `--repo`/`--repo-url`/`--source-url` flags have been removed.
 
 ---
@@ -125,7 +125,7 @@ The server exposes the run modes plus a status/artifact surface so a controller 
 | POST   | `/api/agent/run/autopilot`                      | Launch an autopilot scan.                                                |
 | POST   | `/api/agent/run/swarm`                          | Launch a swarm scan.                                                     |
 | POST   | `/api/agent/run/vigolium-audit`                 | Launch a vigolium-audit-only audit.                                      |
-| POST   | `/api/agent/run/audit`                          | Unified driver — `driver: "piolium"\|"vigolium-audit"\|"both"` (default `both`). |
+| POST   | `/api/agent/run/audit`                          | Unified driver, `driver: "piolium"\|"vigolium-audit"\|"both"` (default `both`). |
 | GET    | `/api/agent/status/list`                        | List active and historical runs (DB + in-memory merge).                  |
 | GET    | `/api/agent/status/:id`                         | Status of a single run.                                                  |
 | GET    | `/api/agent/sessions`                           | Paginated session history (richer than `/status/list`).                  |
@@ -143,10 +143,10 @@ Run endpoints return `202 Accepted` with `{agentic_scan_uuid, status: "running"}
 
 The `audit` endpoint dispatches sequentially when `driver: "both"` (default) and multiplexes SSE chunks with a `driver` field bracketed by `driver_start`/`driver_end` markers when `stream: true`. See [Agentic Security Audit](/getting-started/agentic-security-audit) for the unified-driver overview.
 
-Set `stream: true` on the run endpoints to opt into Server-Sent Events instead of the async response — most consumers should stick with the async flow and tail logs on demand.
+Set `stream: true` on the run endpoints to opt into Server-Sent Events instead of the async response, most consumers should stick with the async flow and tail logs on demand.
 
 ### Provider overrides are CLI / server-config only
 
-The CLI exposes per-invocation provider flags (`--provider`, `--model`, `--oauth-cred`, `--oauth-token`, `--llm-api-key`, `--system`). These are **not** mirrored on the REST request schemas. The server resolves the provider once from `agent.olium.*` in `vigolium-configs.yaml` and reuses it across requests, which keeps prompt caches stable. To switch providers on a server-side workload, edit the YAML and reload — there is no per-request override field.
+The CLI exposes per-invocation provider flags (`--provider`, `--model`, `--oauth-cred`, `--oauth-token`, `--llm-api-key`, `--system`). These are **not** mirrored on the REST request schemas. The server resolves the provider once from `agent.olium.*` in `vigolium-configs.yaml` and reuses it across requests, which keeps prompt caches stable. To switch providers on a server-side workload, edit the YAML and reload, there is no per-request override field.
 
-See [API Reference — Agent](/api-references/agent) for the full request/response schemas.
+See [API Reference, Agent](/api-references/agent) for the full request/response schemas.

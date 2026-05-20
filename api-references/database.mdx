@@ -1,5 +1,5 @@
 ---
-title: "Vigolium API Reference — Generic Database API"
+title: "Vigolium API Reference, Generic Database API"
 description: "Unified CRUD API for any database table with pagination, filtering, sorting, and full-text search."
 icon: "database"
 ---
@@ -12,7 +12,7 @@ Project-scoped tables (`scans`, `http_records`, `findings`, `source_repos`, `ses
 
 ---
 
-## GET /api/db/tables — List All Tables
+## GET /api/db/tables, List All Tables
 
 Returns all database tables with their row counts.
 
@@ -35,7 +35,7 @@ curl -s http://localhost:9002/api/db/tables | jq .
 
 ---
 
-## GET /api/db/tables/:table/columns — List Table Columns
+## GET /api/db/tables/:table/columns, List Table Columns
 
 Returns column metadata and primary key information for a specific table.
 
@@ -67,7 +67,7 @@ curl -s http://localhost:9002/api/db/tables/findings/columns | jq .
 
 ---
 
-## GET /api/db/tables/:table/records — List Records
+## GET /api/db/tables/:table/records, List Records
 
 Returns paginated, filtered, sorted records from any table.
 
@@ -155,7 +155,7 @@ curl -s 'http://localhost:9002/api/db/tables/scan_logs/records?filter.scan_uuid=
 
 ---
 
-## GET /api/db/tables/:table/records/:id — Get Single Record
+## GET /api/db/tables/:table/records/:id, Get Single Record
 
 Returns a single record by its primary key value. Only works for tables with a single-column primary key.
 
@@ -192,7 +192,7 @@ curl -s http://localhost:9002/api/db/tables/findings/records/42 | jq .
 
 ---
 
-## POST /api/db/tables/:table/records — Create Record
+## POST /api/db/tables/:table/records, Create Record
 
 Inserts a new record into the specified table. Requires **admin** role.
 
@@ -226,7 +226,7 @@ curl -s -X POST http://localhost:9002/api/db/tables/scopes/records \
 
 ---
 
-## PUT /api/db/tables/:table/records/:id — Update Record
+## PUT /api/db/tables/:table/records/:id, Update Record
 
 Updates one or more fields on an existing record. Requires **admin** role.
 
@@ -261,7 +261,7 @@ curl -s -X PUT http://localhost:9002/api/db/tables/http_records/records/rec-0001
 
 ---
 
-## DELETE /api/db/tables/:table/records/:id — Delete Record
+## DELETE /api/db/tables/:table/records/:id, Delete Record
 
 Deletes a single record by primary key. Requires **admin** role.
 

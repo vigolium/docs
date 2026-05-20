@@ -1,6 +1,6 @@
 ---
 title: "Native Scan Architecture"
-description: "Anatomy of a scan — tracing an HTTP request from the command line through the deterministic Go pipeline to a vulnerability finding."
+description: "Anatomy of a scan, tracing an HTTP request from the command line through the deterministic Go pipeline to a vulnerability finding."
 icon: "radar"
 ---
 
@@ -8,7 +8,7 @@ icon: "radar"
 Architecture series: [Overview](/architecture/overview) · **Native Scan** · [Agentic Scan](/architecture/agentic-scan) · [Data & Storage](/architecture/data-and-storage) · [Server & API](/architecture/server-and-api)
 </Note>
 
-This document traces the complete lifecycle of an HTTP request through a Vigolium scan — from `vigolium scan -t https://example.com` on the command line to a vulnerability finding written to the terminal. It is an architecture deep-dive intended for contributors who want to understand the scanning pipeline end-to-end.
+This document traces the complete lifecycle of an HTTP request through a Vigolium scan, from `vigolium scan -t https://example.com` on the command line to a vulnerability finding written to the terminal. It is an architecture deep-dive intended for contributors who want to understand the scanning pipeline end-to-end.
 
 ## High-Level Pipeline
 
@@ -65,16 +65,16 @@ CLI invocation
 
 `cmd/vigolium/main.go` prints the banner (unless `--json` or certain subcommands suppress it), then calls `cli.Execute()` which invokes the Cobra root command.
 
-### Root Command — `pkg/cli/root.go`
+### Root Command, `pkg/cli/root.go`
 
 `rootCmd.PersistentPreRunE` fires before every subcommand and:
 
 1. Initializes the global `zap.Logger` via `initLogger()`.
 2. Falls back to the `VIGOLIUM_PROXY` environment variable if `--proxy` is empty.
-3. Runs first-time setup via `ensureInitialized()` — creates `~/.vigolium/` and writes the default config, profiles, and prompt templates if they don't exist.
+3. Runs first-time setup via `ensureInitialized()`, creates `~/.vigolium/` and writes the default config, profiles, and prompt templates if they don't exist.
 4. Handles early-exit flags: `--list-modules`, `--list-input-mode`, `--full-example`.
 
-### Scan Command — `pkg/cli/scan.go`
+### Scan Command, `pkg/cli/scan.go`
 
 `runScanCmd()` is the heart of the scan flow. It performs these steps in order:
 
@@ -107,7 +107,7 @@ runner.New(scanOpts)         ─────────────────
 
 ## Stage 2: Input Parsing
 
-### The InputSource Interface — `pkg/input/source/source.go`
+### The InputSource Interface, `pkg/input/source/source.go`
 
 Input sources provide a pull-based stream of work items:
 
@@ -152,7 +152,7 @@ Resolved by `resolveFormat()` in `file.go`:
 | `nuclei`, `nuclei-output` | Nuclei JSONL output |
 | `deparos`, `deparos-output` | Deparos discovery output |
 
-### The WorkItem — `pkg/work/item.go`
+### The WorkItem, `pkg/work/item.go`
 
 ```go
 type WorkItem struct {
@@ -167,7 +167,7 @@ type WorkItem struct {
 
 ## Stage 3: HTTP Types
 
-### HttpRequestResponse — `pkg/httpmsg/http_request_response.go`
+### HttpRequestResponse, `pkg/httpmsg/http_request_response.go`
 
 The central data type flowing through the entire pipeline. It pairs an HTTP request with an optional response:
 
@@ -181,11 +181,11 @@ type HttpRequestResponse struct {
 Key methods: `Request()`, `Response()`, `HasResponse()`, `Service()`, `URL()`, `Target()`, `ID()` (FNV-1a hash of `host:port:method`), `Clone()`, `WithResponse()`, `CreateInsertionPoints()`, `BuildRetryableRequest()`.
 
 Factory functions:
-- `GetRawRequestFromURL(url)` — builds a minimal GET request from a URL string (used by `TargetSource` and `StdinSource`)
-- `ParseRawRequest(raw)` — parses raw HTTP text
-- `FromStdRequest(req)` — converts a stdlib `http.Request`
+- `GetRawRequestFromURL(url)`: builds a minimal GET request from a URL string (used by `TargetSource` and `StdinSource`)
+- `ParseRawRequest(raw)`: parses raw HTTP text
+- `FromStdRequest(req)`: converts a stdlib `http.Request`
 
-### HttpRequest — `pkg/httpmsg/http_request.go`
+### HttpRequest, `pkg/httpmsg/http_request.go`
 
 Stores the raw HTTP request bytes as the source of truth, with lazy-parsed accessors:
 
@@ -206,7 +206,7 @@ type HttpRequest struct {
 
 Immutable builder methods (`WithMethod()`, `WithPath()`, `WithHeader()`, `WithBody()`, etc.) return new `*HttpRequest` instances with rebuilt raw bytes. The `RequestOption` / `Apply()` batch builder pattern rebuilds raw bytes only once for multiple changes.
 
-### HttpResponse — `pkg/httpmsg/http_response.go`
+### HttpResponse, `pkg/httpmsg/http_response.go`
 
 Same lazy-parsing pattern as `HttpRequest`:
 
@@ -221,7 +221,7 @@ type HttpResponse struct {
 }
 ```
 
-### Service — `pkg/httpmsg/service.go`
+### Service, `pkg/httpmsg/service.go`
 
 A host/port/protocol triple:
 
@@ -235,7 +235,7 @@ type Service struct {
 
 ## Stage 4: Runner Orchestration
 
-### The Runner — `internal/runner/runner.go`
+### The Runner, `internal/runner/runner.go`
 
 The Runner is the high-level orchestrator. It builds shared infrastructure and executes the multi-phase scan pipeline.
 
@@ -269,14 +269,14 @@ type phaseInfra struct {
 ```
 
 Built in order:
-1. **Notifier** — Telegram and/or Discord backends (from config or env vars).
-2. **Services** — wraps Options, Notifier, DedupManager, and HostErrors (circuit breaker for unresponsive hosts).
-3. **HostRateLimiter** — per-host concurrency control (default: 2 concurrent per host, 1000 max tracked hosts, 30s idle eviction).
-4. **HTTP Requester** — HTTP client with retry, proxy, redirect, and middleware support.
-5. **ScopeMatcher** — host/path/status/content-type/body-string filtering from config.
-6. **JS Engine** — Grafana Sobek engine for JavaScript extensions, including pre/post hook chains.
+1. **Notifier**: Telegram and/or Discord backends (from config or env vars).
+2. **Services**: wraps Options, Notifier, DedupManager, and HostErrors (circuit breaker for unresponsive hosts).
+3. **HostRateLimiter**: per-host concurrency control (default: 2 concurrent per host, 1000 max tracked hosts, 30s idle eviction).
+4. **HTTP Requester**: HTTP client with retry, proxy, redirect, and middleware support.
+5. **ScopeMatcher**: host/path/status/content-type/body-string filtering from config.
+6. **JS Engine**: Grafana Sobek engine for JavaScript extensions, including pre/post hook chains.
 
-### RunNativeScan() — The 6-Phase Pipeline
+### RunNativeScan(), The 6-Phase Pipeline
 
 ```
 RunNativeScan()
@@ -321,7 +321,7 @@ Phases 0-4 populate the database with HTTP records. Phase 5 reads those records 
 ### Phase 4 Detail: KnownIssueScan
 
 1. Queries distinct paths from DB via `GetDistinctPaths()`.
-2. Builds target URLs — either path-enriched (default, `enrich_targets: true`) or host-level only.
+2. Builds target URLs, either path-enriched (default, `enrich_targets: true`) or host-level only.
 3. Runs Nuclei templates + Kingfisher secret scanning against targets.
 4. **Post-phase dedup**: calls `DeduplicateFindings()` to group findings with identical `(module_id, severity, matched_at URL)`.
 
@@ -333,14 +333,14 @@ Phases 0-4 populate the database with HTTP records. Phase 5 reads those records 
 4. Runs a **feedback loop** (up to `maxFeedbackRounds = 3`):
    - Creates a `OneShotDBInputSource` that reads records after the scan cursor.
    - Builds an Executor with all active + passive modules, `SkipBaseline: true` (responses already in DB).
-   - The Executor enforces a per-module finding cap (`MaxFindingsPerModule`, default 10) — once a module emits this many findings, further results from that module are suppressed.
+   - The Executor enforces a per-module finding cap (`MaxFindingsPerModule`, default 10), once a module emits this many findings, further results from that module are suppressed.
    - After each round, checks for newly created records. Breaks early if none.
 5. **Post-phase dedup**: calls `DeduplicateFindings()` to merge findings where the same module fired on the same URL with different payloads.
 6. Marks the scan as completed.
 
 ## Stage 5: The Executor
 
-### Executor Struct — `pkg/core/executor.go`
+### Executor Struct, `pkg/core/executor.go`
 
 The Executor is the central dispatch engine. It receives work items, distributes them to a worker pool, and dispatches modules.
 
@@ -370,7 +370,7 @@ type Executor struct {
 
 At construction time, `NewExecutor()` pre-groups all modules by their `ScanScope` bitmask into five slices. A module declaring `ScanScopeInsertionPoint | ScanScopeRequest` appears in both `perIPActive` and `perRequestActive`. This avoids per-item scope-check iteration.
 
-### Execute() — Worker Pool
+### Execute(), Worker Pool
 
 ```go
 func (e *Executor) Execute(ctx context.Context) (bool, error)
@@ -382,16 +382,16 @@ func (e *Executor) Execute(ctx context.Context) (bool, error)
 4. Flushes passive modules (`Flusher` interface) and OAST service.
 5. Returns `(foundResults, nil)`.
 
-### feedItems() — The Producer
+### feedItems(), The Producer
 
 For each item from `source.Next()`:
 
 1. **Static file filter**: if path matches a static file extension (`.jpg`, `.css`, etc.), skip.
-2. **Pre-request scope check**: `ScopeMatcher.InScopeRequest(host, path, "", "")` — host + path only, no HTTP round-trip. Rejects obviously out-of-scope items early.
+2. **Pre-request scope check**: `ScopeMatcher.InScopeRequest(host, path, "", "")`, host + path only, no HTTP round-trip. Rejects obviously out-of-scope items early.
 3. **Host error check**: if `HostErrors.Check(hostID)` returns true (host has been circuit-broken), skip.
 4. Send item to the worker channel.
 
-### worker() — The Consumer
+### worker(), The Consumer
 
 Each worker goroutine loops on the channel:
 
@@ -422,7 +422,7 @@ Response bytes are copied from a `sync.Pool` of recycled buffers (32 KiB initial
 
 ### Step 2: Traffic Callback
 
-If configured, calls `OnTraffic(method, url, statusCode, contentType)` — an observer hook for printing traffic lines to stderr.
+If configured, calls `OnTraffic(method, url, statusCode, contentType)`, an observer hook for printing traffic lines to stderr.
 
 ### Step 3: Pre-Hooks
 
@@ -477,7 +477,7 @@ runPassivePerHost(request, filter)      sequential loop over perHostPassive
 runPassivePerRequest(request, filter)   sequential loop over perRequestPassive
 ```
 
-For each module: check filter → check `CanProcess()` → call scan method → process results. No goroutines — passive modules do not perform network I/O.
+For each module: check filter → check `CanProcess()` → call scan method → process results. No goroutines, passive modules do not perform network I/O.
 
 ### Step 9: Active Module Execution (Parallel)
 
@@ -521,7 +521,7 @@ Execute()
 
 ## Stage 7: Insertion Points
 
-### The InsertionPoint Interface — `pkg/httpmsg/insertion_point.go`
+### The InsertionPoint Interface, `pkg/httpmsg/insertion_point.go`
 
 ```go
 type InsertionPoint interface {
@@ -568,11 +568,11 @@ The Executor maintains a 4096-entry LRU cache (`ipCache`) keyed by request SHA-2
 
 ### Shared Base Request
 
-`CreateAllInsertionPoints()` creates a single `sharedBaseRequest` clone of the raw bytes, shared across all `ParameterInsertionPoint` instances from that call. This is safe because `BuildRequest()` never mutates the shared bytes — it always allocates a new result slice.
+`CreateAllInsertionPoints()` creates a single `sharedBaseRequest` clone of the raw bytes, shared across all `ParameterInsertionPoint` instances from that call. This is safe because `BuildRequest()` never mutates the shared bytes, it always allocates a new result slice.
 
 ## Stage 8: Module Dispatch
 
-### Module Interface Hierarchy — `pkg/modules/`
+### Module Interface Hierarchy, `pkg/modules/`
 
 ```
 Module (base)
@@ -589,7 +589,7 @@ Module (base)
     └── (optional) Flusher: Flush(scanCtx)
 ```
 
-### ScanScope Bitmask — `pkg/modules/modkit/types.go`
+### ScanScope Bitmask, `pkg/modules/modkit/types.go`
 
 ```go
 const (
@@ -601,7 +601,7 @@ const (
 
 A module declares one or more scopes by OR-ing constants. The executor uses `ScanScopes().Has(scope)` to pre-group modules at startup.
 
-### InsertionPointTypeSet — `pkg/modules/modkit/types.go`
+### InsertionPointTypeSet, `pkg/modules/modkit/types.go`
 
 A `uint32` bitmask where each bit corresponds to an `InsertionPointType`. Checked by the executor before calling `ScanPerInsertionPoint()`:
 
@@ -615,7 +615,7 @@ Pre-built presets: `URLParamTypes`, `BodyParamTypes`, `CookieTypes`, `HeaderType
 
 **Active modules** (via `BaseActiveModule`): reject nil requests, unparseable URLs, media/JS URLs, and non-testable HTTP methods (`OPTIONS`, `CONNECT`, `HEAD`, `TRACE`). The executor pre-computes these checks in `computeEligibility()` and skips calling `CanProcess()` when the base would reject.
 
-**Passive modules** (via `BasePassiveModule`): only check that the required HTTP transaction parts (request and/or response) are present. They process all content types including media — no method filtering.
+**Passive modules** (via `BasePassiveModule`): only check that the required HTTP transaction parts (request and/or response) are present. They process all content types including media, no method filtering.
 
 ### Execution Pattern
 
@@ -631,7 +631,7 @@ Per item:
 
 Steps 3-5 run as three concurrent goroutine groups via `conc.WaitGroup`.
 
-### ScanContext — `pkg/modules/modkit/context.go`
+### ScanContext, `pkg/modules/modkit/context.go`
 
 Shared resources available to all modules during scanning:
 
@@ -646,10 +646,10 @@ type ScanContext struct {
 }
 ```
 
-- **DedupManager** — request-level deduplication.
-- **OASTProvider** — generates out-of-band callback URLs for blind vulnerability detection.
-- **MutationGenerator** — classifies parameter values and generates test mutations.
-- **baselineCache** — caches baseline responses for diff-based scanning.
+- **DedupManager**: request-level deduplication.
+- **OASTProvider**: generates out-of-band callback URLs for blind vulnerability detection.
+- **MutationGenerator**: classifies parameter values and generates test mutations.
+- **baselineCache**: caches baseline responses for diff-based scanning.
 
 ### Flusher Interface
 
@@ -663,13 +663,13 @@ type Flusher interface {
 
 Called by the executor after all workers complete, enabling end-of-scan aggregation and final result emission.
 
-### Module Development Defaults — `pkg/modules/modkit/`
+### Module Development Defaults, `pkg/modules/modkit/`
 
 Module authors embed `BaseActiveModule` or `BasePassiveModule` to get default implementations of all interface methods. Module IDs must be lowercase kebab-case with prefix `active-` or `passive-` (validated at construction, panics on violation). The `modkit` package also provides `NewBaseModule()`, `NewBaseActiveModule()`, and `NewBasePassiveModule()` constructors.
 
 ## Stage 9: Result Emission
 
-### ResultEvent — `pkg/output/output.go`
+### ResultEvent, `pkg/output/output.go`
 
 ```go
 type ResultEvent struct {
@@ -688,7 +688,7 @@ type ResultEvent struct {
 }
 ```
 
-`ResultEvent.ID()` computes a SHA-1 hash over `ModuleID | Description | Severity | Matched` — this becomes `finding_hash` in the database for deduplication.
+`ResultEvent.ID()` computes a SHA-1 hash over `ModuleID | Description | Severity | Matched`, this becomes `finding_hash` in the database for deduplication.
 
 ### processResults() and emitResult()
 
@@ -734,7 +734,7 @@ processResults(results, module)
 
 ## Stage 10: Output
 
-### Writer Interface — `pkg/output/output.go`
+### Writer Interface, `pkg/output/output.go`
 
 ```go
 type Writer interface {
@@ -754,7 +754,7 @@ The default `Writer` implementation:
    - **Stdout**: writes JSON (if `--json`) or formatted console output (if not `--silent`).
    - **File**: appends JSON line to output file (JSONL format).
 
-### Console Format — `pkg/output/format_screen.go`
+### Console Format, `pkg/output/format_screen.go`
 
 ```
 [› phase │] [moduleType] [moduleName] [severity] matched-at [extracted-results] [fuzz-param]
@@ -764,15 +764,15 @@ The default `Writer` implementation:
 - Severity shown with symbol and ANSI color (Critical=magenta, High=red, Medium=yellow, Low=green).
 - Output truncated to terminal width.
 
-### JSON Format — `pkg/output/format_json.go`
+### JSON Format, `pkg/output/format_json.go`
 
 Serializes `ResultEvent` via `jsoniter.Marshal()`. Response body is stripped unless `--include-response` is set.
 
-### HTML Format — `pkg/output/format_html.go`
+### HTML Format, `pkg/output/format_html.go`
 
 Uses a streaming approach: splits the embedded HTML template at the results-JSON marker, writes the before-portion with simple string replacement (avoids `text/template` because bundled JS contains template-delimiter sequences), then streams JSON array items one at a time, then writes the after-portion.
 
-### File Output Writer — `pkg/output/file_output_writer.go`
+### File Output Writer, `pkg/output/file_output_writer.go`
 
 ```go
 type fileWriter struct {
@@ -785,11 +785,11 @@ Mutex-locked, appends JSON + newline (JSONL format). Opens with `O_APPEND|O_CREA
 
 ## Stage 11: Database Persistence
 
-### Data Models — `pkg/database/models.go`
+### Data Models, `pkg/database/models.go`
 
 #### HTTPRecord (table: `http_records`)
 
-Fully denormalized — no separate hosts or parameters tables. Key fields:
+Fully denormalized, no separate hosts or parameters tables. Key fields:
 
 - **Identity**: `UUID` (primary key), `RequestHash` (SHA-256 of raw request)
 - **Host info**: `Scheme`, `Hostname`, `Port`, `IP`
@@ -805,16 +805,16 @@ Fully denormalized — no separate hosts or parameters tables. Key fields:
 - **Module info**: `ModuleID`, `ModuleName`, `Description`, `Severity`, `Confidence`
 - **Match data**: `MatchedAt` (JSONB array), `ExtractedResults`, `Request`, `Response`
 - **Relations**: `HTTPRecordUUIDs` (JSONB array), `ScanUUID`
-- **Grouped evidence**: `AdditionalEvidence` (JSONB array of strings) — request/response pairs from duplicate findings that were merged into this survivor (capped at 10 entries)
+- **Grouped evidence**: `AdditionalEvidence` (JSONB array of strings), request/response pairs from duplicate findings that were merged into this survivor (capped at 10 entries)
 
 The `finding_records` junction table links findings to HTTP records (many-to-many).
 
-### Converters — `pkg/database/converters.go`
+### Converters, `pkg/database/converters.go`
 
-- `HTTPRecord.FromHttpRequestResponse()` — converts the in-memory type to the DB model. Generates UUID, parses URL, copies headers/body, computes hashes, extracts HTML title, counts response words.
-- `Finding.FromResultEvent()` — maps `ResultEvent` fields to `Finding`. Sets `FindingHash = event.ID()` (the SHA-1 dedup hash).
+- `HTTPRecord.FromHttpRequestResponse()`: converts the in-memory type to the DB model. Generates UUID, parses URL, copies headers/body, computes hashes, extracts HTML title, counts response words.
+- `Finding.FromResultEvent()`: maps `ResultEvent` fields to `Finding`. Sets `FindingHash = event.ID()` (the SHA-1 dedup hash).
 
-### Repository — `pkg/database/repository.go`
+### Repository, `pkg/database/repository.go`
 
 Key methods:
 
@@ -829,7 +829,7 @@ Key methods:
 | `GetRecordsWithResponseBody()` | UUID-cursor pagination for batch scanning (Kingfisher) |
 | `UpdateRiskScores()` | Batch CASE/WHEN UPDATE, 500 UUIDs per statement |
 
-### RecordWriter — `pkg/database/record_writer.go`
+### RecordWriter, `pkg/database/record_writer.go`
 
 Batched asynchronous persistence for high-throughput ingestion:
 
@@ -847,7 +847,7 @@ type RecordWriter struct {
 
 ## Stage 12: Supporting Systems
 
-### Scope Matching — `internal/config/scope_matcher.go`
+### Scope Matching, `internal/config/scope_matcher.go`
 
 `ScopeMatcher` evaluates items against configurable rules across multiple dimensions (all AND-ed):
 
@@ -867,7 +867,7 @@ type RecordWriter struct {
 | `balanced` | eTLD+1 must match (e.g., `*.example.com`) |
 | `relaxed` (default) | Host contains target keyword |
 
-### Rate Limiting — `pkg/core/ratelimit/host_limiter.go`
+### Rate Limiting, `pkg/core/ratelimit/host_limiter.go`
 
 `HostRateLimiter` provides per-host concurrency control:
 
@@ -877,7 +877,7 @@ type RecordWriter struct {
 - Background eviction goroutine removes idle entries (default: 30s idle, checked every 10s).
 - Per-shard capacity cap with oldest-entry eviction when exceeded.
 
-### Host Error Circuit Breaker — `pkg/core/hosterrors/`
+### Host Error Circuit Breaker, `pkg/core/hosterrors/`
 
 `hosterrors.Cache` tracks consecutive errors per host:
 
@@ -886,7 +886,7 @@ type RecordWriter struct {
 - `MarkSuccess()` resets the counter (but not if already at threshold).
 - The executor's `feedItems()` pre-checks this to skip items for quarantined hosts.
 
-### JS Extension Hooks — `pkg/jsext/hooks.go`
+### JS Extension Hooks, `pkg/jsext/hooks.go`
 
 **Pre-hooks** (`PreHookExecutor`): transform or filter requests before module dispatch. Return `nil` to skip the item.
 
@@ -894,7 +894,7 @@ type RecordWriter struct {
 
 `HookChain` executes hooks sequentially, passing each hook's output to the next. On error, the hook is skipped (non-fatal). On `nil` return, the chain is aborted immediately.
 
-Each hook uses a `VMPool` (`sync.Pool` of Sobek VMs) — VMs are reused across concurrent invocations with no shared mutable state.
+Each hook uses a `VMPool` (`sync.Pool` of Sobek VMs), VMs are reused across concurrent invocations with no shared mutable state.
 
 ### OAST (Out-of-Band)
 
@@ -908,7 +908,7 @@ Three levels of deduplication prevent noise and redundancy:
 
 2. **Finding-level (inline)**: `finding_hash` unique constraint in the database uses `INSERT ON CONFLICT DO NOTHING`. When a duplicate hash is detected at insert time, `appendRecordsToFinding()` appends the new HTTP record UUIDs and request/response pair (as `AdditionalEvidence`) to the existing finding instead of creating a new row.
 
-3. **Finding-level (post-phase grouping)**: `DeduplicateFindings()` runs after the KnownIssueScan and dynamic-assessment phases. It groups findings that share the same `(module_id, severity, matched_at[0] URL)` within a project — this catches cases where the same module fires multiple times on the same URL with different payloads (e.g., an injection probe producing dozens of results per endpoint).
+3. **Finding-level (post-phase grouping)**: `DeduplicateFindings()` runs after the KnownIssueScan and dynamic-assessment phases. It groups findings that share the same `(module_id, severity, matched_at[0] URL)` within a project, this catches cases where the same module fires multiple times on the same URL with different payloads (e.g., an injection probe producing dozens of results per endpoint).
 
    The grouping process:
    - Partitions findings by `module_id || severity || matched_at[0]` and orders by `created_at ASC`
@@ -1019,7 +1019,7 @@ vigolium scan -t https://example.com
 
 | Stage | Key File | Key Function | Data In | Data Out |
 |-------|----------|-------------|---------|----------|
-| CLI Entry | `cmd/vigolium/main.go` | `main()` → `cli.Execute()` | CLI args | — |
+| CLI Entry | `cmd/vigolium/main.go` | `main()` → `cli.Execute()` | CLI args |, |
 | Config | `pkg/cli/scan.go` | `runScanCmd()` | Flags + YAML | `*types.Options`, `*config.Settings` |
 | Input | `pkg/input/source/` | `InputSource.Next()` | URLs/files/stdin | `*work.WorkItem` |
 | HTTP Types | `pkg/httpmsg/` | `GetRawRequestFromURL()` | URL string | `*HttpRequestResponse` |
@@ -1038,7 +1038,7 @@ vigolium scan -t https://example.com
     Operating modes and how the subsystems fit together.
   </Card>
   <Card title="Data & Storage" icon="database" href="/architecture/data-and-storage">
-    Stage 11 in depth — multi-tenancy, repository pattern, cloud storage.
+    Stage 11 in depth, multi-tenancy, repository pattern, cloud storage.
   </Card>
   <Card title="Strategies" icon="sliders" href="/native-scan/strategies">
     Pick which phases run and how aggressively.

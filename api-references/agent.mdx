@@ -1,5 +1,5 @@
 ---
-title: "Vigolium API Reference — Agent"
+title: "Vigolium API Reference, Agent"
 description: "AI agent API with query, autopilot, and swarm run modes, SSE streaming, session history, and OpenAI-compatible chat."
 icon: "robot"
 ---
@@ -13,22 +13,22 @@ The agent API provides three run modes that mirror the `vigolium agent` CLI subc
 | `POST /api/agent/run/query`       | `vigolium agent query`      | Single-shot prompt execution             |
 | `POST /api/agent/run/autopilot`   | `vigolium agent autopilot`  | Autonomous AI-driven scanning session    |
 | `POST /api/agent/run/swarm`       | `vigolium agent swarm`      | AI-guided multi-phase vulnerability swarm|
-| `GET /api/agent/status/list`      | —                           | List runs with in-memory status          |
-| `GET /api/agent/status/:id`       | —                           | Get run status by ID                     |
+| `GET /api/agent/status/list`      |,                           | List runs with in-memory status          |
+| `GET /api/agent/status/:id`       |,                           | Get run status by ID                     |
 | `GET /api/agent/sessions`         | `vigolium agent sessions`   | Paginated session history from DB        |
-| `GET /api/agent/sessions/:id`     | —                           | Full session detail with debug fields    |
-| `GET /api/agent/sessions/:id/logs`| —                           | Raw `runtime.log` (plain text or SSE tail)|
-| `GET /api/agent/sessions/:id/artifacts` | —                     | List session artifact files              |
-| `GET /api/agent/sessions/:id/artifacts/{name}` | —              | Read a specific artifact (10 MiB default cap) |
-| `POST /api/agent/chat/completions`| —                           | OpenAI-compatible chat completions       |
+| `GET /api/agent/sessions/:id`     |,                           | Full session detail with debug fields    |
+| `GET /api/agent/sessions/:id/logs`|,                           | Raw `runtime.log` (plain text or SSE tail)|
+| `GET /api/agent/sessions/:id/artifacts` |,                     | List session artifact files              |
+| `GET /api/agent/sessions/:id/artifacts/{name}` |,              | Read a specific artifact (10 MiB default cap) |
+| `POST /api/agent/chat/completions`|,                           | OpenAI-compatible chat completions       |
 
-All run modes share a global concurrency lock (capped per-mode by `server.agent_heavy_max` / `server.agent_light_max`) — exceeding the cap returns `429 Too Many Requests` after `server.agent_queue_timeout`.
+All run modes share a global concurrency lock (capped per-mode by `server.agent_heavy_max` / `server.agent_light_max`), exceeding the cap returns `429 Too Many Requests` after `server.agent_queue_timeout`.
 
-> **Provider overrides are CLI-only.** The server resolves the olium provider once from `agent.olium.*` in `vigolium-configs.yaml` and reuses it across requests. There is no per-request provider/model field — to switch providers on a server-side workload, edit the YAML and reload.
+> **Provider overrides are CLI-only.** The server resolves the olium provider once from `agent.olium.*` in `vigolium-configs.yaml` and reuses it across requests. There is no per-request provider/model field, to switch providers on a server-side workload, edit the YAML and reload.
 
 ---
 
-## POST /api/agent/run/query — Single-Shot Agent Run
+## POST /api/agent/run/query, Single-Shot Agent Run
 
 Starts an AI agent run with a prompt template, file, or inline prompt. Returns `202 Accepted` (async) or an SSE stream when `stream: true`.
 
@@ -81,7 +81,7 @@ curl -s -X POST http://localhost:9002/api/agent/run/query \
 
 ---
 
-## POST /api/agent/run/autopilot — Autonomous Scanning Session
+## POST /api/agent/run/autopilot, Autonomous Scanning Session
 
 Launches an AI agent that autonomously discovers, scans, and triages vulnerabilities using vigolium CLI commands. When `source` is provided, vigolium-audit runs first, native context and planning artifacts are prepared, and then the autonomous operator session starts.
 
@@ -92,7 +92,7 @@ Launches an AI agent that autonomously discovers, scans, and triages vulnerabili
 | `prompt`           | string   | No       | Natural language scan prompt (parsed into target/source/focus when explicit fields are empty) |
 | `intensity`        | string   | No       | Scan intensity preset: `"quick"`, `"balanced"` (default), or `"deep"`. Bundles `max_commands`, `timeout`, `archon_mode`, and `browser` settings |
 | `target`           | string   | No*      | Target URL to scan (derived from `input` if not set)           |
-| `input`            | string   | No       | Raw input (curl, raw HTTP, Burp XML, URL) — target extracted automatically |
+| `input`            | string   | No       | Raw input (curl, raw HTTP, Burp XML, URL), target extracted automatically |
 | `agent`            | string   | No       | Optional descriptive label persisted to the run record         |
 | `source`           | string   | No       | Path to source code, git URL (with optional OAuth token), or archive file (`.zip`, `.tar.gz`, `.tgz`, `.tar.bz2`, `.tar.xz`). Legacy alias: `repo_path`. |
 | `files`            | string[] | No       | Specific files to include (relative to `source`). Auto-populated from `diff` when not set |
@@ -115,7 +115,7 @@ Launches an AI agent that autonomously discovers, scans, and triages vulnerabili
 | `project_uuid`     | string   | No       | Scope results to a project (falls back to `X-Project-UUID` header) |
 | `archon_mode`      | string   | No       | Vigolium-audit mode: `"lite"` (default, 3-phase), `"balanced"` (6-phase), `"deep"` (10-phase), `"mock"` |
 | `no_archon`        | bool     | No       | Disable automatic vigolium-audit (enabled by default when `source` is set) |
-| `archon`           | string   | No       | **DEPRECATED** — use `no_archon` + `archon_mode` instead. Legacy values: `"lite"`, `"balanced"`, `"deep"`, `"off"` |
+| `archon`           | string   | No       | **DEPRECATED**, use `no_archon` + `archon_mode` instead. Legacy values: `"lite"`, `"balanced"`, `"deep"`, `"off"` |
 | `upload_results`   | bool     | No       | Upload session bundle to cloud storage on completion (requires `storage` config) |
 
 \* At least one of `target`, `input`, `source`, `diff`, or `prompt` is required.
@@ -176,29 +176,29 @@ curl -s -X POST http://localhost:9002/api/agent/run/autopilot \
 
 ---
 
-## POST /api/agent/run/swarm — AI-Guided Vulnerability Swarm
+## POST /api/agent/run/swarm, AI-Guided Vulnerability Swarm
 
 Launches an AI-guided multi-phase vulnerability swarm. The master agent analyzes inputs, selects scanner modules, generates custom JS extensions, executes scans, and optionally triages results. The swarm phases are:
 
-1. **Normalize** — Parse and normalize inputs (native, no AI)
-2. **Auth** — Browser-based login (native, optional, requires `--browser-auth` + `--browser`)
-3. **Source Analysis** — AI agents extract routes, auth flows, and extensions from source code *(conditional, requires `source`)*
-4. **Code Audit** — AI security code audit *(conditional, requires `code_audit: true`)*
-5. **Discovery** — Content discovery and spidering *(conditional, requires `discover` flag)*
-6. **Plan** — Master agent analyzes targets, selects modules, generates quick checks and extensions
-7. **Extension** — Validate, merge, and write JS extensions to disk (native)
-8. **Scan** — Execute scanner modules with agent-selected filters and extensions (native)
-9. **Triage** — AI agent reviews findings, confirms or marks as false positive *(optional, requires `triage: true`)*
-10. **Rescan** — Targeted re-scanning based on triage follow-ups *(conditional, triggered by triage)*
+1. **Normalize**: Parse and normalize inputs (native, no AI)
+2. **Auth**: Browser-based login (native, optional, requires `--browser-auth` + `--browser`)
+3. **Source Analysis**: AI agents extract routes, auth flows, and extensions from source code *(conditional, requires `source`)*
+4. **Code Audit**: AI security code audit *(conditional, requires `code_audit: true`)*
+5. **Discovery**: Content discovery and spidering *(conditional, requires `discover` flag)*
+6. **Plan**: Master agent analyzes targets, selects modules, generates quick checks and extensions
+7. **Extension**: Validate, merge, and write JS extensions to disk (native)
+8. **Scan**: Execute scanner modules with agent-selected filters and extensions (native)
+9. **Triage**: AI agent reviews findings, confirms or marks as false positive *(optional, requires `triage: true`)*
+10. **Rescan**: Targeted re-scanning based on triage follow-ups *(conditional, triggered by triage)*
 
 AI agents are called at phases 3, 4, 6, and 9. When inputs exceed `master_batch_size` records, the master agent runs in parallel batches (default 5 records per batch) with plan merging.
 
-**Request body — Inputs:**
+**Request body, Inputs:**
 
 | Field                  | Type     | Required | Description                                                           |
 |------------------------|----------|----------|-----------------------------------------------------------------------|
 | `prompt`               | string   | No       | Natural language scan prompt                                           |
-| `intensity`            | string   | No       | `"quick"`, `"balanced"` (default), `"deep"` — bundles `discover`, `triage`, `code_audit`, `max_iterations`, `archon`, concurrency, and duration settings |
+| `intensity`            | string   | No       | `"quick"`, `"balanced"` (default), `"deep"`, bundles `discover`, `triage`, `code_audit`, `max_iterations`, `archon`, concurrency, and duration settings |
 | `input`                | string   | No*      | Single input (URL, curl command, raw HTTP, Burp XML, or record UUID)  |
 | `inputs`               | string[] | No*      | Multiple inputs                                                       |
 | `target`               | string   | No       | Target URL (alias for `input` when given alone)                        |
@@ -349,8 +349,8 @@ The intent extractor recognizes: target URLs, source code paths, vulnerability f
 | `source_path`  | `source`             | `source`          | Filesystem path to source code                        |
 | `focus`        | `focus`              | `focus`           | Vulnerability focus area                              |
 | `instruction`  | `instruction`        | `instruction`     | Remaining guidance                                    |
-| `discover`     | —                    | `discover`        | Inferred when both target and source are present      |
-| `code_audit`   | —                    | `code_audit`      | Inferred when source-only (no target)                 |
+| `discover`     |,                    | `discover`        | Inferred when both target and source are present      |
+| `code_audit`   |,                    | `code_audit`      | Inferred when source-only (no target)                 |
 | `archon`       | `archon_mode`        | `archon`          | `"lite"`, `"balanced"`, or `"deep"` when audit agent is mentioned |
 
 ```bash
@@ -405,7 +405,7 @@ data: {"type":"done","swarm_result":{"total_findings":5,"confirmed":3,"false_pos
 
 ---
 
-## GET /api/agent/status/list — List Agent Runs
+## GET /api/agent/status/list, List Agent Runs
 
 Returns all agent runs with their current status.
 
@@ -437,7 +437,7 @@ curl -s http://localhost:9002/api/agent/status/list | jq .
 
 ---
 
-## GET /api/agent/status/:id — Agent Run Status
+## GET /api/agent/status/:id, Agent Run Status
 
 | Field              | Type     | Description                                                |
 |--------------------|----------|------------------------------------------------------------|
@@ -458,13 +458,13 @@ curl -s http://localhost:9002/api/agent/status/list | jq .
 
 ---
 
-## GET /api/agent/sessions — List Agent Sessions
+## GET /api/agent/sessions, List Agent Sessions
 
-Paginated list of agent sessions from the database. Unlike `/api/agent/status/list` (which includes in-memory running state), this returns persisted historical sessions with structured metadata — but without large debug fields (`prompt_sent`, `agent_raw_output`, etc.) to keep responses lightweight.
+Paginated list of agent sessions from the database. Unlike `/api/agent/status/list` (which includes in-memory running state), this returns persisted historical sessions with structured metadata, but without large debug fields (`prompt_sent`, `agent_raw_output`, etc.) to keep responses lightweight.
 
 | Parameter | Type   | Default | Description                                      |
 |-----------|--------|---------|--------------------------------------------------|
-| `mode`    | string | —       | Filter by mode: `query`, `autopilot`, `swarm`    |
+| `mode`    | string |,       | Filter by mode: `query`, `autopilot`, `swarm`    |
 | `limit`   | int    | `50`    | Page size (max `500`)                            |
 | `offset`  | int    | `0`     | Offset for pagination                            |
 
@@ -474,7 +474,7 @@ curl -s 'http://localhost:9002/api/agent/sessions?mode=swarm&limit=10' | jq .
 
 ---
 
-## GET /api/agent/sessions/:id — Agent Session Detail
+## GET /api/agent/sessions/:id, Agent Session Detail
 
 Full detail of a single agent session, including large debug fields: `prompt_sent`, `agent_raw_output`, `attack_plan`, `triage_result`, `result_json`.
 
@@ -493,9 +493,9 @@ Full detail of a single agent session, including large debug fields: `prompt_sen
 
 ---
 
-## GET /api/agent/sessions/:id/logs — Session Console Logs
+## GET /api/agent/sessions/:id/logs, Session Console Logs
 
-Returns the raw `runtime.log` file for a session — the same live console stream the CLI user sees. ANSI colors are preserved by default so browser terminal emulators (xterm.js, etc.) render it exactly like the CLI. Works while the run is in progress *and* after it finishes.
+Returns the raw `runtime.log` file for a session, the same live console stream the CLI user sees. ANSI colors are preserved by default so browser terminal emulators (xterm.js, etc.) render it exactly like the CLI. Works while the run is in progress *and* after it finishes.
 
 Two modes, selected via the `Accept` header:
 
@@ -517,7 +517,7 @@ curl -N -H 'Accept: text/event-stream' \
 
 ---
 
-## GET /api/agent/sessions/:id/artifacts — List Session Artifacts
+## GET /api/agent/sessions/:id/artifacts, List Session Artifacts
 
 Returns a recursive list of files inside the session directory, capped at 500 entries. Useful for browsing generated extensions, vigolium-audit output, plan/checkpoint files.
 
@@ -535,7 +535,7 @@ curl -s http://localhost:9002/api/agent/sessions/agt-550e8400-.../artifacts | jq
 }
 ```
 
-## GET /api/agent/sessions/:id/artifacts/{name} — Read Artifact
+## GET /api/agent/sessions/:id/artifacts/{name}, Read Artifact
 
 Read a specific artifact file. Wildcard supports nesting (e.g. `archon-audit/state.json`).
 
@@ -549,13 +549,13 @@ curl -s 'http://localhost:9002/api/agent/sessions/agt-550e8400-.../artifacts/swa
 
 ---
 
-## POST /api/agent/chat/completions — OpenAI-Compatible Chat Completions
+## POST /api/agent/chat/completions, OpenAI-Compatible Chat Completions
 
 Accepts an OpenAI-compatible Chat Completions request and returns an OpenAI-compatible response. This allows any OpenAI-compatible client to use the in-process olium engine by changing the base URL.
 
-The `model` field is currently informational — every request is dispatched through the olium engine using the provider configured under `agent.olium.*` in `vigolium-configs.yaml`.
+The `model` field is currently informational, every request is dispatched through the olium engine using the provider configured under `agent.olium.*` in `vigolium-configs.yaml`.
 
-This endpoint is **synchronous** — it blocks until the agent completes. It shares the concurrency lock with the run endpoints (returns `409 Conflict` if an agent is already running).
+This endpoint is **synchronous**, it blocks until the agent completes. It shares the concurrency lock with the run endpoints (returns `409 Conflict` if an agent is already running).
 
 | Field      | Type   | Required | Description                                      |
 |------------|--------|----------|--------------------------------------------------|

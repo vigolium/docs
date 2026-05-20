@@ -4,13 +4,13 @@ description: "Checks targets for known CVEs, common misconfigurations, and expos
 icon: "window-maximize"
 ---
 
-# KnownIssueScan — Known Vulnerability and Secret Detection
+# KnownIssueScan, Known Vulnerability and Secret Detection
 
 KnownIssueScan checks targets for known CVEs, common misconfigurations, and exposed secrets using Nuclei templates and the Kingfisher secret detection engine. It runs after the Discovery phase, leveraging all paths and endpoints discovered in earlier phases to maximize coverage.
 
 ## Why KnownIssueScan Matters
 
-Many real-world breaches exploit publicly disclosed vulnerabilities (CVEs) that remain unpatched, or secrets accidentally committed to response bodies. KnownIssueScan systematically tests for these known issues across the entire discovered attack surface — catching low-hanging fruit that custom fuzzing-based modules are not designed to detect.
+Many real-world breaches exploit publicly disclosed vulnerabilities (CVEs) that remain unpatched, or secrets accidentally committed to response bodies. KnownIssueScan systematically tests for these known issues across the entire discovered attack surface, catching low-hanging fruit that custom fuzzing-based modules are not designed to detect.
 
 ## How It Works
 
@@ -85,7 +85,7 @@ known_issue_scan:
 ## Phase Execution Detail
 
 1. Queries distinct paths from the database via `GetDistinctPaths()`.
-2. Builds target URLs — either path-enriched (default, `enrich_targets: true`) or host-level only.
+2. Builds target URLs, either path-enriched (default, `enrich_targets: true`) or host-level only.
 3. Runs Nuclei templates against enriched targets with the configured concurrency and rate limits.
 4. Runs Kingfisher secret scanning on stored response bodies.
 5. Each finding is saved to the database with `ModuleType: "known-issue-scan"` and `FindingSource: "known-issue-scan"`.

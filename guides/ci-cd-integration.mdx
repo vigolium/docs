@@ -58,7 +58,7 @@ This is particularly effective in CI because the source code is always present i
 
 ### Code Review (Query)
 
-Run an AI-powered security code review on the current source tree — single LLM call, predictable runtime:
+Run an AI-powered security code review on the current source tree, single LLM call, predictable runtime:
 
 ```bash
 vigolium agent query --prompt-template security-code-review --source . --json
@@ -68,7 +68,7 @@ This produces structured JSON output with findings that can be parsed and posted
 
 ### Diff-Focused Review (Autopilot)
 
-Focus on changed code only — perfect for PR gates:
+Focus on changed code only, perfect for PR gates:
 
 ```bash
 # GitHub PR diff (auto-fetches changed files via REST API)

@@ -1,6 +1,6 @@
 ---
 title: "How Agent Mode Works"
-description: "Architecture of Vigolium's agent runtime — the in-process olium engine, prompt orchestration, swarm/autopilot pipelines, and provider model."
+description: "Architecture of Vigolium's agent runtime, the in-process olium engine, prompt orchestration, swarm/autopilot pipelines, and provider model."
 icon: "brain"
 ---
 
@@ -27,7 +27,7 @@ Vigolium's agent mode runs AI-driven security scans on top of the native scanner
 | `olium`      | Interactive olium TUI or one-shot non-interactive prompt.        |
 | `session`    | List or inspect past agent runs (sessions list / detail view).   |
 
-`query` is the only mode that does **not** orchestrate a scan — it's a one-shot prompt with optional source-code context. `autopilot` and `swarm` are the two **agentic scan** modes.
+`query` is the only mode that does **not** orchestrate a scan, it's a one-shot prompt with optional source-code context. `autopilot` and `swarm` are the two **agentic scan** modes.
 
 ---
 
@@ -71,19 +71,19 @@ Vigolium's agent mode runs AI-driven security scans on top of the native scanner
 
 The engine is the seam between orchestrators and the olium runtime. Its job is to:
 
-1. **Preflight** — validate provider/model selection.
-2. **Build the prompt** — load template, parse frontmatter, render with `TemplateData`.
-3. **Enrich context** — pull DB context (previous findings, discovered endpoints, high-risk endpoints, module list, scan stats) through a thread-safe LRU cache that lives for one swarm/autopilot run.
-4. **Dispatch** — call the olium engine.
-5. **Retry** — exponential backoff on transient errors (default 2 retries, 2-30s backoff with jitter).
-6. **Parse** — schema-aware JSON extraction tolerating fences, prose, and type coercion (string ↔ int, object ↔ string body).
-7. **Ingest** — write parsed findings/HTTP records to the DB repository.
+1. **Preflight**: validate provider/model selection.
+2. **Build the prompt**: load template, parse frontmatter, render with `TemplateData`.
+3. **Enrich context**: pull DB context (previous findings, discovered endpoints, high-risk endpoints, module list, scan stats) through a thread-safe LRU cache that lives for one swarm/autopilot run.
+4. **Dispatch**: call the olium engine.
+5. **Retry**: exponential backoff on transient errors (default 2 retries, 2-30s backoff with jitter).
+6. **Parse**: schema-aware JSON extraction tolerating fences, prose, and type coercion (string ↔ int, object ↔ string body).
+7. **Ingest**: write parsed findings/HTTP records to the DB repository.
 
 Key entry points:
 
-- `Engine.Run(ctx, opts)` — one-shot prompt execution; creates a fresh olium engine.
-- `Engine.RunOnOliumEngine(ctx, opts, eng)` — runs against a **shared engine instance**, preserving conversation prefix for prompt-cache hits across phases.
-- `Engine.RunSourceAnalysisParallel(ctx, cfg)` — fan-out source analysis (single explore call → parallel format/extension sub-calls on the same engine).
+- `Engine.Run(ctx, opts)`: one-shot prompt execution; creates a fresh olium engine.
+- `Engine.RunOnOliumEngine(ctx, opts, eng)`: runs against a **shared engine instance**, preserving conversation prefix for prompt-cache hits across phases.
+- `Engine.RunSourceAnalysisParallel(ctx, cfg)`: fan-out source analysis (single explore call → parallel format/extension sub-calls on the same engine).
 
 A global semaphore caps in-flight provider calls; the value comes from `agent.olium.max_concurrent` (default 4).
 
@@ -91,10 +91,10 @@ A global semaphore caps in-flight provider calls; the value comes from `agent.ol
 
 Native, in-process replacement for the old subprocess pool.
 
-- **`pkg/olium/engine`** — `Engine.Run(ctx, prompt) <-chan Event` returns a stream of events: `EventTextDelta`, `EventThinkingDelta`, `EventToolCall`, `EventTurnDone` (with token usage), `EventError`. Conversation state (system prompt, tool definitions, prior turns) lives on the engine and is reused across calls when phases share an engine.
-- **`pkg/olium/tool`** — registry of built-in tools (bash, file ops, grep, fetch, …). Autopilot exposes the full set; swarm uses a smaller set per phase.
-- **`pkg/olium/skill`** — optional skill files (Markdown SKILL.md packages) that augment the system prompt; loaded from embedded assets and `~/.vigolium/skills/`.
-- **`pkg/olium/provider`** — provider dispatch (five drivers):
+- **`pkg/olium/engine`**: `Engine.Run(ctx, prompt) <-chan Event` returns a stream of events: `EventTextDelta`, `EventThinkingDelta`, `EventToolCall`, `EventTurnDone` (with token usage), `EventError`. Conversation state (system prompt, tool definitions, prior turns) lives on the engine and is reused across calls when phases share an engine.
+- **`pkg/olium/tool`**: registry of built-in tools (bash, file ops, grep, fetch, …). Autopilot exposes the full set; swarm uses a smaller set per phase.
+- **`pkg/olium/skill`**: optional skill files (Markdown SKILL.md packages) that augment the system prompt; loaded from embedded assets and `~/.vigolium/skills/`.
+- **`pkg/olium/provider`**: provider dispatch (five drivers):
 
   | Provider              | Auth source                                           |
   |-----------------------|-------------------------------------------------------|
@@ -186,9 +186,9 @@ Phase names prefixed `native-` are pure-Go (no LLM). The pipeline is gated by:
 
 - `--only` / `--skip` / `--start-from` flags (with legacy aliases via `NormalizeSwarmPhase`)
 - intensity preset (`SwarmPresets[Quick|Balanced|Deep]`)
-- `cfg.SourcePath` — empty source skips source-analysis and code-audit
+- `cfg.SourcePath`: empty source skips source-analysis and code-audit
 - `cfg.Discover`, `cfg.CodeAudit`, `cfg.Triage` toggles
-- checkpoint resume — `--resume <session-dir>` skips already-completed phases
+- checkpoint resume, `--resume <session-dir>` skips already-completed phases
 
 A parallel **vigolium-audit** subprocess can run in the background (`cfg.Archon != ""`) when source is provided, contributing source-code audit findings without blocking the swarm.
 
@@ -209,7 +209,7 @@ The extension phase compiles every JS extension through the Sobek engine. Syntax
 
 ### Triage loop
 
-After the native scan, if findings exist and triage is enabled, the triage agent receives a fixture (truncated by detail tiers — 15 full-detail / 40 table-with-top-10 / etc.) and emits:
+After the native scan, if findings exist and triage is enabled, the triage agent receives a fixture (truncated by detail tiers, 15 full-detail / 40 table-with-top-10 / etc.) and emits:
 
 ```go
 TriageResult {
@@ -225,7 +225,7 @@ If `FollowUpScans` is non-empty and rescan is enabled, the pipeline loops back t
 
 ## 4. Autopilot pipeline
 
-`vigolium agent autopilot --target ... [--source ...]` is simpler — no plan/extension phases. The agent itself decides what to run.
+`vigolium agent autopilot --target ... [--source ...]` is simpler, no plan/extension phases. The agent itself decides what to run.
 
 ```
    ┌─────────────────────────────────────────────┐
@@ -358,6 +358,6 @@ CLI flags (`--provider`, `--model`, `--oauth-cred`, `--oauth-token`, `--llm-api-
 
 - **Engine** turns a prompt template + DB context into a structured result. One LLM call.
 - **Orchestrator** sequences many engine calls plus native steps (discovery, scan), checkpoints state, and writes a session directory.
-- **Olium** is the agent runtime — it holds conversation state and dispatches to a provider. One olium engine can serve many engine calls cheaply (prompt cache hits).
+- **Olium** is the agent runtime, it holds conversation state and dispatches to a provider. One olium engine can serve many engine calls cheaply (prompt cache hits).
 - **Phases** are the unit of resumable work. `--only`, `--skip`, `--start-from`, and `--resume` operate on phase names.
 - **Intensity** is a single knob that hydrates a bundle of toggles (commands, timeout, vigolium-audit mode, discover/audit/triage flags, browser/auth).

@@ -4,9 +4,9 @@ description: "The single-loop agentic scan: one long-running olium engine drives
 icon: "plane"
 ---
 
-`vigolium agent autopilot` is the **single-loop agentic scan**: one long-running LLM session decides what to investigate, drives tools (bash, file I/O, web fetch, vigolium CLI commands), reports findings to the database as it confirms them, and halts on its own when it has nothing productive left to do.
+`vigolium agent autopilot` is the **single-loop agentic scan**, one long-running LLM session decides what to investigate, drives tools (bash, file I/O, web fetch, vigolium CLI commands), reports findings to the database as it confirms them, and halts on its own when it has nothing productive left to do.
 
-It is the simplest of the agentic-scan modes — there is no master/worker pipeline, no plan/triage phase split, just one engine running until it calls `halt_scan`.
+It is the simplest of the agentic-scan modes, there is no master/worker pipeline, no plan/triage phase split, just one engine running until it calls `halt_scan`.
 
 ---
 
@@ -128,23 +128,23 @@ vigolium agent autopilot -t https://staging.example.com \
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `-t, --target` | — | Target URL (derived from `--input` if omitted) |
-| `--input` | — | Raw input (curl, raw HTTP, Burp XML, base64, URL). Reads stdin if piped |
-| `--record-uuid` | — | Use an HTTP record from the database as the seed input |
-| `--source` | — | Path to application source code (or git URL — auto-cloned). Auto-runs vigolium-audit. |
-| `--files` | — | Specific files to include (relative to `--source`) |
-| `--focus` | — | Focus area hint (e.g. `"auth bypass"`, `"API injection"`) |
-| `--instruction` / `--instruction-file` | — | Custom instruction appended to prompt |
+| `-t, --target` |, | Target URL (derived from `--input` if omitted) |
+| `--input` |, | Raw input (curl, raw HTTP, Burp XML, base64, URL). Reads stdin if piped |
+| `--record-uuid` |, | Use an HTTP record from the database as the seed input |
+| `--source` |, | Path to application source code (or git URL, auto-cloned). Auto-runs vigolium-audit. |
+| `--files` |, | Specific files to include (relative to `--source`) |
+| `--focus` |, | Focus area hint (e.g. `"auth bypass"`, `"API injection"`) |
+| `--instruction` / `--instruction-file` |, | Custom instruction appended to prompt |
 | `--intensity` | `balanced` | Preset bundle: `quick` / `balanced` / `deep` |
 | `--vigolium-audit` | `lite` (with `--source`) | Vigolium-audit mode: `lite` / `balanced` / `deep` / `mock` / `off` |
 | `--browser` | false | Enable agent-browser for browser-based interactions |
-| `--credentials` | — | Credentials for auth preflight (e.g. `"admin/admin123"`) |
+| `--credentials` |, | Credentials for auth preflight (e.g. `"admin/admin123"`) |
 | `--auth-required` | false | Require auth/session preparation before the operator starts |
 | `--requires-browser` | false | Require browser-assisted auth instead of HTTP-only preflight |
-| `--browser-start-url` | — | Explicit browser/login start URL |
-| `--focus-routes` | — | Protected/browser-focused routes to prioritize |
-| `--diff` | — | Focus on changed code (PR URL, `main...branch`, `HEAD~N`) |
-| `--last-commits` | — | Shorthand for `--diff HEAD~N` |
+| `--browser-start-url` |, | Explicit browser/login start URL |
+| `--focus-routes` |, | Protected/browser-focused routes to prioritize |
+| `--diff` |, | Focus on changed code (PR URL, `main...branch`, `HEAD~N`) |
+| `--last-commits` |, | Shorthand for `--diff HEAD~N` |
 | `--max-commands` | 100 | Max LLM turns the agent can take |
 | `--max-duration` | 6h | Wall-clock cap |
 | `--token-budget` | 0 | Cap on cumulative input+output tokens (0 = no cap) |
@@ -152,7 +152,7 @@ vigolium agent autopilot -t https://staging.example.com \
 | `--provider` | *(config)* | Olium provider override |
 | `--model` | *(config)* | Model id override |
 | `--oauth-cred` / `--oauth-token` / `--llm-api-key` | *(config)* | Provider credential overrides |
-| `--system` | — | Extra text appended to the built-in system prompt |
+| `--system` |, | Extra text appended to the built-in system prompt |
 | `--dry-run` | false | Render prompt without launching agent |
 | `--show-prompt` | false | Print rendered prompt to stderr before executing |
 
@@ -180,7 +180,7 @@ POST /api/agent/run/autopilot
 }
 ```
 
-`EffectiveSourcePath()` accepts either `source` or the legacy `repo_path` JSON field. Provider/model overrides are CLI-only — the server resolves them once from `agent.olium.*` and reuses across requests. Returns `202 Accepted` with `{agentic_scan_uuid, status}`. Set `stream: true` for an SSE response.
+`EffectiveSourcePath()` accepts either `source` or the legacy `repo_path` JSON field. Provider/model overrides are CLI-only, the server resolves them once from `agent.olium.*` and reuses across requests. Returns `202 Accepted` with `{agentic_scan_uuid, status}`. Set `stream: true` for an SSE response.
 
 ---
 
@@ -202,7 +202,7 @@ The autopilot is **not** restricted to the vigolium CLI. The engine ships a gene
 | `halt_scan`      | Autopilot-only. Sets `HaltSignal`, engine exits naturally next turn.  |
 | `report_finding` | Autopilot-only. Writes a `Finding` row scoped to the AgenticScan UUID. |
 
-The model decides when to invoke `vigolium scan-url`, `vigolium finding`, etc. — those are **shell commands**, not first-class tools. The agent runs them via `bash` if it judges them useful.
+The model decides when to invoke `vigolium scan-url`, `vigolium finding`, etc., those are **shell commands**, not first-class tools. The agent runs them via `bash` if it judges them useful.
 
 ---
 
@@ -224,7 +224,7 @@ Supported provider IDs:
 | `openai-api-key`   | `gpt-5.5`           | `--llm-api-key` / `$OPENAI_API_KEY`                       |
 | `claude-code-cli`  | `claude-opus-4-7`   | The local `claude` binary on `$PATH`                      |
 
-Prompt caching (`EnablePromptCache: true`) is set on the engine — providers that support it (Anthropic, Claude OAuth) cache the system prompt + tool list across turns.
+Prompt caching (`EnablePromptCache: true`) is set on the engine, providers that support it (Anthropic, Claude OAuth) cache the system prompt + tool list across turns.
 
 ---
 
@@ -238,7 +238,7 @@ Prompt caching (`EnablePromptCache: true`) is set on the engine — providers th
 | `balanced` (default) | 100  | 6h        | `balanced`   | off       |
 | `deep`     | 300           | 12h       | `deep`       | on        |
 
-`MaxCommands` becomes the engine's `MaxTurns` cap (one LLM→tool cycle per turn). When the cap is hit the run ends with an error event — the model didn't get to halt cleanly.
+`MaxCommands` becomes the engine's `MaxTurns` cap (one LLM→tool cycle per turn). When the cap is hit the run ends with an error event, the model didn't get to halt cleanly.
 
 ---
 
@@ -246,10 +246,10 @@ Prompt caching (`EnablePromptCache: true`) is set on the engine — providers th
 
 The autopilot exits in one of four ways:
 
-1. **Natural halt** — model calls `halt_scan`. The current turn is allowed to finish; the engine then sees no further tool calls on the next turn and emits `EventRunDone`. `Result.Halted=true`, `HaltReason` populated.
-2. **Quiet halt** — model finishes a turn with no tool calls and no `halt_scan`. Treated as a natural stop.
-3. **Max turns** — turn count hits `MaxCommands`. Engine emits an `EventError`; autopilot returns a non-nil error.
-4. **Context cancelled** — timeout or SIGINT/SIGTERM. Engine teardown cancels in-flight tools.
+1. **Natural halt**: model calls `halt_scan`. The current turn is allowed to finish; the engine then sees no further tool calls on the next turn and emits `EventRunDone`. `Result.Halted=true`, `HaltReason` populated.
+2. **Quiet halt**: model finishes a turn with no tool calls and no `halt_scan`. Treated as a natural stop.
+3. **Max turns**: turn count hits `MaxCommands`. Engine emits an `EventError`; autopilot returns a non-nil error.
+4. **Context cancelled**: timeout or SIGINT/SIGTERM. Engine teardown cancels in-flight tools.
 
 A separate **finding rate-limit** lives inside `report_finding`:
 
@@ -262,11 +262,11 @@ A separate **finding rate-limit** lives inside `report_finding`:
 
 Every successful `report_finding` call writes a row via `repo.SaveFindingDirect`. Key fields:
 
-- `ProjectUUID`, `ScanUUID`, `AgenticScanUUID` — propagate the project/scan scope so `vigolium finding` and `vigolium agent sessions` can join back.
-- `ModuleID = "olium-autopilot"`, `ModuleType = "ai-agent"`, `FindingSource = "autopilot"` — distinguishes agent-originated findings from scanner-module findings.
-- `FindingHash` — SHA-256 over (title, severity, source_file, url, description-fingerprint), or over an explicit `dedup_key` if the model supplies one. The DB's `ON CONFLICT` handler squashes duplicates.
+- `ProjectUUID`, `ScanUUID`, `AgenticScanUUID`, propagate the project/scan scope so `vigolium finding` and `vigolium agent sessions` can join back.
+- `ModuleID = "olium-autopilot"`, `ModuleType = "ai-agent"`, `FindingSource = "autopilot"`, distinguishes agent-originated findings from scanner-module findings.
+- `FindingHash`: SHA-256 over (title, severity, source_file, url, description-fingerprint), or over an explicit `dedup_key` if the model supplies one. The DB's `ON CONFLICT` handler squashes duplicates.
 
-Because the autopilot writes findings as it confirms them, partial results survive a crash or timeout — the parent `AgenticScan` row is just updated to `status=failed` with the error message, but everything saved before that point stays in the DB.
+Because the autopilot writes findings as it confirms them, partial results survive a crash or timeout, the parent `AgenticScan` row is just updated to `status=failed` with the error message, but everything saved before that point stays in the DB.
 
 ---
 
@@ -289,9 +289,9 @@ The run UUID matches the `AgenticScan.uuid` row, so `vigolium agent sessions` an
 
 When `--source` is set, three things change:
 
-1. **Source resolution** — accepts local paths, git URLs (cloned to a temp dir), `--diff PR-url|ref...ref|HEAD~N`, and `--last-commits N`. The agent gets a local path and (optionally) a list of changed files.
-2. **Initial prompt mode hint** — the prompt switches between blackbox ("probe the live target"), whitebox ("navigate the source tree"), or a greybox blend ("read the code to find what's risky, then probe").
-3. **Skill scope** — embedded skills + `~/.vigolium/skills/` are indexed in the system prompt; scan-specific skills like `audit-auth` and `triage-finding` are loadable via `load_skill`.
+1. **Source resolution**: accepts local paths, git URLs (cloned to a temp dir), `--diff PR-url|ref...ref|HEAD~N`, and `--last-commits N`. The agent gets a local path and (optionally) a list of changed files.
+2. **Initial prompt mode hint**: the prompt switches between blackbox ("probe the live target"), whitebox ("navigate the source tree"), or a greybox blend ("read the code to find what's risky, then probe").
+3. **Skill scope**: embedded skills + `~/.vigolium/skills/` are indexed in the system prompt; scan-specific skills like `audit-auth` and `triage-finding` are loadable via `load_skill`.
 
 Vigolium-audit also runs first (foreground) when `--source` is set, freezing its findings into `archon-audit/` for the operator to consult.
 
@@ -301,7 +301,7 @@ Vigolium-audit also runs first (foreground) when `--source` is set, freezing its
 
 When the positional prompt parses to **multiple** apps (`vigolium agent autopilot "scan source at ~/src/A, ~/src/B"`), the package-level autopilot flags are snapshotted and reapplied per app, then `runAutopilotOlium` is invoked sequentially for each. Each app gets its own session dir, AgenticScan row, and provider session.
 
-A single-app prompt re-enters `runAgentAutopilot` directly with the parsed flags — same code path as a flag-driven invocation.
+A single-app prompt re-enters `runAgentAutopilot` directly with the parsed flags, same code path as a flag-driven invocation.
 
 ---
 

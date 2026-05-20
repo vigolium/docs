@@ -18,10 +18,10 @@ Vigolium supports multiple scanning modes depending on what you have available: 
 | **Balanced** | URL | `vigolium scan -t URL` | Discovery + spidering + known-issue-scan + dynamic-assessment |
 | **Deep** | URL | `vigolium scan -t URL --strategy deep` | Adds external harvesting to balanced |
 | **Extension** | URL + JS extensions | `vigolium run extension -t URL --ext script.js` | Run only custom extension modules |
-| **Agent — Query** | Source code + provider | `vigolium agent query --prompt-template security-code-review --source ./app` | One-shot AI code review |
-| **Agent — Swarm** | URL (+ optional source) | `vigolium agent swarm -t URL [--source ./app]` | AI plans modules + JS extensions, native scanner runs them |
-| **Agent — Autopilot** | URL (+ optional source) | `vigolium agent autopilot -t URL [--source ./app]` | AI drives bash/files/CLI autonomously |
-| **Agent — Vigolium Audit** | Source code | `vigolium agent vigolium-audit --source ./app --mode deep` | Multi-phase whitebox security audit |
+| **Agent, Query** | Source code + provider | `vigolium agent query --prompt-template security-code-review --source ./app` | One-shot AI code review |
+| **Agent, Swarm** | URL (+ optional source) | `vigolium agent swarm -t URL [--source ./app]` | AI plans modules + JS extensions, native scanner runs them |
+| **Agent, Autopilot** | URL (+ optional source) | `vigolium agent autopilot -t URL [--source ./app]` | AI drives bash/files/CLI autonomously |
+| **Agent, Vigolium Audit** | Source code | `vigolium agent vigolium-audit --source ./app --mode deep` | Multi-phase whitebox security audit |
 
 ## Decision Guide
 
@@ -87,7 +87,7 @@ The canonical phase names are `discovery`, `spidering`, `dynamic-assessment`, an
 
 These two flags are **mutually exclusive**. Using both produces an error.
 
-### `--only <phase>` — Run a Single Phase
+### `--only <phase>`: Run a Single Phase
 
 Disables all other phases and turns off heuristics.
 
@@ -108,7 +108,7 @@ vigolium scan -t https://example.com --only ext --ext my-scanner.js
 
 Valid values: `ingestion`, `discovery` (`deparos`/`discover`), `spidering` (`spitolas`), `external-harvest`, `known-issue-scan`, `dynamic-assessment` (`audit`/`dast`/`assessment`), `extension` (`ext`).
 
-### `--skip <phase>` — Skip Specific Phases
+### `--skip <phase>`: Skip Specific Phases
 
 Disables named phases while keeping all others enabled by the strategy.
 
@@ -135,7 +135,7 @@ vigolium run extension -t https://example.com --ext my-scanner.js
 
 ## Scanning Profiles
 
-A **scanning strategy** only toggles phases on/off. A **scanning profile** goes further — it bundles strategy, pace, scope, discovery, spidering, and module configuration into a single YAML file that overrides the main config when selected.
+A **scanning strategy** only toggles phases on/off. A **scanning profile** goes further, it bundles strategy, pace, scope, discovery, spidering, and module configuration into a single YAML file that overrides the main config when selected.
 
 ### Using a Profile
 

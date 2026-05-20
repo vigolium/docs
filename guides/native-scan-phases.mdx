@@ -12,11 +12,11 @@ Vigolium's native scan pipeline consists of multiple phases that run sequentiall
 
 When you run a standard scan, phases execute in this order:
 
-1. **External Harvest** — gather endpoints from external sources (Wayback Machine, CommonCrawl, AlienVault, urlscan, VirusTotal)
-2. **Discovery** — content discovery via wordlists and fuzzing
-3. **Spidering** — browser-based crawling to discover dynamic content
-4. **Known Issue Scan** — template-based scanning with Nuclei + Kingfisher secret detection
-5. **Dynamic-Assessment** — active and passive vulnerability scanning modules
+1. **External Harvest**: gather endpoints from external sources (Wayback Machine, CommonCrawl, AlienVault, urlscan, VirusTotal)
+2. **Discovery**: content discovery via wordlists and fuzzing
+3. **Spidering**: browser-based crawling to discover dynamic content
+4. **Known Issue Scan**: template-based scanning with Nuclei + Kingfisher secret detection
+5. **Dynamic-Assessment**: active and passive vulnerability scanning modules
 
 A full scan with all phases enabled:
 
@@ -24,7 +24,7 @@ A full scan with all phases enabled:
 vigolium scan -t https://example.com --discover --spider --external-harvest --known-issue-scan
 ```
 
-> Source-aware whitebox analysis (SAST, code audit, route extraction) lives in agent mode now — see [Agentic Scanning](/guides/agentic-scan).
+> Source-aware whitebox analysis (SAST, code audit, route extraction) lives in agent mode now, see [Agentic Scanning](/guides/agentic-scan).
 
 ## Running a Single Phase
 

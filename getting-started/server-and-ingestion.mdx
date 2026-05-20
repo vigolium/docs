@@ -435,7 +435,7 @@ See the [API Reference](/api-references/scan) for full request/response details.
 
 The agent API provides three run modes that mirror the `vigolium agent` CLI subcommands. Only one agent run can be active at a time (returns `409 Conflict` if busy).
 
-### Query — Single-Shot Agent Run
+### Query, Single-Shot Agent Run
 
 ```bash
 curl -s -X POST http://localhost:9002/api/agent/run/query \
@@ -449,7 +449,7 @@ curl -s -X POST http://localhost:9002/api/agent/run/query \
 
 At least one of `prompt_template`, `prompt_file`, or `prompt` is required. Returns `202 Accepted` on success. Set `"stream": true` for real-time SSE output. The legacy `repo_path` JSON field is still accepted as an alias for `source`.
 
-### Autopilot — Autonomous Scanning
+### Autopilot, Autonomous Scanning
 
 ```bash
 curl -s -X POST http://localhost:9002/api/agent/run/autopilot \
@@ -463,7 +463,7 @@ curl -s -X POST http://localhost:9002/api/agent/run/autopilot \
   }'
 ```
 
-### Swarm — AI-Guided Multi-Phase Scan
+### Swarm, AI-Guided Multi-Phase Scan
 
 ```bash
 curl -s -X POST http://localhost:9002/api/agent/run/swarm \
@@ -479,7 +479,7 @@ curl -s -X POST http://localhost:9002/api/agent/run/swarm \
 
 SSE events are `data:` lines with JSON payloads: `{"type":"chunk","text":"..."}` for real-time output, `{"type":"phase","phase":"..."}` for swarm phase transitions, `{"type":"done","result":{...}}` on completion, or `{"type":"error","error":"..."}` on failure.
 
-> **Provider overrides are CLI-only.** The server resolves the olium provider once from `agent.olium.*` in `vigolium-configs.yaml`. To switch providers on a server-side workload, edit the YAML and reload — there is no per-request provider field.
+> **Provider overrides are CLI-only.** The server resolves the olium provider once from `agent.olium.*` in `vigolium-configs.yaml`. To switch providers on a server-side workload, edit the YAML and reload, there is no per-request provider field.
 
 ### List All Agent Runs
 
