@@ -102,7 +102,7 @@ Available strategies and their default phases:
 
 > **Phase aliases:** `dynamic-assessment` is the canonical name for active/passive vulnerability scanning. `audit`, `dast`, and `assessment` are accepted aliases on `--only` / `--skip` flags. `discovery` accepts `deparos` / `discover`; `spidering` accepts `spitolas`; `extension` accepts `ext`.
 
-For source-aware whitebox analysis, use `vigolium agent swarm --source <path>` or `vigolium agent archon --source <path>` instead of a native scan strategy. See [Agent Mode](/agentic-scan/agent-mode).
+For source-aware whitebox analysis, use `vigolium agent swarm --source <path>` or `vigolium agent vigolium-audit --source <path>` instead of a native scan strategy. See [Agent Mode](/agentic-scan/agent-mode).
 
 ### `scanning_pace`
 
@@ -355,9 +355,9 @@ agent:
     enable: true
     binary_path: agent-browser     # default: looked up on $PATH
 
-  # Archon-audit integration
+  # Vigolium-audit integration
   archon:
-    enable: false                  # auto-enabled by --archon flag
+    enable: false                  # auto-enabled by --vigolium-audit flag
     mode: lite                     # lite | balanced | deep | mock
     platform: claude               # claude | codex | opencode
     plugin_dir: ""                 # default: ~/.vigolium/archon-audit/
@@ -474,7 +474,7 @@ oast:
 
 ### `source_aware`
 
-Storage location for cloned source repositories. Used when `--source` receives a git URL (autopilot, swarm, archon, query). Static analysis tooling (ast-grep, semgrep, etc.) has been removed — for AI-driven code audit, use `vigolium agent archon` or `vigolium agent swarm --source --code-audit`.
+Storage location for cloned source repositories. Used when `--source` receives a git URL (autopilot, swarm, vigolium-audit, query). Static analysis tooling (ast-grep, semgrep, etc.) has been removed — for AI-driven code audit, use `vigolium agent vigolium-audit` or `vigolium agent swarm --source --code-audit`.
 
 ```yaml
 source_aware:

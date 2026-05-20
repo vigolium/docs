@@ -12,7 +12,7 @@ If you only remember one thing: **native scan covers breadth, audit agent covers
 |---|---|---|---|---|
 | [Native Scan](#1-native-scan) | Maximum-speed full-coverage blackbox sweep | Black-box | No | No |
 | [Native Scan via Burp Plugin](#2-native-scan-via-burp-suite-plugin) | Precise scan against one request/URL with every parameter | Black-box | No | No |
-| [Audit Agent](#3-audit-agent-archon--piolium) | Thorough whitebox source-code audit | White-box | **Yes** | Frontier LLM (Claude / Codex / Pi) |
+| [Audit Agent](#3-audit-agent-vigolium-audit--piolium) | Thorough whitebox source-code audit | White-box | **Yes** | Frontier LLM (Claude / Codex / Pi) |
 | [Autopilot Agent](#4-autopilot-agent) | Hands-off black-box scan with a real browser + JIT extensions | Black-box (optionally source-aware) | Optional | Yes |
 | [Swarm Agent](#5-swarm-agent) | Generate tailored payloads against a single request | Black-box | No | Yes |
 
@@ -68,16 +68,16 @@ The plugin is a thin wrapper around `scan-url` / `scan-request` — see [Native 
 
 ---
 
-## 3. Audit Agent (Archon + Piolium)
+## 3. Audit Agent (Vigolium Audit + Piolium)
 
 A whitebox source-code audit driven by frontier LLMs. Vigolium ships two drivers:
 
-- **[Archon Audit](https://www.npmjs.com/package/@vigolium/archon-audit)** — embedded driver that runs through the `claude` CLI (Claude / Codex). Up to 11 phases at `deep`. No extra install.
+- **[Vigolium Audit](https://www.npmjs.com/package/@vigolium/vigolium-audit)** — embedded driver that runs through the `claude` CLI (Claude / Codex). Up to 11 phases at `deep`. No extra install.
 - **[Piolium](https://www.npmjs.com/package/@vigolium/piolium)** — Pi-coding-agent extension. Up to 17 phases at `deep`. Requires the `pi` runtime + `pi install piolium`. Supports any provider Pi supports, including **local models**.
 
 ```bash
-# Archon, single-shot audit
-vigolium agent archon --source ~/src/your-app --mode deep
+# Vigolium-audit, single-shot audit
+vigolium agent vigolium-audit --source ~/src/your-app --mode deep
 
 # Piolium, the most thorough audit available
 vigolium agent piolium --source ~/src/your-app --mode deep
@@ -96,7 +96,7 @@ vigolium agent audit --driver both --source ~/src/your-app
   The audit agent only delivers its best results on frontier models (Claude Opus, GPT-5.x, etc.). The Piolium path is the only way to drive an audit against a local model, via Pi's own provider config.
 </Callout>
 
-See [Setting Up the Agent](/getting-started/setup-agent), [Archon Audit](/agentic-scan/archon-audit), [Piolium Audit](/agentic-scan/piolium-audit).
+See [Setting Up the Agent](/getting-started/setup-agent) and [Agentic Security Audit](/getting-started/agentic-security-audit).
 
 ---
 
@@ -113,8 +113,8 @@ vigolium agent autopilot -t https://example.com --intensity balanced
 # Source-aware — pairs blackbox runtime checks with whitebox code reading
 vigolium agent autopilot -t https://example.com --source ~/src/your-app
 
-# Throw archon into the mix in the background
-vigolium agent autopilot -t https://example.com --source ~/src/your-app --archon=balanced
+# Throw vigolium-audit into the mix in the background
+vigolium agent autopilot -t https://example.com --source ~/src/your-app --vigolium-audit=balanced
 ```
 
 **When to pick it**
@@ -160,9 +160,9 @@ See [Swarm](/agentic-scan/swarm).
 |---|---|---|---|
 | **Native Scan** | `dynamic-assessment` only — no discovery, no spidering, no known-issue scan. Best for stateless / CI gates. | Full pipeline: discovery + spidering + known-issue + dynamic-assessment. Sensible defaults for everything. | Adds external harvest, recursive discovery, extra modules, longer per-phase durations. The full hammer. |
 | **Native via Burp** | One-shot `scan-url` / `scan-request`, active modules only. | Active + passive, all insertion points. | Active + passive + heavy mutation strategy and longer timeouts. |
-| **Archon Audit** | **3 phases** — recon, triage, quick scan. CI-friendly. | **6 phases** — adds deep-dive, exploit-design, validation. | **11 phases** — full audit including secondary review and cross-file analysis. |
+| **Vigolium Audit** | **3 phases** — recon, triage, quick scan. CI-friendly. | **6 phases** — adds deep-dive, exploit-design, validation. | **11 phases** — full audit including secondary review and cross-file analysis. |
 | **Piolium Audit** | **4 phases** — quick triage. | **9 phases** — standard audit. | **17 phases** — exhaustive: recon, primary, longshot, revisit, confirm, merge, diff. |
-| **Autopilot** | Short max-duration cap, conservative module budget, fewer turns. Smoke-test territory. | Default turn / duration budget. Real-browser pilot mode on. | Larger turn budget, JS-extension generation enabled, runs archon in the background if `--source` is provided. |
+| **Autopilot** | Short max-duration cap, conservative module budget, fewer turns. Smoke-test territory. | Default turn / duration budget. Real-browser pilot mode on. | Larger turn budget, JS-extension generation enabled, runs vigolium-audit in the background if `--source` is provided. |
 | **Swarm** | Single-pass payload generation, no discover, no triage. | Generates + triages payloads; one feedback round. | Full multi-round generate / triage / refine across every insertion point. |
 
 ### Rule of thumb
@@ -189,7 +189,7 @@ vigolium scan -t https://example.com --strategy deep --profile aggressive
 
 - **"I just want to scan a URL right now."** → [Native Scan](#1-native-scan), `vigolium scan-url`.
 - **"I have a Burp request in my hand."** → [Native via Burp Plugin](#2-native-scan-via-burp-suite-plugin) or `vigolium scan-request`.
-- **"I have the source code and time to spare."** → [Audit Agent](#3-audit-agent-archon--piolium).
+- **"I have the source code and time to spare."** → [Audit Agent](#3-audit-agent-vigolium-audit--piolium).
 - **"I want the scanner to drive itself overnight."** → [Autopilot Agent](#4-autopilot-agent).
 - **"I want LLM-crafted payloads against this one endpoint."** → [Swarm Agent](#5-swarm-agent).
 

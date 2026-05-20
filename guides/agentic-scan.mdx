@@ -1,6 +1,6 @@
 ---
 title: "Agentic Scanning"
-description: "Use AI-driven scanning modes — Query, Swarm, Autopilot, and Archon — to autonomously discover, audit, and verify vulnerabilities."
+description: "Use AI-driven scanning modes — Query, Swarm, Autopilot, and Vigolium Audit — to autonomously discover, audit, and verify vulnerabilities."
 icon: "brain"
 ---
 
@@ -11,7 +11,7 @@ Vigolium's agent mode uses AI to drive vulnerability scanning. Five subcommands 
 - **Query** — single-shot prompt; code review, endpoint discovery, secret hunt.
 - **Swarm** — AI-guided multi-phase scan that drives the native scanner (plan → modules → triage).
 - **Autopilot** — autonomous AI pentest; the agent drives bash, files, and the vigolium CLI itself.
-- **Archon** — multi-phase whitebox security audit (lite / balanced / deep).
+- **Vigolium Audit** — multi-phase whitebox security audit (lite / balanced / deep).
 - **Olium** — interactive TUI / one-shot prompt; the underlying agent runtime, also used by every mode above.
 
 All AI dispatch goes through the in-process **olium** engine. Configure the provider once in `agent.olium.*`; per-run flags can override.
@@ -179,7 +179,7 @@ vigolium agent autopilot -t https://example.com
 
 ### With Source Code
 
-When `--source` is provided, archon-audit runs first (foreground), prepares a frozen whitebox context bundle, and the autonomous operator launches against that context.
+When `--source` is provided, vigolium-audit runs first (foreground), prepares a frozen whitebox context bundle, and the autonomous operator launches against that context.
 
 ```bash
 vigolium agent autopilot -t https://example.com --source ./app
@@ -197,7 +197,7 @@ vigolium agent autopilot -t https://example.com --source ./app --last-commits 5
 
 ### Intensity Presets
 
-| Preset | Max commands | Timeout | Archon mode | Browser |
+| Preset | Max commands | Timeout | Vigolium-audit mode | Browser |
 |--------|--------------|---------|-------------|---------|
 | `quick` | 30 | 1h | `lite` | off |
 | `balanced` (default) | 100 | 6h | `balanced` | off |
@@ -222,19 +222,19 @@ vigolium agent autopilot -t https://example.com \
   --intensity quick --token-budget 200000 --max-duration 30m
 ```
 
-## Archon: Source Audit
+## Vigolium-Audit: Source Audit
 
-Archon-audit is the dedicated whitebox audit mode. It runs as a foreground command on its own, or as a background prep step when swarm/autopilot are invoked with `--source`.
+Vigolium-audit is the dedicated whitebox audit mode. It runs as a foreground command on its own, or as a background prep step when swarm/autopilot are invoked with `--source`.
 
 ```bash
 # Standalone — multi-phase audit
-vigolium agent archon --source ./app --mode deep
+vigolium agent vigolium-audit --source ./app --mode deep
 
 # Lite mode (CI-friendly, 3 phases)
-vigolium agent archon --source ./app --mode lite
+vigolium agent vigolium-audit --source ./app --mode lite
 
 # Use a different agent CLI
-vigolium agent archon --source ./app --mode balanced --agent codex
+vigolium agent vigolium-audit --source ./app --mode balanced --agent codex
 ```
 
 Findings ingest into the same database as the rest of vigolium with `finding_source: archon`. Query them with:
@@ -243,7 +243,7 @@ Findings ingest into the same database as the rest of vigolium with `finding_sou
 vigolium finding list --source archon
 ```
 
-See [Archon Audit](/agentic-scan/archon-audit) for the full guide.
+See [Agentic Security Audit](/getting-started/agentic-security-audit) for the full guide.
 
 ## Session Management
 
@@ -304,5 +304,5 @@ vigolium agent swarm --show-prompt \
 | **Query** | 1 | Code review, endpoint discovery, CI checks |
 | **Swarm** | 2-4+ | Targeted request scanning, focused testing, full-scope with `--discover` |
 | **Autopilot** | Many | Deep autonomous assessment, exploratory pentest |
-| **Archon** | Multi-phase | Whitebox source-code audit (standalone or alongside swarm/autopilot) |
+| **Vigolium Audit** | Multi-phase | Whitebox source-code audit (standalone or alongside swarm/autopilot) |
 | **Olium** | Variable | Interactive chat, debugging, ad-hoc prompts |

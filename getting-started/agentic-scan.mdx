@@ -1,0 +1,168 @@
+---
+title: "Agentic Scanning"
+description: "Drive vulnerability scanning with AI — autopilot (autonomous operator), swarm (AI-guided pipeline), or query (single-shot prompts). All dispatched through the in-process olium runtime."
+icon: "robot"
+---
+
+Vigolium's agent mode runs vulnerability scans with an LLM in the loop. Three subcommands cover the spectrum from single-shot prompts to fully autonomous pentests:
+
+- **`vigolium agent query`** — one-shot prompt against code or a target. Code review, endpoint discovery, secret hunt. No scanning loop.
+- **`vigolium agent swarm`** — multi-phase pipeline where native Go does the heavy lifting and AI intervenes at checkpoints (planning attacks, triaging results, generating custom JS extensions).
+- **`vigolium agent autopilot`** — one long-running LLM session with full tool access. The agent decides what to scan, runs scans, inspects results, and iterates until it halts.
+
+All three dispatch through the in-process **olium** runtime — one unified provider interface, one conversation state. There are no subprocess SDK backends.
+
+<Callout icon="message" color="#FFC107" iconType="regular">Autopilot and Swarm are still maturing. We greatly appreciate feedback on false positives and bug reports.</Callout>
+
+---
+
+## Prerequisites
+
+- A working olium provider (Claude / OpenAI / Codex / local). See [Setting Up the Agent](/getting-started/setup-agent).
+- Optional: a source-code path or git URL for source-aware scanning (`--source`).
+
+Smoke-test the provider before launching a real scan:
+
+```bash
+vigolium ol -p 'what model are you running'
+```
+
+If that returns a model name, you're wired up.
+
+---
+
+## Autopilot — autonomous AI pentest
+
+Hand the agent a target and walk away. It opens a shell, reads files, runs the vigolium CLI, decides which modules to invoke, and iterates until it calls `halt_scan` or hits the max-turns / max-duration cap.
+
+```bash
+# Pure black-box
+vigolium agent autopilot -t https://example.com
+
+# Natural-language prompt — target, source, focus auto-extracted
+vigolium agent autopilot "scan VAmPI source at ~/src/VAmPI on localhost:3005"
+
+# Source-aware — pairs blackbox runtime checks with whitebox code reading
+vigolium agent autopilot -t https://example.com --source ~/src/your-app
+
+# Focus on a vulnerability class
+vigolium agent autopilot -t https://example.com --focus "auth bypass and IDOR"
+
+# Browser-assisted auth
+vigolium agent autopilot -t https://app.example.com --intensity deep \
+  --browser --credentials "admin/admin123"
+
+# Pipe a curl command in
+curl -s https://example.com/api/users | vigolium agent autopilot
+```
+
+### Intensity presets
+
+| Preset | Max commands | Timeout | Vigolium-audit mode (with `--source`) | Browser |
+|--------|:------------:|:-------:|:------------------------------------:|:-------:|
+| `quick` | 30 | 1h | `lite` | off |
+| `balanced` (default) | 100 | 6h | `balanced` | off |
+| `deep` | 300 | 12h | `deep` | on |
+
+```bash
+vigolium agent autopilot -t https://example.com --intensity deep
+```
+
+Reach for autopilot when the target is fuzzy, JS-heavy, auth-walled, or you want creative / exploratory testing. See [Autopilot](/agentic-scan/autopilot) for the full flag reference.
+
+---
+
+## Swarm — AI-guided multi-phase scan
+
+The agent **directs** the native scanner instead of becoming it. A state-machine pipeline runs: normalize → auth → source-analysis → code-audit → discover → plan (AI) → extension → native scan → triage (AI) → optional rescan loop.
+
+```bash
+# Swarm against a single URL
+vigolium agent swarm -i "https://example.com/api/users?id=1"
+
+# Against a raw HTTP request file, with triage
+vigolium agent swarm -i ./request.txt --triage
+
+# Full-scope sweep with discovery + triage
+vigolium agent swarm -i https://example.com --discover --triage
+
+# Source-aware: AI extracts routes, plans modules, generates JS extensions
+vigolium agent swarm -t https://example.com --source ./backend --code-audit
+
+# Target a specific vulnerability class
+vigolium agent swarm -t https://example.com --vuln-type sqli --focus "auth bypass"
+```
+
+Reach for swarm when you have a known-good request, want bespoke fuzzing tailored to it, or need a verification loop on findings.
+
+See [Swarm](/agentic-scan/swarm) for the full pipeline reference.
+
+---
+
+## Source-aware scanning (`--source`)
+
+Both `autopilot` and `swarm` accept `--source <path|git-url|archive>`. When set, **vigolium-audit runs first** (foreground), prepares a frozen whitebox context bundle, then the autonomous scan launches against that context.
+
+```bash
+# Autopilot with auto-audit (lite mode, default)
+vigolium agent autopilot -t https://example.com --source ~/src/your-app
+
+# Override the audit depth
+vigolium agent autopilot -t https://example.com --source ~/src/your-app --vigolium-audit=deep
+
+# Disable the audit prep
+vigolium agent autopilot -t https://example.com --source ~/src/your-app --vigolium-audit=off
+
+# Focus on a PR's changed code
+vigolium agent autopilot -t https://example.com --source ./app \
+  --diff https://github.com/org/app/pull/42
+
+# Last N commits
+vigolium agent autopilot -t https://example.com --source ./app --last-commits 5
+```
+
+`--source` accepts local paths, git URLs (cloned with `--depth 1` by default), or archive files. For a standalone source audit without a scan, see [Agentic Security Audit](/getting-started/agentic-security-audit).
+
+---
+
+## Picking between autopilot and swarm
+
+| You want... | Pick |
+|---|---|
+| Hands-off black-box scanning with a real browser + custom extensions | **autopilot** |
+| Structured, repeatable results with optional verification loops | **swarm** |
+| AI-crafted payloads against one specific request | **swarm** (single-input) |
+| Creative pentest-style exploration | **autopilot** |
+| CI/PR gate (fast, deterministic) | **swarm --intensity quick** |
+| Overnight deep assessment | **autopilot --intensity deep** |
+
+If you have **both** source code and a target URL, both work. `swarm --source --target ... --code-audit --triage` gives the most structured output; `autopilot --source ...` gives the agent more freedom.
+
+---
+
+## Sessions and findings
+
+Every agent run writes a session directory under `~/.vigolium/agent-sessions/<run-uuid>/` with the checkpoint, plan, rendered prompts, captured output, and any generated extensions. Browse past runs with:
+
+```bash
+vigolium agent session              # list recent
+vigolium agent session --tail       # live-tail the active run
+vigolium agent session --full <id>  # full detail
+```
+
+Findings ingest into the same `findings` table as native scans, tagged by source (`autopilot`, `swarm`, `archon`, `piolium`). Query them with:
+
+```bash
+vigolium finding list --source autopilot
+vigolium finding list --source swarm
+```
+
+---
+
+## Next steps
+
+- [Autopilot](/agentic-scan/autopilot) — autonomous operator: full flag reference, intensity presets, halt conditions.
+- [Swarm](/agentic-scan/swarm) — multi-phase pipeline: phases, extension generation, triage loop.
+- [Agent Mode](/agentic-scan/agent-mode) — the full reference for every `vigolium agent` subcommand.
+- [Agentic Security Audit](/getting-started/agentic-security-audit) — whitebox source-code audit (vigolium-audit + piolium).
+- [Setting Up the Agent](/getting-started/setup-agent) — provider/credential setup.

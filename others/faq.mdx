@@ -82,16 +82,16 @@ Answers to the questions that come up most often. For a system-level picture, st
 
     Note: OpenAI-style function tools are supported by the wire format but not by every model. Models that work well locally: `qwen2.5-coder`, `llama3.1` instruct, `mistral-nemo`. If the agent never calls tools, it's likely a model that silently ignores tool definitions — switch to a tool-trained model.
   </Accordion>
-  <Accordion title="What's the difference between query, autopilot, swarm, and archon?">
+  <Accordion title="What's the difference between query, autopilot, swarm, and vigolium-audit?">
     - **Query** — single-shot prompt; no network scanning. Good for code review, endpoint discovery, secret detection.
     - **Autopilot** — one long-running LLM session with full tool access that decides what to scan and iterates until it halts.
     - **Swarm** — a multi-phase pipeline where native Go does the heavy lifting and AI intervenes at checkpoints (planning, triage, custom extension generation).
-    - **Archon** — a foreground multi-phase AI source-code audit.
+    - **Vigolium Audit** — a foreground multi-phase AI source-code audit.
 
     All scan-oriented modes support `--source` for source-aware analysis. See [Agent Mode](/agentic-scan/agent-mode).
   </Accordion>
   <Accordion title="Where do agent sessions get stored?">
-    Every swarm and autopilot run writes a session directory under `agent.sessions_dir` (default `~/.vigolium/agent-sessions/<run-uuid>/`), containing the checkpoint, serialized plan, session config, compiled extensions, archon-audit output, rendered prompts, and the agent transcript.
+    Every swarm and autopilot run writes a session directory under `agent.sessions_dir` (default `~/.vigolium/agent-sessions/<run-uuid>/`), containing the checkpoint, serialized plan, session config, compiled extensions, vigolium-audit output, rendered prompts, and the agent transcript.
   </Accordion>
 </AccordionGroup>
 

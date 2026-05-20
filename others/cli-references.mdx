@@ -221,9 +221,9 @@ vigolium agent autopilot "test auth bypass on https://app.example.com"
 # Plain target
 vigolium agent autopilot -t https://example.com/api
 
-# Source-aware (auto-runs archon-audit first to build context)
+# Source-aware (auto-runs vigolium-audit first to build context)
 vigolium agent autopilot -t https://example.com --source ./src
-vigolium agent autopilot -t https://example.com --source ./src --archon=off   # disable archon
+vigolium agent autopilot -t https://example.com --source ./src --vigolium-audit=off   # disable vigolium-audit
 
 # Pipe a curl command or raw HTTP request via stdin
 curl -s https://example.com/api/users | vigolium agent autopilot
@@ -260,17 +260,17 @@ vigolium agent autopilot -t https://example.com --source ./src --dry-run
 vigolium agent autopilot -t https://example.com --source ./src --show-prompt
 ```
 
-### `agent audit` — unified source audit (archon + piolium)
+### `agent audit` — unified source audit (vigolium-audit + piolium)
 
-Runs archon and/or piolium back-to-back against a single source tree under one AgenticScan, with per-driver session subdirs and a post-pass findings dedup.
+Runs vigolium-audit and/or piolium back-to-back against a single source tree under one AgenticScan, with per-driver session subdirs and a post-pass findings dedup.
 
 ```bash
-# Default: archon then piolium under one AgenticScan, balanced mode
+# Default: vigolium-audit then piolium under one AgenticScan, balanced mode
 vigolium agent audit --source .
 
-# Single driver (equivalent to agent piolium / agent archon)
+# Single driver (equivalent to agent piolium / agent vigolium-audit)
 vigolium agent audit --driver piolium --source ./backend --mode lite
-vigolium agent audit --driver archon  --source ./backend --agent claude
+vigolium agent audit --driver vigolium-audit  --source ./backend --agent claude
 
 # Both drivers, deep intensity, against a remote git URL
 vigolium agent audit --source git@github.com:org/repo.git --intensity deep
@@ -280,10 +280,10 @@ vigolium agent audit --source https://github.com/org/repo.git --commit-depth 0  
 vigolium agent audit --source ./backend \
   --pi-provider vertex-anthropic --pi-model claude-opus-4-6
 
-# Driver-specific modes (piolium=longshot/smoke, archon=mock)
+# Driver-specific modes (piolium=longshot/smoke, vigolium-audit=mock)
 vigolium agent audit --driver piolium --source ./mono-repo --mode longshot \
   --plm-longshot-langs python,go --plm-longshot-limit 200
-vigolium agent audit --driver archon --source ./backend --mode mock
+vigolium agent audit --driver vigolium-audit --source ./backend --mode mock
 
 # Cap commit-history scan window
 vigolium agent audit --driver piolium --source ./backend --plm-scan-since "60 days ago"

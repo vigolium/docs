@@ -83,7 +83,7 @@ curl -s -X POST http://localhost:9002/api/agent/run/query \
 
 ## POST /api/agent/run/autopilot — Autonomous Scanning Session
 
-Launches an AI agent that autonomously discovers, scans, and triages vulnerabilities using vigolium CLI commands. When `source` is provided, archon-audit runs first, native context and planning artifacts are prepared, and then the autonomous operator session starts.
+Launches an AI agent that autonomously discovers, scans, and triages vulnerabilities using vigolium CLI commands. When `source` is provided, vigolium-audit runs first, native context and planning artifacts are prepared, and then the autonomous operator session starts.
 
 **Request body:**
 
@@ -113,8 +113,8 @@ Launches an AI agent that autonomously discovers, scans, and triages vulnerabili
 | `stream`           | bool     | No       | If `true`, returns an SSE stream                               |
 | `scan_uuid`        | string   | No       | Link results to a specific scan UUID                           |
 | `project_uuid`     | string   | No       | Scope results to a project (falls back to `X-Project-UUID` header) |
-| `archon_mode`      | string   | No       | Archon audit mode: `"lite"` (default, 3-phase), `"balanced"` (6-phase), `"deep"` (10-phase), `"mock"` |
-| `no_archon`        | bool     | No       | Disable automatic archon-audit (enabled by default when `source` is set) |
+| `archon_mode`      | string   | No       | Vigolium-audit mode: `"lite"` (default, 3-phase), `"balanced"` (6-phase), `"deep"` (10-phase), `"mock"` |
+| `no_archon`        | bool     | No       | Disable automatic vigolium-audit (enabled by default when `source` is set) |
 | `archon`           | string   | No       | **DEPRECATED** — use `no_archon` + `archon_mode` instead. Legacy values: `"lite"`, `"balanced"`, `"deep"`, `"off"` |
 | `upload_results`   | bool     | No       | Upload session bundle to cloud storage on completion (requires `storage` config) |
 
@@ -236,7 +236,7 @@ AI agents are called at phases 3, 4, 6, and 9. When inputs exceed `master_batch_
 | `triage`               | bool     | No       | Enable AI triage and rescan phases                                     |
 | `force_extensions`     | bool     | No       | Force extension agent to run even when the master returned no extensions |
 | `profile`              | string   | No       | Scanning profile name (e.g. `"light"`, `"thorough"`)                  |
-| `archon`               | string   | No       | Background archon-audit: `"lite"`, `"balanced"`, `"deep"`, `"mock"`, `"off"`. Requires `source`. |
+| `archon`               | string   | No       | Background vigolium-audit: `"lite"`, `"balanced"`, `"deep"`, `"mock"`, `"off"`. Requires `source`. |
 
 **Concurrency tuning:**
 
@@ -294,7 +294,7 @@ curl -s -X POST http://localhost:9002/api/agent/run/swarm \
     "profile": "thorough"
   }' | jq .
 
-# Source-aware with background archon-audit
+# Source-aware with background vigolium-audit
 curl -s -X POST http://localhost:9002/api/agent/run/swarm \
   -H "Content-Type: application/json" \
   -d '{
@@ -341,7 +341,7 @@ curl -N -X POST http://localhost:9002/api/agent/run/swarm \
 
 The autopilot and swarm endpoints accept a `prompt` field for natural language scan requests. When `prompt` is provided and no explicit input fields are set (`target`, `input`, `source`), the prompt is parsed by an AI intent extractor that returns structured parameters.
 
-The intent extractor recognizes: target URLs, source code paths, vulnerability focus areas, custom instructions, discovery mode, code audit mode, and archon audit level.
+The intent extractor recognizes: target URLs, source code paths, vulnerability focus areas, custom instructions, discovery mode, code audit mode, and vigolium-audit level.
 
 | Intent Field   | Maps To (Autopilot) | Maps To (Swarm)  | Description                                           |
 |----------------|----------------------|-------------------|-------------------------------------------------------|
@@ -519,7 +519,7 @@ curl -N -H 'Accept: text/event-stream' \
 
 ## GET /api/agent/sessions/:id/artifacts — List Session Artifacts
 
-Returns a recursive list of files inside the session directory, capped at 500 entries. Useful for browsing generated extensions, archon output, plan/checkpoint files.
+Returns a recursive list of files inside the session directory, capped at 500 entries. Useful for browsing generated extensions, vigolium-audit output, plan/checkpoint files.
 
 ```bash
 curl -s http://localhost:9002/api/agent/sessions/agt-550e8400-.../artifacts | jq .

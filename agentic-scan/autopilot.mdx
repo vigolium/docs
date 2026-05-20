@@ -82,7 +82,7 @@ The autopilot is exactly that, except the analyst is an LLM and the notebook is 
 # Basic autonomous scan
 vigolium agent autopilot -t https://example.com
 
-# With source code (auto-runs archon-audit first)
+# With source code (auto-runs vigolium-audit first)
 vigolium agent autopilot -t http://localhost:3000 --source ~/projects/my-app
 
 # Tighter scope with intensity preset
@@ -131,12 +131,12 @@ vigolium agent autopilot -t https://staging.example.com \
 | `-t, --target` | — | Target URL (derived from `--input` if omitted) |
 | `--input` | — | Raw input (curl, raw HTTP, Burp XML, base64, URL). Reads stdin if piped |
 | `--record-uuid` | — | Use an HTTP record from the database as the seed input |
-| `--source` | — | Path to application source code (or git URL — auto-cloned). Auto-runs archon. |
+| `--source` | — | Path to application source code (or git URL — auto-cloned). Auto-runs vigolium-audit. |
 | `--files` | — | Specific files to include (relative to `--source`) |
 | `--focus` | — | Focus area hint (e.g. `"auth bypass"`, `"API injection"`) |
 | `--instruction` / `--instruction-file` | — | Custom instruction appended to prompt |
 | `--intensity` | `balanced` | Preset bundle: `quick` / `balanced` / `deep` |
-| `--archon` | `lite` (with `--source`) | Archon mode: `lite` / `balanced` / `deep` / `mock` / `off` |
+| `--vigolium-audit` | `lite` (with `--source`) | Vigolium-audit mode: `lite` / `balanced` / `deep` / `mock` / `off` |
 | `--browser` | false | Enable agent-browser for browser-based interactions |
 | `--credentials` | — | Credentials for auth preflight (e.g. `"admin/admin123"`) |
 | `--auth-required` | false | Require auth/session preparation before the operator starts |
@@ -232,7 +232,7 @@ Prompt caching (`EnablePromptCache: true`) is set on the engine — providers th
 
 `--intensity` bundles several settings; explicit flags always override.
 
-| Preset     | `MaxCommands` | `Timeout` | `ArchonMode` | `Browser` |
+| Preset     | `MaxCommands` | `Timeout` | `Vigolium-audit mode` | `Browser` |
 | ---------- | ------------- | --------- | ------------ | --------- |
 | `quick`    | 30            | 1h        | `lite`       | off       |
 | `balanced` (default) | 100  | 6h        | `balanced`   | off       |
@@ -278,7 +278,7 @@ For each run, autopilot creates a UUID-named directory under `agent.sessions_dir
 ~/.vigolium/agent-sessions/{run-uuid}/
   ├── run.pid       # pgid + start time; cleared on exit
   ├── runtime.log   # tee of stdout (assistant text stream)
-  └── archon-audit/ # archon subprocess output (when --source is provided)
+  └── archon-audit/ # vigolium-audit subprocess output (when --source is provided)
 ```
 
 The run UUID matches the `AgenticScan.uuid` row, so `vigolium agent sessions` and `vigolium log <uuid>` both work without extra plumbing. Stale dirs older than 48h are swept on startup; orphan PID files (from SIGKILL'd runs) are cleared via `agent.CleanupOrphanedProcesses`.
@@ -293,7 +293,7 @@ When `--source` is set, three things change:
 2. **Initial prompt mode hint** — the prompt switches between blackbox ("probe the live target"), whitebox ("navigate the source tree"), or a greybox blend ("read the code to find what's risky, then probe").
 3. **Skill scope** — embedded skills + `~/.vigolium/skills/` are indexed in the system prompt; scan-specific skills like `audit-auth` and `triage-finding` are loadable via `load_skill`.
 
-Archon-audit also runs first (foreground) when `--source` is set, freezing its findings into `archon-audit/` for the operator to consult.
+Vigolium-audit also runs first (foreground) when `--source` is set, freezing its findings into `archon-audit/` for the operator to consult.
 
 ---
 

@@ -15,8 +15,8 @@
     }
   },
   "logo": {
-    "light": "/images/logo/vigolium-royal-purple.png",
-    "dark": "/images/logo/vigolium-logo-blueprint.png",
+    "light": "/images/logo/vigolium-logo-deep-emerald.png",
+    "dark": "/images/logo/vigolium-logo-deep-emerald.png",
     "href": "/",
     "name": "Vigolium Docs"
   },
@@ -35,6 +35,8 @@
               "getting-started/choosing-a-mode",
               "getting-started/native-scan",
               "getting-started/setup-agent",
+              "getting-started/agentic-scan",
+              "getting-started/agentic-security-audit",
               "getting-started/configuration",
               "getting-started/output-and-reporting"
             ]
@@ -59,8 +61,6 @@
               "agentic-scan/agent-mode",
               "agentic-scan/autopilot",
               "agentic-scan/swarm",
-              "agentic-scan/archon-audit",
-              "agentic-scan/piolium-audit",
               "agentic-scan/olium",
               "agentic-scan/using-vigolium-in-your-agent"
             ]

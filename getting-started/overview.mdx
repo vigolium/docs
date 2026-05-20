@@ -38,7 +38,7 @@ Agentic scanning uses AI agents to drive or augment the scanning process. Invoke
 | **Query** | `vigolium agent query` | Single-shot prompt execution. Good for code review, endpoint discovery, secret detection. No network scanning. |
 | **Autopilot** | `vigolium agent autopilot` | Autonomous AI-driven pentest. The olium engine drives bash, file ops, and the vigolium CLI until it calls `halt_scan`. |
 | **Swarm** | `vigolium agent swarm` | 10-phase pipeline where native Go handles heavy lifting and AI intervenes at checkpoints — planning attacks, triaging results, generating custom JS scanner extensions. |
-| **Archon** | `vigolium agent archon` | Multi-phase whitebox security audit (lite / balanced / deep). Embedded driver — no extra install. Runs as a foreground audit or in the background alongside swarm/autopilot. |
+| **Vigolium Audit** | `vigolium agent vigolium-audit` | Multi-phase whitebox security audit (lite / balanced / deep). Embedded driver — no extra install. Runs as a foreground audit or in the background alongside swarm/autopilot. |
 | **Piolium** | `vigolium agent piolium` | Pi-native whitebox audit driver — up to 17 phases at `deep`. Requires the `pi` runtime and the `piolium` extension installed separately. |
 | **Olium** | `vigolium olium` / `vigolium ol` | Interactive TUI chat or one-shot non-interactive prompt — the underlying agent runtime. |
 
@@ -75,7 +75,7 @@ The CLI is the heart of Vigolium, powering all scanning operations with two comp
 - **Browser-based spider** — Chromium-driven crawler with SPA support, form filling, and JS analysis
 - **Multi-session authentication** — inline sessions, session files, or full auth configs with login flows and token extraction
 - **JavaScript extensions** — custom modules and hooks via embedded JS engine
-- **Source-aware agentic scan** — pair `--source` with `swarm`, `autopilot`, or `archon` for code-context-aware AI scanning and audit
+- **Source-aware agentic scan** — pair `--source` with `swarm`, `autopilot`, or `vigolium-audit` for code-context-aware AI scanning and audit
 - **Concurrent architecture** — configurable worker pool with per-host rate limiting and hybrid queue
 - **HTML reports** — self-contained HTML reports with sortable/filterable tables
 - **API server mode** — REST API with Swagger UI, multi-format ingestion, transparent HTTP proxy
@@ -119,10 +119,10 @@ A self-hosted web dashboard that provides a visual interface for managing and an
 
 ## <Icon icon="cloud" /> Vigolium Cloud Console
 
-A cloud-based solution for teams that want the power of Vigolium without managing infrastructure. Console provides managed scanning, centralized reporting, and team collaboration out of the box — so you can focus on fixing vulnerabilities instead of maintaining tooling.
+A cloud-based solution for teams that want the power of Vigolium without managing infrastructure. Console is the **upgraded, fully-featured version of Vigolium** — managed scanning, centralized reporting, team collaboration, and extra features layered on top of the open-source core, so you can focus on fixing vulnerabilities instead of maintaining tooling.
 
 <Callout icon="rocket" color="#FFC107" iconType="regular">
-  Interested in Vigolium Console? [Request a Demo](https://www.vigolium.com/request-demo) to see it in action.
+  Check out the Cloud Console at [console.vigolium.com](https://console.vigolium.com/).
 </Callout>
 
 
@@ -163,7 +163,7 @@ A cloud-based solution for teams that want the power of Vigolium without managin
 | Try agentic scanning | [Agent Mode](/agentic-scan/agent-mode) |
 | Let AI drive scans autonomously | [Autopilot](/agentic-scan/autopilot) |
 | Run multi-phase AI + native pipelines | [Swarm](/agentic-scan/swarm) |
-| Audit source code in depth | [Archon Audit](/agentic-scan/archon-audit) — or [Piolium Audit](/agentic-scan/piolium-audit) |
+| Audit source code in depth | [Agentic Security Audit](/getting-started/agentic-security-audit) |
 | Chat with the agent runtime | [Olium](/agentic-scan/olium) |
 | Run Vigolium as an API server | [Server Mode](/server-mode/running-the-server) |
 | Tweak scan settings | [Configuration](/getting-started/configuration) |

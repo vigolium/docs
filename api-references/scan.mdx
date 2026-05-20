@@ -151,7 +151,7 @@ Returns `202 Accepted` on success, `200 OK` for dry runs, or `409 Conflict` if a
 | `headers`              | map[string]string | No       | Custom HTTP headers included in all requests                                |
 | `scanning_profile`     | string            | No       | Scanning profile name or path                                               |
 
-> Source-aware whitebox analysis lives in agent mode. Use `POST /api/agent/run/swarm` with a `source` field for AI-driven route extraction + code audit + targeted scanning, `POST /api/agent/run/autopilot` for autonomous pentest with code context, or run `vigolium agent archon` standalone for a multi-phase whitebox audit.
+> Source-aware whitebox analysis lives in agent mode. Use `POST /api/agent/run/swarm` with a `source` field for AI-driven route extraction + code audit + targeted scanning, `POST /api/agent/run/autopilot` for autonomous pentest with code context, or run `vigolium agent vigolium-audit` standalone for a multi-phase whitebox audit.
 
 **Phase duration factors:**
 
@@ -946,7 +946,7 @@ curl -s -X POST http://localhost:9002/api/scan-all-records \
 
 ## Source Code Upload
 
-Source code uploads for AI-driven analysis (swarm, autopilot, archon) are handled via the cloud-storage API. See [Storage API](/api-references/storage):
+Source code uploads for AI-driven analysis (swarm, autopilot, vigolium-audit) are handled via the cloud-storage API. See [Storage API](/api-references/storage):
 
 - `POST /api/storage/upload-source` — upload a source archive (zip, tar.gz, tar.bz2, tar.xz)
 - `GET  /api/storage/source/:key` — download a previously-uploaded archive

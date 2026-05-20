@@ -66,7 +66,7 @@ The schema is intentionally **denormalized** — there are no separate hosts or 
 - *Evidence*: `MatchedAt` (JSONB), `ExtractedResults`, `Request`, `Response`, `AdditionalEvidence` (merged-duplicate request/response pairs, capped at 10)
 - *Relations*: `HTTPRecordUUIDs` (JSONB), `ScanUUID`; the `finding_records` junction table is the many-to-many link to HTTP records.
 
-Agent-produced findings (autopilot/swarm/archon/piolium) flow into the **same `findings` table**, tagged by source so native and AI results coexist and dedup together.
+Agent-produced findings (autopilot/swarm/vigolium-audit/piolium) flow into the **same `findings` table**, tagged by source so native and AI results coexist and dedup together.
 
 ### Converters (`pkg/database/converters.go`)
 

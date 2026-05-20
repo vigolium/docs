@@ -25,7 +25,7 @@ Vigolium Cloud Console provides managed scanning, reporting, and team collaborat
 
 - Getting started with Vigolium and choosing a scan mode
 - Native scanning, scanner modules, authentication, and scan scope
-- Agentic scanning with autopilot, swarm, Archon, Piolium, and Olium
+- Agentic scanning with autopilot, swarm, Vigolium Audit, Piolium, and Olium
 - Server mode, ingestion, API references, reporting, and customization
 
 ## Local development
