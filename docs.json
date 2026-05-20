@@ -15,8 +15,8 @@
     }
   },
   "logo": {
-    "light": "/images/vigolium-logo-small.png",
-    "dark": "/images/vigolium-logo-small.png",
+    "light": "/images/logo/vigolium-royal-purple.png",
+    "dark": "/images/logo/vigolium-logo-blueprint.png",
     "href": "/",
     "name": "Vigolium Docs"
   },
