@@ -90,6 +90,47 @@ Run `vigolium agent audit --list-modes` to print the full mode graph and time es
 
 ---
 
+## Multi-round audits and the `confirm` mode
+
+LLM-driven audits are not deterministic. Two runs of the same `balanced` audit on the same commit will not produce the exact same finding set, an agent's reasoning, tool-call ordering, and which insights it chases all vary between runs. On top of that, the agent has no built-in concept of *your* product, what looks like a privilege escalation in isolation is often a documented feature, an internal admin tool, or a deliberate trust boundary.
+
+The practical workaround is to **run the audit in multiple rounds** rather than treating a single run as the final word:
+
+1. **Round 1, broad pass** — run `balanced` or `deep` against the source. Expect a mix of real bugs, plausible-but-wrong reasoning, and design-intent false positives.
+2. **Round 2, revisit** — run `--mode revisit` on the same source. It reuses round one's knowledge base and explicitly hunts for what the first pass missed, often surfaces variants and missed sinks without re-reporting the same findings.
+3. **Round 3, confirm with intent** — run `--mode confirm` against the prior `vigolium-results/` directory and feed it the **product context** the agent couldn't infer: which endpoints are intentionally public, which "auth bypass" is a documented dev-only flag, which "SSRF" is the metadata-service probe your own infra needs, etc. The agent re-reads each finding against that context, drops the design-intent false positives, and locks in what's left.
+
+<Frame caption="vigolium-audit confirm mode rerunning over a prior vigolium-results/ directory">
+  <img src="/images/audit/vigolium-audit-confirm-mode.png" alt="vigolium-audit confirm mode dispatching with codex" />
+</Frame>
+
+```bash
+# Round 1 — broad pass, writes vigolium-results/ into the session dir
+vigolium agent audit --source ~/src/your-app --mode balanced
+
+# Round 2 — revisit, reuses the KB and hunts for misses
+vigolium agent audit --source ~/src/your-app --mode revisit
+
+# Round 3 — confirm pass with your own intent / feature context
+vigolium agent audit --source ~/src/your-app --mode confirm \
+  --context ./audit-intent.md
+```
+
+`audit-intent.md` is a free-form note you write describing what's a feature vs a bug for this codebase. A useful skeleton:
+
+```markdown
+# Intent / known-design notes
+
+- `/admin/*` routes are gated by mTLS at the edge; the in-app `is_admin` check is defense-in-depth, not the primary boundary.
+- `GET /debug/metadata` SSRF-flavored calls are intentional, used by the sidecar.
+- Tokens stored in `localStorage` is a deliberate tradeoff for the embedded SDK, not a vuln.
+- Anything under `internal/migrations/` is non-routable in prod; ignore findings there.
+```
+
+The confirm pass treats this file as ground truth when adjudicating prior findings, what survives is much more likely to be a real bug worth triaging.
+
+---
+
 ## Piolium, the Pi-native alternative
 
 `piolium` runs the same multi-phase audit through the **Pi coding-agent runtime** instead of Claude/Codex. Use it when:
