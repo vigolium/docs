@@ -52,10 +52,10 @@ All four types are supported in JS, YAML, and (for active/passive) as quick chec
 
 ### 1. Enable extensions in your config
 
-Add or uncomment the `extensions` block under `audit` in your `vigolium-configs.yaml`:
+Add or uncomment the `extensions` block under `dynamic-assessment` in your `vigolium-configs.yaml`:
 
 ```yaml
-audit:
+dynamic-assessment:
   extensions:
     enabled: true
     extension_dir: ~/.vigolium/extensions/   # scan this dir for .js and .vgm.yaml files
@@ -100,7 +100,7 @@ Every JS extension must export a `module.exports` object. Required fields:
 
 ## Writing a JavaScript Extension
 
-JS extensions run inside an embedded Sobek (ES5.1-compatible) VM. The global `vigolium` object provides all APIs.
+JS extensions run inside an embedded Sobek (ES2015+) VM. The global `vigolium` object provides all APIs.
 
 ### Active Module (JS)
 
@@ -944,7 +944,7 @@ Session objects expose: `get()`, `post()`, `request()`, `send()`, `setHeader()`,
 | `generatePayloads(opts)` | Generate context-aware security payloads by type, context, technology, WAF |
 | `analyzeResponse(opts)` | Analyze HTTP exchange for vulnerability → `{vulnerable, confidence, evidence, details}` |
 | `confirmFinding(opts)` | Verify true positive → `{confirmed, confidence, reasoning, false_positive_indicators}` |
-| `run(opts)` | Run full agent backend subprocess (claude, opencode, gemini, etc.) |
+| `run(opts)` | Run an inline olium agent turn (in-process; uses the same provider as `vigolium agent olium`) |
 
 ### vigolium.oast (Out-of-Band Testing)
 
@@ -1043,7 +1043,7 @@ vigolium scan -u https://example.com \
 With `my-test-config.yaml`:
 
 ```yaml
-audit:
+dynamic-assessment:
   extensions:
     enabled: true
     custom_dir:
@@ -1101,7 +1101,7 @@ vigolium extensions preset reflected_param_scanner
 Full `extensions` block options in `vigolium-configs.yaml`:
 
 ```yaml
-audit:
+dynamic-assessment:
   extensions:
     # Enable the extension engine. Default: false
     enabled: true

@@ -95,6 +95,7 @@ API key resolution order: `VIGOLIUM_API_KEY` env var > `server.auth_api_key` in 
 | POST | `/api/agent/run/query` | Single-shot agent prompt execution |
 | POST | `/api/agent/run/autopilot` | Autonomous AI-driven scanning session |
 | POST | `/api/agent/run/swarm` | AI-guided multi-phase vulnerability scan |
+| POST | `/api/agent/run/audit` | Unified whitebox audit (audit and/or piolium) with `driver: auto\|both\|audit\|piolium` |
 | POST | `/api/agent/chat/completions` | OpenAI-compatible chat completions (synchronous) |
 | GET | `/api/agent/status/list` | List agent runs |
 | GET | `/api/agent/status/:id` | Get agent run status (includes full result when completed) |
@@ -433,7 +434,7 @@ See the [API Reference](/api-references/scan) for full request/response details.
 
 ## Running AI Agents via API
 
-The agent API provides three run modes that mirror the `vigolium agent` CLI subcommands. Only one agent run can be active at a time (returns `409 Conflict` if busy).
+The agent API provides four run modes that mirror the `vigolium agent` CLI subcommands (query, autopilot, swarm, audit). Concurrency is controlled by `server.agent_heavy_max` and `server.agent_light_max`.
 
 ### Query, Single-Shot Agent Run
 
@@ -497,7 +498,7 @@ curl -s http://localhost:9002/api/agent/status/agt-550e8400... \
 
 Once the run completes, the response includes a `result` field with the full agent output (raw text, findings, HTTP records).
 
-See [Agent Mode](/agentic-scan/agent-mode) for the full agent documentation (autopilot, swarm, vigolium-audit, query, olium) and the [API Reference](/api-references/agent) for request/response details.
+See [Agent Mode](/agentic-scan/agent-mode) for the full agent documentation (autopilot, swarm, audit, piolium, query, olium) and the [API Reference](/api-references/agent) for request/response details.
 
 ## Input Modes Reference
 

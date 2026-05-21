@@ -66,7 +66,7 @@ curl -s -X POST http://localhost:9002/api/scan-url \
 ```json
 {
   "project_uuid": "my-project-uuid",
-  "scan_id": "550e8400-e29b-41d4-a716-446655440000",
+  "scan_uuid": "550e8400-e29b-41d4-a716-446655440000",
   "status": "running",
   "message": "scan-url started for https://example.com/api/users?id=1"
 }
@@ -82,10 +82,12 @@ Starts an asynchronous scan from a base64-encoded raw HTTP request. Equivalent t
 
 | Field         | Type   | Required | Description                                          |
 |---------------|--------|----------|------------------------------------------------------|
-| `raw_request` | string | Yes      | Base64-encoded raw HTTP request                      |
-| `target_url`  | string | No       | Override target URL (scheme://host) for the request  |
-| `modules`     | string | No       | Comma-separated module IDs to run                    |
-| `no_passive`  | bool   | No       | Skip passive modules                                 |
+| `http_request_base64` | string | Yes      | Base64-encoded raw HTTP request (preferred; `raw_request` is accepted as a legacy alias) |
+| `http_response_base64`| string | No       | Optional base64-encoded raw HTTP response to pair with the request |
+| `url`         | string | No       | URL hint when the raw request lacks scheme/host       |
+| `target_url`  | string | No       | Override target URL (scheme://host) for the request   |
+| `modules`     | string | No       | Comma-separated module IDs to run                     |
+| `no_passive`  | bool   | No       | Skip passive modules                                  |
 
 ```bash
 # Base64-encode a raw HTTP request
@@ -95,7 +97,7 @@ curl -s -X POST http://localhost:9002/api/scan-request \
   -H "Content-Type: application/json" \
   -H "X-Project-UUID: my-project-uuid" \
   -d "{
-    \"raw_request\": \"$REQ_B64\",
+    \"http_request_base64\": \"$REQ_B64\",
     \"target_url\": \"https://example.com\"
   }" | jq .
 ```
@@ -105,7 +107,7 @@ curl -s -X POST http://localhost:9002/api/scan-request \
 ```json
 {
   "project_uuid": "my-project-uuid",
-  "scan_id": "661f9511-f3ac-52e5-b827-557766551111",
+  "scan_uuid": "661f9511-f3ac-52e5-b827-557766551111",
   "status": "running",
   "message": "scan-request started for https://example.com/api/login"
 }
@@ -151,7 +153,7 @@ Returns `202 Accepted` on success, `200 OK` for dry runs, or `409 Conflict` if a
 | `headers`              | map[string]string | No       | Custom HTTP headers included in all requests                                |
 | `scanning_profile`     | string            | No       | Scanning profile name or path                                               |
 
-> Source-aware whitebox analysis lives in agent mode. Use `POST /api/agent/run/swarm` with a `source` field for AI-driven route extraction + code audit + targeted scanning, `POST /api/agent/run/autopilot` for autonomous pentest with code context, or run `vigolium agent vigolium-audit` standalone for a multi-phase whitebox audit.
+> Source-aware whitebox analysis lives in agent mode. Use `POST /api/agent/run/swarm` with a `source` field for AI-driven route extraction + code audit + targeted scanning, `POST /api/agent/run/autopilot` for autonomous pentest with code context, or `POST /api/agent/run/audit` (CLI: `vigolium agent audit`) for the unified source-audit driver dispatcher.
 
 **Phase duration factors:**
 
@@ -226,7 +228,7 @@ curl -s -X POST http://localhost:9002/api/scans/run \
 ```json
 {
   "project_uuid": "my-project-uuid",
-  "scan_id": "550e8400-e29b-41d4-a716-446655440000",
+  "scan_uuid": "550e8400-e29b-41d4-a716-446655440000",
   "status": "running",
   "message": "scan started",
   "targets_count": 1,
@@ -239,7 +241,7 @@ curl -s -X POST http://localhost:9002/api/scans/run \
 ```json
 {
   "project_uuid": "my-project-uuid",
-  "scan_id": "550e8400-e29b-41d4-a716-446655440000",
+  "scan_uuid": "550e8400-e29b-41d4-a716-446655440000",
   "status": "dry_run",
   "message": "scan record created (dry run)",
   "targets_count": 1,
@@ -257,8 +259,8 @@ When a scan starts (via API or CLI), the runner logs a configuration summary to 
   ℹ Strategy: balanced
   ℹ Phases: ✓ ExternalHarvest (24m0s, x0.2) | ✓ Spidering (18m0s, x0.2) | ✓ Discovery
             ✓ KnownIssueScan (6h0m0s, x3.0) | ✓ Dynamic-Assessment (2h0m0s, x1.0)
-  ℹ Speed: concurrency=50 | rate-limit=100 | max-per-host=10
-  ℹ Modules: 144 active, 91 passive
+  ℹ Speed: concurrency=50 | rate-limit=100 | max-per-host=30
+  ℹ Modules: 154 active, 97 passive
 ```
 
 **Error responses:**
@@ -285,7 +287,7 @@ curl -s http://localhost:9002/api/scan/status \
 ```json
 {
   "project_uuid": "my-project-uuid",
-  "scan_id": "scan-abc123",
+  "scan_uuid": "scan-abc123",
   "running": true,
   "status": "running"
 }
@@ -296,7 +298,7 @@ curl -s http://localhost:9002/api/scan/status \
 ```json
 {
   "project_uuid": "my-project-uuid",
-  "scan_id": "scan-abc123",
+  "scan_uuid": "scan-abc123",
   "running": true,
   "status": "paused"
 }
@@ -314,24 +316,7 @@ curl -s http://localhost:9002/api/scan/status \
 
 ---
 
-### DELETE /api/scan, Cancel Scan
-
-Cancels a running scan.
-
-```bash
-curl -s -X DELETE http://localhost:9002/api/scan \
-  -H "X-Project-UUID: my-project-uuid" | jq .
-```
-
-```json
-{
-  "project_uuid": "my-project-uuid",
-  "scan_id": "scan-abc123",
-  "running": true,
-  "status": "cancelling",
-  "message": "scan cancellation requested"
-}
-```
+> To cancel a running scan, call `POST /api/scans/:uuid/stop` (covered under [Scan Management](#post-apiscansuuidstop--stop-a-running-scan)) — there is no global `DELETE /api/scan` route.
 
 ---
 
@@ -443,7 +428,7 @@ curl -s -X POST http://localhost:9002/api/scans/scan-abc123/stop \
 ```json
 {
   "project_uuid": "my-project-uuid",
-  "scan_id": "scan-abc123",
+  "scan_uuid": "scan-abc123",
   "running": true,
   "status": "cancelling",
   "message": "scan stop requested, workers finishing current tasks"
@@ -471,7 +456,7 @@ curl -s -X POST http://localhost:9002/api/scans/scan-abc123/pause \
 ```json
 {
   "project_uuid": "my-project-uuid",
-  "scan_id": "scan-abc123",
+  "scan_uuid": "scan-abc123",
   "running": true,
   "status": "paused",
   "message": "scan paused, workers finishing current items"
@@ -499,7 +484,7 @@ curl -s -X POST http://localhost:9002/api/scans/scan-abc123/resume \
 ```json
 {
   "project_uuid": "my-project-uuid",
-  "scan_id": "scan-abc123",
+  "scan_uuid": "scan-abc123",
   "running": true,
   "status": "running",
   "message": "scan resumed"
@@ -576,7 +561,7 @@ curl -s 'http://localhost:9002/api/scans/scan-abc123/logs?level=info&phase=disco
       "level": "info",
       "phase": "config",
       "message": "scan configuration snapshot",
-      "metadata": "{\"project_uuid\":\"my-project-uuid\",\"targets\":[\"https://example.com\"],\"strategy\":\"balanced\",\"concurrency\":50,\"rate_limit\":100,\"max_per_host\":10,\"active_modules\":144,\"passive_modules\":91,\"spidering_enabled\":true,\"discovery_enabled\":true,\"known_issue_scan_enabled\":false}",
+      "metadata": "{\"project_uuid\":\"my-project-uuid\",\"targets\":[\"https://example.com\"],\"strategy\":\"balanced\",\"concurrency\":50,\"rate_limit\":100,\"max_per_host\":30,\"active_modules\":154,\"passive_modules\":97,\"spidering_enabled\":true,\"discovery_enabled\":true,\"known_issue_scan_enabled\":false}",
       "created_at": "2026-02-16T15:00:00Z"
     },
     {
@@ -641,7 +626,7 @@ curl -s 'http://localhost:9002/api/scans/scan-abc123/logs?level=info&phase=disco
       "level": "info",
       "phase": "audit",
       "message": "phase started",
-      "metadata": "{\"active_modules\":127,\"passive_modules\":85}",
+      "metadata": "{\"active_modules\":154,\"passive_modules\":97}",
       "created_at": "2026-02-16T15:03:01Z"
     },
     {
@@ -735,7 +720,7 @@ curl -s 'http://localhost:9002/api/scans/scan-abc123/logs?level=info&phase=disco
       "level": "info",
       "phase": "config",
       "message": "scan configuration snapshot",
-      "metadata": "{\"project_uuid\":\"my-project-uuid\",\"targets\":[\"https://example.com\"],\"strategy\":\"balanced\",\"scanning_profile\":\"\",\"concurrency\":50,\"rate_limit\":100,\"max_per_host\":10,\"heuristics_check\":\"basic\",\"scope_origin_mode\":\"relaxed\",\"active_modules\":144,\"passive_modules\":91,\"spidering_enabled\":true,\"discovery_enabled\":true,\"known_issue_scan_enabled\":false,\"external_harvest\":false,\"skip_dynamic\":false}",
+      "metadata": "{\"project_uuid\":\"my-project-uuid\",\"targets\":[\"https://example.com\"],\"strategy\":\"balanced\",\"scanning_profile\":\"\",\"concurrency\":50,\"rate_limit\":100,\"max_per_host\":30,\"heuristics_check\":\"basic\",\"scope_origin_mode\":\"relaxed\",\"active_modules\":154,\"passive_modules\":97,\"spidering_enabled\":true,\"discovery_enabled\":true,\"known_issue_scan_enabled\":false,\"external_harvest\":false,\"skip_dynamic\":false}",
       "created_at": "2026-02-16T15:00:00Z"
     }
   ],
@@ -824,7 +809,7 @@ curl -s -X POST http://localhost:9002/api/scan-records \
 ```json
 {
   "project_uuid": "my-project-uuid",
-  "scan_id": "550e8400-e29b-41d4-a716-446655440000",
+  "scan_uuid": "550e8400-e29b-41d4-a716-446655440000",
   "status": "running",
   "message": "selective scan started",
   "records_to_scan": 3
@@ -913,7 +898,7 @@ curl -s -X POST http://localhost:9002/api/scan-all-records \
 ```json
 {
   "project_uuid": "my-project-uuid",
-  "scan_id": "550e8400-e29b-41d4-a716-446655440000",
+  "scan_uuid": "550e8400-e29b-41d4-a716-446655440000",
   "status": "running",
   "message": "all-records scan started",
   "records_to_scan": 142,
@@ -926,7 +911,7 @@ curl -s -X POST http://localhost:9002/api/scan-all-records \
 ```json
 {
   "project_uuid": "my-project-uuid",
-  "scan_id": "550e8400-e29b-41d4-a716-446655440000",
+  "scan_uuid": "550e8400-e29b-41d4-a716-446655440000",
   "status": "dry_run",
   "message": "scan record created (dry run)",
   "records_to_scan": 142,
@@ -946,10 +931,10 @@ curl -s -X POST http://localhost:9002/api/scan-all-records \
 
 ## Source Code Upload
 
-Source code uploads for AI-driven analysis (swarm, autopilot, vigolium-audit) are handled via the cloud-storage API. See [Storage API](/api-references/storage):
+Source code uploads for AI-driven analysis (swarm, autopilot, audit) are handled via the cloud-storage API. See [Storage API](/api-references/storage):
 
 - `POST /api/storage/upload-source`: upload a source archive (zip, tar.gz, tar.bz2, tar.xz)
 - `GET  /api/storage/source/:key`: download a previously-uploaded archive
 - `POST /api/storage/presign`: get a presigned URL for direct client-side upload
 
-The returned `storage_url` (e.g. `gs://<project-uuid>/ugc/source.tar.gz`) can be passed to `--source` (CLI) or the `source` field on `POST /api/agent/run/{swarm,autopilot,query}`.
+The returned `storage_url` (e.g. `gs://<project-uuid>/ugc/source.tar.gz`) can be passed to `--source` (CLI) or the `source` field on `POST /api/agent/run/{query,autopilot,swarm,audit}`.

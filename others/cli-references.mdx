@@ -175,19 +175,13 @@ vigolium ext eval 'vigolium.log("hello")'
 vigolium ext eval --ext-file script.js
 ```
 
-## Scope & Source
+## Scope
 
-Control what's in-scope and attach source code to a host for whitebox-aware scanning.
+Control what's in-scope. Source code is attached per scan via the `--source` flag on `vigolium agent <subcommand>` (autopilot, swarm, query, audit).
 
 ```bash
-# Scope rules
 vigolium scope view
 vigolium scope set host.include '*.example.com'
-
-# Source code attachment
-vigolium source ls
-vigolium source add --hostname api.example.com --path ./api-source
-vigolium source scan 1
 ```
 
 ## Agent (AI)
@@ -223,7 +217,7 @@ vigolium agent autopilot -t https://example.com/api
 
 # Source-aware (auto-runs vigolium-audit first to build context)
 vigolium agent autopilot -t https://example.com --source ./src
-vigolium agent autopilot -t https://example.com --source ./src --vigolium-audit=off   # disable vigolium-audit
+vigolium agent autopilot -t https://example.com --source ./src --audit=off   # disable vigolium-audit
 
 # Pipe a curl command or raw HTTP request via stdin
 curl -s https://example.com/api/users | vigolium agent autopilot
@@ -262,30 +256,34 @@ vigolium agent autopilot -t https://example.com --source ./src --show-prompt
 
 ### `agent audit`: unified source audit (vigolium-audit + piolium)
 
-Runs vigolium-audit and/or piolium back-to-back against a single source tree under one AgenticScan, with per-driver session subdirs and a post-pass findings dedup.
+Runs the vigolium-audit harness and/or piolium against a single source tree under one AgenticScan, with per-driver session subdirs and a post-pass findings dedup. `vigolium-audit` is the embedded harness name; the CLI driver value is `audit`.
 
 ```bash
-# Default: vigolium-audit then piolium under one AgenticScan, balanced mode
+# Default driver is "auto": run audit; fall back to piolium only if the
+# claude/codex CLI required by audit is missing. Balanced mode.
 vigolium agent audit --source .
 
-# Single driver (equivalent to agent piolium / agent vigolium-audit)
-vigolium agent audit --driver piolium --source ./backend --mode lite
-vigolium agent audit --driver vigolium-audit  --source ./backend --agent claude
+# Run both drivers back-to-back, unconditionally
+vigolium agent audit --driver both --source ./backend
 
-# Both drivers, deep intensity, against a remote git URL
-vigolium agent audit --source git@github.com:org/repo.git --intensity deep
-vigolium agent audit --source https://github.com/org/repo.git --commit-depth 0   # full history
+# Single driver (equivalent to agent piolium for the piolium leg)
+vigolium agent audit --driver piolium --source ./backend --mode lite
+vigolium agent audit --driver audit   --source ./backend --agent claude
+
+# Multi-driver, deep intensity, against a remote git URL
+vigolium agent audit --driver both --source git@github.com:org/repo.git --intensity deep
+vigolium agent audit --driver both --source https://github.com/org/repo.git --commit-depth 0   # full history
 
 # Override pi's provider/model for the piolium leg
-vigolium agent audit --source ./backend \
+vigolium agent audit --driver both --source ./backend \
   --pi-provider vertex-anthropic --pi-model claude-opus-4-6
 
-# Driver-specific modes (piolium=longshot/smoke, vigolium-audit=mock)
+# Driver-specific modes (piolium=longshot/smoke, audit=mock)
 vigolium agent audit --driver piolium --source ./mono-repo --mode longshot \
   --plm-longshot-langs python,go --plm-longshot-limit 200
-vigolium agent audit --driver vigolium-audit --source ./backend --mode mock
+vigolium agent audit --driver audit --source ./backend --mode mock
 
-# Cap commit-history scan window
+# Cap commit-history scan window (piolium only)
 vigolium agent audit --driver piolium --source ./backend --plm-scan-since "60 days ago"
 vigolium agent audit --driver piolium --source ./backend --plm-scan-limit 500
 
@@ -307,7 +305,6 @@ vigolium init                     # Initialize ~/.vigolium with defaults
 vigolium doctor                   # Diagnose configuration and tool readiness
 vigolium auth                     # Authentication management utilities
 vigolium project                  # Manage multi-tenant projects
-vigolium license                  # Show license status
 ```
 
 <Note>

@@ -28,6 +28,7 @@ The autopilot is exactly that, except the analyst is an LLM and the notebook is 
                   ┌──────────────────────────────────────────────┐
  vigolium agent ─►│ 1. CLI flag parsing                          │
  autopilot …      │    intensity preset → max-cmds, timeout, …   │
+
                   │    --input → curl/HTTP/Burp/url normalize    │
                   │    --source → resolve git URL/diff/local     │
                   │    --provider/model → olium.ResolveProvider  │
@@ -119,9 +120,9 @@ vigolium agent autopilot "scan VAmPI source at ~/src/VAmPI on localhost:3005"
 # Dry-run: preview the rendered system prompt
 vigolium agent autopilot -t https://example.com --dry-run
 
-# CI scan with budget caps
+# # CI scan with quick intensity
 vigolium agent autopilot -t https://staging.example.com \
-  --intensity quick --token-budget 200000 --upload-results
+  --intensity quick --upload-results
 ```
 
 ### Key flags
@@ -136,7 +137,7 @@ vigolium agent autopilot -t https://staging.example.com \
 | `--focus` |, | Focus area hint (e.g. `"auth bypass"`, `"API injection"`) |
 | `--instruction` / `--instruction-file` |, | Custom instruction appended to prompt |
 | `--intensity` | `balanced` | Preset bundle: `quick` / `balanced` / `deep` |
-| `--vigolium-audit` | `lite` (with `--source`) | Vigolium-audit mode: `lite` / `balanced` / `deep` / `mock` / `off` |
+| `--audit` | `lite` (with `--source`) | Vigolium-audit mode: `lite` / `balanced` / `deep` / `mock` / `off` |
 | `--browser` | false | Enable agent-browser for browser-based interactions |
 | `--credentials` |, | Credentials for auth preflight (e.g. `"admin/admin123"`) |
 | `--auth-required` | false | Require auth/session preparation before the operator starts |
@@ -145,9 +146,8 @@ vigolium agent autopilot -t https://staging.example.com \
 | `--focus-routes` |, | Protected/browser-focused routes to prioritize |
 | `--diff` |, | Focus on changed code (PR URL, `main...branch`, `HEAD~N`) |
 | `--last-commits` |, | Shorthand for `--diff HEAD~N` |
-| `--max-commands` | 100 | Max LLM turns the agent can take |
+| `--max-commands` | 500 (balanced) | Max LLM turns the agent can take. Intensity preset sets this — quick=150, balanced=500, deep=1500. |
 | `--max-duration` | 6h | Wall-clock cap |
-| `--token-budget` | 0 | Cap on cumulative input+output tokens (0 = no cap) |
 | `--upload-results` | false | Upload session bundle to cloud storage on completion |
 | `--provider` | *(config)* | Olium provider override |
 | `--model` | *(config)* | Model id override |
@@ -170,17 +170,16 @@ POST /api/agent/run/autopilot
   "source": "/home/user/src/my-app",
   "focus": "API injection",
   "intensity": "balanced",
-  "archon": "balanced",
-  "max_commands": 100,
+  "audit": "balanced",
+  "max_commands": 500,
   "max_duration": "6h",
-  "token_budget": 200000,
   "browser": false,
   "diff": "main...feature/payments",
   "stream": true
 }
 ```
 
-`EffectiveSourcePath()` accepts either `source` or the legacy `repo_path` JSON field. Provider/model overrides are CLI-only, the server resolves them once from `agent.olium.*` and reuses across requests. Returns `202 Accepted` with `{agentic_scan_uuid, status}`. Set `stream: true` for an SSE response.
+`EffectiveSourcePath()` accepts either `source` or the legacy `repo_path` JSON field. The server resolves provider/model from `agent.olium.*` by default; pass `api_key`, `oauth_token`, `oauth_cred_file`, or `oauth_cred_json` on the same request to override per call. Returns `202 Accepted` with `{agentic_scan_uuid, status}`. Set `stream: true` for an SSE response.
 
 ---
 
@@ -212,19 +211,22 @@ The model decides when to invoke `vigolium scan-url`, `vigolium finding`, etc., 
 
 1. CLI override (`--provider`)
 2. Config file (`agent.olium.provider` in `vigolium-configs.yaml`)
-3. Auto-detect → `codex-oauth`
+3. Default → `openai-compatible` with `gemma4:latest` (a local Ollama endpoint)
 
 Supported provider IDs:
 
-| Provider           | Default model       | Credential                                                |
-| ------------------ | ------------------- | --------------------------------------------------------- |
-| `codex-oauth`      | `gpt-5.5`           | OAuth cred file (`--oauth-cred` / `agent.olium.oauth_cred_path`) |
-| `anthropic-api-key`| `claude-opus-4-7`   | `--llm-api-key` / `$ANTHROPIC_API_KEY`                    |
-| `claude-oauth`     | `claude-opus-4-7`   | Bearer token from `claude setup-token` (`--oauth-token` / `$ANTHROPIC_API_KEY`) |
-| `openai-api-key`   | `gpt-5.5`           | `--llm-api-key` / `$OPENAI_API_KEY`                       |
-| `claude-code-cli`  | `claude-opus-4-7`   | The local `claude` binary on `$PATH`                      |
+| Provider               | Typical model        | Credential                                                |
+| ---------------------- | -------------------- | --------------------------------------------------------- |
+| `openai-codex-oauth`   | `gpt-5.5`            | OAuth cred file (`--oauth-cred` / `agent.olium.oauth_cred_path`) |
+| `anthropic-api-key`    | `claude-opus-4-7`    | `--llm-api-key` / `$ANTHROPIC_API_KEY`                    |
+| `anthropic-oauth`      | `claude-opus-4-7`    | Bearer token from `claude setup-token` (`--oauth-token` / `$ANTHROPIC_API_KEY`) |
+| `openai-api-key`       | `gpt-5.5`            | `--llm-api-key` / `$OPENAI_API_KEY`                       |
+| `anthropic-cli`        | `claude-opus-4-7`    | The local `claude` binary on `$PATH`                      |
+| `anthropic-vertex`     | `claude-opus-4-7`    | GCP service-account JSON + project/location               |
+| `google-vertex`        | `gemini-2.5-pro`     | Same GCP creds; routes `gemini-*` models                  |
+| `openai-compatible`    | `gemma4:latest`      | `custom_provider.base_url` (Ollama, OpenRouter, LM Studio, vLLM, …); `api_key` optional |
 
-Prompt caching (`EnablePromptCache: true`) is set on the engine, providers that support it (Anthropic, Claude OAuth) cache the system prompt + tool list across turns.
+Prompt caching (`EnablePromptCache: true`) is set on the engine; only the Anthropic providers and the Codex OAuth provider actually emit cache markers — `openai-compatible` (including Ollama) and `openai-api-key` ignore them.
 
 ---
 
@@ -233,12 +235,12 @@ Prompt caching (`EnablePromptCache: true`) is set on the engine, providers that 
 `--intensity` bundles several settings; explicit flags always override.
 
 | Preset     | `MaxCommands` | `Timeout` | `Vigolium-audit mode` | `Browser` |
-| ---------- | ------------- | --------- | ------------ | --------- |
-| `quick`    | 30            | 1h        | `lite`       | off       |
-| `balanced` (default) | 100  | 6h        | `balanced`   | off       |
-| `deep`     | 300           | 12h       | `deep`       | on        |
+| ---------- | ------------- | --------- | --------------------- | --------- |
+| `quick`    | 150           | 1h        | `lite`                | on        |
+| `balanced` (default) | 500 | 6h        | `balanced`            | on        |
+| `deep`     | 1500          | 12h       | `deep`                | on        |
 
-`MaxCommands` becomes the engine's `MaxTurns` cap (one LLM→tool cycle per turn). When the cap is hit the run ends with an error event, the model didn't get to halt cleanly.
+`MaxCommands` is the autopilot's own turn cap (the agent's `DefaultAutopilotMaxTurns` is 200; intensity overrides it). When the cap is hit the run ends with an error event — the model didn't get to halt cleanly. `agent.olium.max_turns` applies to the shorter, non-autopilot engine uses (swarm phases, source analysis, query), not to autopilot.
 
 ---
 
@@ -276,9 +278,9 @@ For each run, autopilot creates a UUID-named directory under `agent.sessions_dir
 
 ```
 ~/.vigolium/agent-sessions/{run-uuid}/
-  ├── run.pid       # pgid + start time; cleared on exit
-  ├── runtime.log   # tee of stdout (assistant text stream)
-  └── archon-audit/ # vigolium-audit subprocess output (when --source is provided)
+  ├── run.pid          # pgid + start time; cleared on exit
+  ├── runtime.log      # tee of stdout (assistant text stream)
+  └── vigolium-audit/  # vigolium-audit subprocess output (when --source is provided)
 ```
 
 The run UUID matches the `AgenticScan.uuid` row, so `vigolium agent sessions` and `vigolium log <uuid>` both work without extra plumbing. Stale dirs older than 48h are swept on startup; orphan PID files (from SIGKILL'd runs) are cleared via `agent.CleanupOrphanedProcesses`.
@@ -293,7 +295,7 @@ When `--source` is set, three things change:
 2. **Initial prompt mode hint**: the prompt switches between blackbox ("probe the live target"), whitebox ("navigate the source tree"), or a greybox blend ("read the code to find what's risky, then probe").
 3. **Skill scope**: embedded skills + `~/.vigolium/skills/` are indexed in the system prompt; scan-specific skills like `audit-auth` and `triage-finding` are loadable via `load_skill`.
 
-Vigolium-audit also runs first (foreground) when `--source` is set, freezing its findings into `archon-audit/` for the operator to consult.
+Vigolium-audit also runs first (foreground) when `--source` is set, freezing its findings into `vigolium-audit/` for the operator to consult.
 
 ---
 

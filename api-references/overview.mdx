@@ -22,13 +22,15 @@ vigolium server -A --host 127.0.0.1 --service-port 8080
 
 ## Authentication
 
-All endpoints registered after the auth middleware require a Bearer token when the server is started with the `VIGOLIUM_API_KEY` environment variable or `server.auth_api_key` config. This includes `GET /`, `GET /health`, `GET /server-info`, and all `/api/*` routes.
+`/api/*` routes require a Bearer token when the server is started with `VIGOLIUM_API_KEY` or `server.auth_api_key` set.
 
 ```bash
 curl -H "Authorization: Bearer my-secret-key" http://localhost:9002/api/stats
 ```
 
-Public endpoints (no auth required): `GET /swagger/*`, `GET /metrics`.
+Public endpoints (no auth required): `GET /`, `GET /health`, `GET /server-info`, `GET /swagger/*`, `GET /metrics`, and `POST /api/auth/login`.
+
+Demo-only and view-only modes (`cfg.DemoOnly` / `cfg.ViewOnly`) further gate mutating routes; admin/operator/viewer roles enforced by `RoleGuard` middleware override the per-route checks.
 
 ## Project Scoping
 
@@ -45,21 +47,21 @@ This applies to all data endpoints: ingestion, findings, HTTP records, stats, sc
 
 ---
 
-## GET /, App Info
+## GET /api/info, App Info
 
-Returns basic application metadata.
+Returns basic application metadata. (`GET /` serves the embedded static UI, not JSON.)
 
 ```bash
-curl -s http://localhost:9002/ | jq .
+curl -s http://localhost:9002/api/info | jq .
 ```
 
 ```json
 {
   "name": "vigolium",
-  "version": "v0.0.1-alpha",
-  "author": "@j3ssie",
-  "docs": "https://docs.vigolium.io",
-  "build_time": "2026-02-16T15:22:43Z",
+  "version": "v0.1.8-alpha",
+  "author": "vigolium",
+  "docs": "https://docs.vigolium.com",
+  "build_time": "2026-05-21T15:22:43Z",
   "commit": "67bdce4"
 }
 ```
@@ -94,18 +96,19 @@ curl -s http://localhost:9002/server-info | jq .
 ```json
 {
   "name": "vigolium",
-  "version": "v0.0.1-alpha",
-  "author": "@j3ssie",
-  "docs": "https://docs.vigolium.io",
-  "build_time": "2026-02-16T15:22:43Z",
+  "version": "v0.1.8-alpha",
+  "author": "vigolium",
+  "docs": "https://docs.vigolium.com",
+  "build_time": "2026-05-21T15:22:43Z",
   "commit": "67bdce4",
   "uptime": "5m32s",
   "service_addr": "0.0.0.0:9002",
   "proxy_addr": "",
-  "db_driver": "sqlite",
   "queue_depth": 0,
   "total_records": 1234,
-  "total_findings": 42
+  "total_findings": 42,
+  "license_spdx": "AGPL-3.0",
+  "source": "https://github.com/vigolium/vigolium"
 }
 ```
 
@@ -129,7 +132,7 @@ curl -s http://localhost:9002/swagger/doc.json | jq .info
 
 ## GET /metrics, Prometheus Metrics
 
-Returns Prometheus-formatted metrics. No authentication required. Only available when the server is started with `--enable-metrics`.
+Returns Prometheus-formatted metrics. The route is always registered and unauthenticated; the handler gates the response on the `EnableMetrics` server flag (CLI `--enable-metrics` / config `server.enable_metrics`).
 
 ```bash
 curl -s http://localhost:9002/metrics
@@ -148,7 +151,7 @@ CORS can be enabled via the `cors_allowed_origins` server config:
 | `origin1,origin2`  | Allow specific origins (comma-separated, allows credentials) |
 | *(empty/omitted)*  | CORS disabled                                         |
 
-Allowed methods: `GET`, `POST`, `PUT`, `DELETE`, `OPTIONS`. Allowed headers: `Content-Type`, `Authorization`.
+Allowed methods: `GET`, `POST`, `PUT`, `DELETE`, `PATCH`, `OPTIONS`. Allowed headers: `Content-Type`, `Authorization`, `X-Project-UUID`, `X-User-Email`.
 
 ---
 

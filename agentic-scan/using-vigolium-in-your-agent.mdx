@@ -566,15 +566,15 @@ vigolium agent query --prompt-template security-code-review --source ./src \
 > Run the agent with my own prompt template
 ```
 ```bash
-vigolium agent --prompt-file custom-prompt.md --source ./src
+vigolium agent query --prompt-file custom-prompt.md --source ./src
 ```
 
-**Select a specific agent backend:**
+**Select a specific olium provider:**
 ```
-> Use the Claude backend for code review
+> Use Anthropic for code review
 ```
 ```bash
-vigolium agent --agent claude --prompt-template security-code-review --source ./src
+vigolium agent query --provider anthropic-api-key --prompt-template security-code-review --source ./src
 ```
 
 **Dry-run to preview the rendered prompt:**
@@ -642,20 +642,21 @@ vigolium agent query --prompt 'analyze the authentication flow for bypass vector
 echo "check for SSRF in the URL-fetching handler" | vigolium agent query --stdin
 ```
 
-**Custom prompt file with a specific backend:**
+**Custom prompt file with a specific provider:**
 ```
-> Run a custom prompt file through Claude
+> Run a custom prompt file through Anthropic
 ```
 ```bash
-vigolium agent query --agent claude --prompt-file custom-prompt.md
+vigolium agent query --provider anthropic-api-key --prompt-file custom-prompt.md
 ```
 
-**With extended timeout:**
+**Pick a different model:**
 ```
-> Run a comprehensive review with extra time
+> Run the review on a frontier model
 ```
 ```bash
-vigolium agent query --agent-timeout 10m 'comprehensive security review of all handlers'
+vigolium agent query --provider anthropic-api-key --model claude-opus-4-7 \
+  'comprehensive security review of all handlers'
 ```
 
 #### Agent Autopilot (Autonomous Scanning)
@@ -676,12 +677,12 @@ vigolium agent autopilot -t https://example.com
 vigolium agent autopilot -t https://api.example.com --source ./src --focus "auth bypass"
 ```
 
-**Custom limits (fewer commands, shorter timeout):**
+**Custom limits (fewer commands, shorter wall-clock):**
 ```
 > Limit the agent to 50 commands and 15 minutes
 ```
 ```bash
-vigolium agent autopilot -t https://example.com --max-commands 50 --timeout 15m
+vigolium agent autopilot -t https://example.com --max-commands 50 --max-duration 15m
 ```
 
 **Preview the system prompt (dry run):**
@@ -697,24 +698,24 @@ vigolium agent autopilot -t https://example.com --dry-run
 > Use my own system prompt for autopilot
 ```
 ```bash
-vigolium agent autopilot -t https://example.com --system-prompt my-system-prompt.md
+vigolium agent autopilot -t https://example.com --system my-system-prompt.md
 ```
 
-**Use a different agent backend:**
+**Use a different olium provider:**
 ```
-> Run autopilot with Gemini
+> Run autopilot through Google Vertex
 ```
 ```bash
-vigolium agent autopilot -t https://example.com --agent gemini
+vigolium agent autopilot -t https://example.com --provider google-vertex --model gemini-2.5-pro
 ```
 
 **Autopilot security model:**
-- Only `vigolium` commands are permitted (allowlist)
-- Destructive commands blocked (`db clean`, `db drop`, etc.)
-- Shell metacharacters rejected (`;|&\``$(){}!><`)
-- Per-command timeout: 5 minutes
-- Max 100 commands by default (configurable)
-- Output capped at 256KB per command
+- Yolo-mode bash — autopilot runs the model's `bash` calls without an approval prompt. The model decides when to invoke `vigolium scan-url`, `vigolium finding`, etc. (they're shell commands, not first-class tools).
+- The engine only hard-rejects catastrophic patterns (`rm -rf /`, `dd` to block devices, fork bombs, `mkfs` against real devices). There is no `vigolium`-only command allowlist.
+- Per-tool timeout: 5 minutes (`ToolTimeout`).
+- Intensity-driven defaults: quick=150 / balanced=500 / deep=1500 commands (`MaxCommands`), browser enabled at every intensity.
+- `report_finding` soft-warns at 50 findings and hard-caps at 200, nudging the agent toward `halt_scan`.
+- Run autopilot in a disposable container or VM scoped to in-scope targets — see [Security Warning](/others/security-warning).
 
 #### Agent Swarm (AI-Guided Multi-Phase Scan)
 
@@ -726,15 +727,18 @@ vigolium agent autopilot -t https://example.com --agent gemini
 vigolium agent swarm --discover -t https://example.com
 ```
 
-> **Note:** `vigolium agent pipeline` still works as a backward-compatible alias for `vigolium agent swarm --discover`.
+The swarm runs ten phases in order (most are conditional — see [Swarm](/agentic-scan/swarm) for full detail):
 
-The swarm runs:
-1. **Discover**: Native content discovery + spidering (no AI)
-2. **Plan**: AI analyzes discovery results, produces an attack plan
-3. **Scan**: Native executor with agent-selected modules (no AI)
-4. **Triage**: AI reviews findings, confirms/dismisses, suggests follow-ups
-5. **Rescan**: Targeted re-scanning from triage recommendations (no AI)
-6. **Report**: Structured output from database (no AI)
+1. **native-normalize** — parse `--input`/stdin/record-uuid into HTTP records
+2. **auth** *(optional)* — browser-driven login, writes auth headers/cookies
+3. **source-analysis** *(if `--source`)* — 4-call wave that emits routes, session-config, and source extensions
+4. **code-audit** *(if `--code-audit`)* — code-level security audit, findings → DB
+5. **native-discover** *(if `--discover`)* — crawl/spider/JS-scan
+6. **plan** — master agent picks modules and writes an extensions spec
+7. **native-extension** — compile/validate generated JS extensions (Sobek)
+8. **native-scan** — `runner.RunNativeScan()` with the planned modules + extensions
+9. **triage** *(if `--triage`)* — AI verifies findings, may request targeted rescans
+10. **native-rescan** — targeted rescan loop, bounded by `--max-iterations`
 
 **Swarm with focus area and source code:**
 ```

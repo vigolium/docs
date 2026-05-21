@@ -29,7 +29,7 @@ curl -s -H "Authorization: Bearer $TOKEN" http://localhost:9002/api/diagnostics 
   "agent": {
     "status": "ok",
     "name": "olium",
-    "provider": "codex-oauth",
+    "provider": "openai-codex-oauth",
     "model": "gpt-5.5"
   },
   "browser": {
@@ -74,6 +74,7 @@ Each individual check returns one of: `ok`, `warning`, `error`.
 | `queue` | No | Reports queue depth and error counts |
 | `browser` | No | Checks `agent-browser` binary if enabled in config |
 | `tools.chromium` | No | Checks for chromium/chrome binary (fallbacks: `chromium-browser`, `google-chrome`, `google-chrome-stable`) |
+| `tools.piolium` | No | Reports whether the optional piolium harness is installed under `~/.piolium` |
 | `templates_dir` | No | Verifies prompt templates directory exists and contains `.md` files |
 | `sessions_dir` | No | Verifies agent sessions directory exists and is writable |
 

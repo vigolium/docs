@@ -505,15 +505,15 @@ Scanning profiles (`~/.vigolium/profiles/`) can also override session strategy v
 
 ## Using Session Config with Agent Modes
 
-Agent modes (`pipeline`, `swarm`, `autopilot`) can auto-generate session configs from source code analysis. The generated configs are always written as JSON to the session directory.
+Agent modes (`swarm`, `autopilot`) can auto-generate session configs from source code analysis. The generated configs are always written as JSON to the session directory.
 
-When running agent pipeline or swarm with `--source`, the source analysis phase discovers authentication flows in the codebase and produces a `session-config.json` (or `auth-config.yaml` in pipeline mode) in the session directory. This config is then fed into subsequent scan phases automatically.
+When running agent swarm with `--source`, the source-analysis phase discovers authentication flows in the codebase and produces a `session-config.json` and `auth-config.yaml` in the session directory. This config is then fed into subsequent scan phases automatically.
 
 You can also pass a pre-built session config to agent modes the same way as regular scans:
 
 ```bash
-# Pipeline with pre-configured auth
-vigolium agent pipeline \
+# Autopilot with pre-configured auth
+vigolium agent autopilot \
   --target https://app.com \
   --auth-config ./auth-config.json
 

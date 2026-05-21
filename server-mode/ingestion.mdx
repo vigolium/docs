@@ -229,6 +229,8 @@ When a Burp pair already includes a response, the record is saved as-is (no live
 | `burp_base64` | `http_request_base64` | Base64-encoded raw HTTP request |
 | `openapi` / `swagger` | `content` or `content_base64` | OpenAPI/Swagger spec (JSON or YAML) |
 | `postman_collection` | `content` or `content_base64` | Postman Collection (JSON) |
+| `har` / `http_archive` | `content` or `content_base64` | HAR file (browser/DevTools archive) |
+| `nuclei-output` (alias `nuclei`) | `content` or `content_base64` | Nuclei JSONL output |
 
 For `burp_base64` mode, you can also include `http_response_base64` to store the response alongside the request.
 

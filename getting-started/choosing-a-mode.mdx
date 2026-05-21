@@ -22,7 +22,7 @@ If you only remember one thing: **native scan covers breadth, audit agent covers
 
 Think of it as a supercharged version of **Burp Active Scanner + Nuclei + ffuf + Katana + Wayback Machine**, all driven by one binary, in parallel, with shared state.
 
-Reach for it when you want the broadest possible blackbox sweep against a target as fast as possible: external-data harvest, content discovery, browser-driven spidering (SPA-aware), known-issue scanning, and active/passive dynamic assessment across **235 scanner modules**, all in one run.
+Reach for it when you want the broadest possible blackbox sweep against a target as fast as possible: external-data harvest, content discovery, browser-driven spidering (SPA-aware), known-issue scanning, and active/passive dynamic assessment across **251 scanner modules**, all in one run.
 
 ```bash
 # Balanced full pipeline
@@ -70,14 +70,17 @@ The plugin is a thin wrapper around `scan-url` / `scan-request`, see [Native Sca
 
 ## 3. Audit Agent (Vigolium Audit + Piolium)
 
-A whitebox source-code audit driven by frontier LLMs. Vigolium ships two drivers:
+A whitebox source-code audit driven by frontier LLMs. Vigolium ships two drivers, both reachable through the unified `vigolium agent audit` dispatcher:
 
-- **[Vigolium Audit](https://www.npmjs.com/package/@vigolium/vigolium-audit)**: embedded driver that runs through the `claude` CLI (Claude / Codex). Up to 11 phases at `deep`. No extra install.
+- **Vigolium Audit (embedded)**: ships inside the vigolium binary, drives the `claude` or `codex` CLI. Up to 12 phases at `deep`. No extra install.
 - **[Piolium](https://www.npmjs.com/package/@vigolium/piolium)**: Pi-coding-agent extension. Up to 17 phases at `deep`. Requires the `pi` runtime + `pi install piolium`. Supports any provider Pi supports, including **local models**.
 
 ```bash
-# Vigolium-audit, single-shot audit
-vigolium agent vigolium-audit --source ~/src/your-app --mode deep
+# Auto (default): embedded audit, fall back to piolium only if audit is unavailable
+vigolium agent audit --source ~/src/your-app --mode deep
+
+# Force the embedded audit driver
+vigolium agent audit --driver audit --source ~/src/your-app --mode deep
 
 # Piolium, the most thorough audit available
 vigolium agent piolium --source ~/src/your-app --mode deep
@@ -114,7 +117,7 @@ vigolium agent autopilot -t https://example.com --intensity balanced
 vigolium agent autopilot -t https://example.com --source ~/src/your-app
 
 # Throw vigolium-audit into the mix in the background
-vigolium agent autopilot -t https://example.com --source ~/src/your-app --vigolium-audit=balanced
+vigolium agent autopilot -t https://example.com --source ~/src/your-app --audit=balanced
 ```
 
 **When to pick it**
@@ -160,7 +163,7 @@ See [Swarm](/agentic-scan/swarm).
 |---|---|---|---|
 | **Native Scan** | `dynamic-assessment` only, no discovery, no spidering, no known-issue scan. Best for stateless / CI gates. | Full pipeline: discovery + spidering + known-issue + dynamic-assessment. Sensible defaults for everything. | Adds external harvest, recursive discovery, extra modules, longer per-phase durations. The full hammer. |
 | **Native via Burp** | One-shot `scan-url` / `scan-request`, active modules only. | Active + passive, all insertion points. | Active + passive + heavy mutation strategy and longer timeouts. |
-| **Vigolium Audit** | **3 phases**, recon, triage, quick scan. CI-friendly. | **6 phases**, adds deep-dive, exploit-design, validation. | **11 phases**, full audit including secondary review and cross-file analysis. |
+| **Vigolium Audit** | **3 phases**, recon, triage, quick scan. CI-friendly. | **9 phases**, adds deep-dive, exploit-design, validation. | **12 phases**, full audit including secondary review and cross-file analysis. |
 | **Piolium Audit** | **4 phases**, quick triage. | **9 phases**, standard audit. | **17 phases**, exhaustive: recon, primary, longshot, revisit, confirm, merge, diff. |
 | **Autopilot** | Short max-duration cap, conservative module budget, fewer turns. Smoke-test territory. | Default turn / duration budget. Real-browser pilot mode on. | Larger turn budget, JS-extension generation enabled, runs vigolium-audit in the background if `--source` is provided. |
 | **Swarm** | Single-pass payload generation, no discover, no triage. | Generates + triages payloads; one feedback round. | Full multi-round generate / triage / refine across every insertion point. |

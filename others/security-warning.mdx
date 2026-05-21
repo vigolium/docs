@@ -10,7 +10,7 @@ Vigolium is a powerful offensive security tool. Two parts of the system are inte
 
 ## Agent mode runs with no sandbox
 
-Agentic modes (`vigolium agent autopilot`, `swarm`, `vigolium-audit`, `piolium`, `audit`, `query`, `olium`) drive an LLM with full access to Bash, Read, Write, Grep, and Glob tools on the host. This is **deliberate**: a sandboxed agent cannot reach the artifacts a real pentest needs, source trees, locally installed tools, captured traffic, custom wordlists, or the network paths a target is reachable on.
+Agentic modes (`vigolium agent autopilot`, `swarm`, `audit`, `piolium`, `query`, `olium`) drive an LLM with full access to Bash, Read, Write, Grep, and Glob tools on the host. This is **deliberate**: a sandboxed agent cannot reach the artifacts a real pentest needs, source trees, locally installed tools, captured traffic, custom wordlists, or the network paths a target is reachable on.
 
 The consequence is that, while the agent is running, it can:
 

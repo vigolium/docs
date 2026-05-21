@@ -21,7 +21,7 @@ This is the entry point to Vigolium's architecture documentation. This page cove
   </Card>
 </CardGroup>
 
-Vigolium is a high-fidelity web vulnerability scanner written in Go. It combines deterministic, module-based scanning with AI-driven agentic analysis to provide broad and deep coverage of web application security issues. The scanner ships 245 modules (152 active, 93 passive) covering injection flaws, misconfigurations, information disclosure, authentication issues, and more.
+Vigolium is a high-fidelity web vulnerability scanner written in Go. It combines deterministic, module-based scanning with AI-driven agentic analysis to provide broad and deep coverage of web application security issues. The scanner ships 251 modules (154 active, 97 passive) covering injection flaws, misconfigurations, information disclosure, authentication issues, and more.
 
 Vigolium can operate as a CLI tool for one-off scans, as a persistent REST API server that ingests live traffic, or as a standalone ingestor client that forwards traffic to a running server. All scan data is project-scoped for multi-tenancy support. Module: `github.com/vigolium/vigolium`, requires Go 1.26+.
 
@@ -42,18 +42,17 @@ The native scan pipeline is fully deterministic, pure Go, no AI involvement. Req
 **Phases (in order):**
 
 ```
-Heuristics -> External Harvesting -> Spidering -> Discovery -> DynamicAssessment -> KnownIssueScan -> Extension
+Heuristics -> External Harvesting -> Spidering -> Discovery -> KnownIssueScan -> DynamicAssessment
 ```
 
 | Phase | Purpose |
 |-------|---------|
 | Heuristics | Lightweight fingerprinting and technology detection |
 | External Harvesting | Wayback Machine and other passive source enumeration |
-| Spidering | Active crawling, JS analysis, link and form extraction |
-| Discovery | Endpoint and content discovery via wordlists |
-| DynamicAssessment | Core vulnerability testing, injection, XSS, SSRF, etc. (CLI aliases: `audit`, `dast`, `assessment`) |
-| KnownIssueScan | Checks for known CVEs and common misconfigurations |
-| Extension | User-supplied JavaScript scanning extensions |
+| Spidering | Active crawling, JS analysis, link and form extraction (alias: `spitolas`) |
+| Discovery | Endpoint and content discovery via wordlists (aliases: `deparos`, `discover`) |
+| KnownIssueScan | Nuclei templates and Kingfisher secret detection against discovered paths |
+| DynamicAssessment | Core vulnerability testing, injection, XSS, SSRF, etc.; user-supplied JS/YAML extensions also dispatch here (CLI aliases: `audit`, `dast`, `assessment`) |
 
 **Strategies** control which phases run and how aggressively:
 
@@ -65,14 +64,15 @@ Heuristics -> External Harvesting -> Spidering -> Discovery -> DynamicAssessment
 
 ### Agentic Scan
 
-Agentic scanning uses AI agents to drive or augment the scanning process. Invoked via `vigolium agent <mode>`. All AI dispatch runs through the in-process **olium** engine (`pkg/olium/`); providers include `openai-codex-oauth`, `anthropic-api-key`, `anthropic-oauth`, `openai-api-key`, and `anthropic-cli`.
+Agentic scanning uses AI agents to drive or augment the scanning process. Invoked via `vigolium agent <mode>`. All AI dispatch runs through the in-process **olium** engine (`pkg/olium/`); eight providers are supported: `openai-codex-oauth`, `anthropic-api-key`, `anthropic-oauth`, `openai-api-key`, `anthropic-cli`, `anthropic-vertex`, `google-vertex`, and `openai-compatible` (Ollama / OpenRouter / LM Studio / vLLM / …).
 
 | Mode | Command | Description |
 |------|---------|-------------|
 | **Query** | `vigolium agent query` | Single-shot prompt execution. Good for code review, endpoint discovery, secret detection. No network scanning. |
 | **Autopilot** | `vigolium agent autopilot` | One long-running LLM session with full bash/file/web tools plus `report_finding` and `halt_scan`. The agent decides what to scan, runs scans, inspects results, and iterates until it halts. |
 | **Swarm** | `vigolium agent swarm` | Multi-phase pipeline where native Go handles heavy lifting and AI intervenes at checkpoints, planning attacks, triaging results, and generating custom JS scanner extensions. |
-| **Vigolium Audit** | `vigolium agent vigolium-audit` | Foreground multi-phase AI source-code audit. Drives a separate Claude Code / Codex harness against a source tree. |
+| **Audit** | `vigolium agent audit` | Unified driver dispatcher. `--driver auto\|both\|audit\|piolium` drives the embedded vigolium-audit harness, the standalone piolium harness, or both side-by-side under one parent scan. |
+| **Piolium** | `vigolium agent piolium` | Direct access to the standalone piolium audit harness (requires a separate `~/.piolium` install). |
 | **Olium** | `vigolium agent olium` (or `vigolium ol`) | Direct interactive TUI access to the olium engine. Use `-p` for a non-interactive one-shot prompt. |
 
 All agent modes support `--source` for source-aware analysis and store session artifacts (plans, extensions, output) in a configurable sessions directory.

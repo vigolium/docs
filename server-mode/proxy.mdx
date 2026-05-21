@@ -102,21 +102,24 @@ curl -s "http://localhost:9002/api/findings?domain=example.com" \
 ### Server Info
 
 ```bash
-curl -s http://localhost:9002/server-info \
-  -H "Authorization: Bearer my-secret-key" | jq .
+curl -s http://localhost:9002/server-info | jq .
 ```
 
-Response:
+`/server-info` is public — no `Authorization` header needed. Response:
 
 ```json
 {
-  "version": "0.1.0",
+  "name": "vigolium",
+  "version": "v0.1.8-alpha",
+  "author": "vigolium",
+  "docs": "https://docs.vigolium.com",
   "uptime": "2h15m30s",
   "service_addr": "0.0.0.0:9002",
   "proxy_addr": "0.0.0.0:9003",
-  "db_driver": "sqlite",
   "queue_depth": 0,
   "total_records": 1542,
-  "total_findings": 23
+  "total_findings": 23,
+  "license_spdx": "AGPL-3.0",
+  "source": "https://github.com/vigolium/vigolium"
 }
 ```

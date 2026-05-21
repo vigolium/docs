@@ -81,7 +81,7 @@ Endpoints group by concern; each group has a dedicated page under the [API Refer
 | Projects | `GET/POST/PUT/DELETE /api/projects[/:uuid]`, `/domain-map` | Multi-tenancy management |
 | Storage | `/api/storage/{source,results,upload-source,presign}` | Cloud bundles (storage enabled) |
 | DB browse | `/api/db/tables/...` | Generic table inspection (admin) |
-| Agent | `POST /api/agent/run/{query,autopilot,swarm,vigolium-audit,audit}`, sessions/status | AI runs (see §4) |
+| Agent | `POST /api/agent/run/{query,autopilot,swarm,audit}`, `/api/agent/chat/completions`, sessions/status | AI runs (see §4) |
 
 ### Asynchronous job pattern
 
@@ -99,9 +99,10 @@ Opting into `"stream": true` on a run endpoint switches to Server-Sent Events in
 
 `pkg/server/handlers_agent.go` mirrors the `vigolium agent` subcommands over HTTP. It does not re-implement agent logic, it invokes the same orchestrators documented in [Agentic Scan](/architecture/agentic-scan), with one deliberate constraint:
 
-- **Provider is server-config only.** The CLI's per-invocation provider flags (`--provider`, `--model`, `--oauth-token`, …) are *not* mirrored on the REST schemas. The server resolves the provider once from `agent.olium.*` in `vigolium-configs.yaml` and reuses it, keeping warm sessions and prompt caches stable. Switching providers means editing YAML and reloading.
+- **Server-default provider, BYOK per request.** The server falls back to `agent.olium.*` in `vigolium-configs.yaml` (which keeps warm sessions and prompt caches stable across requests), but every agent run endpoint also accepts per-request BYOK credentials (`api_key`, `oauth_token`, `oauth_cred_file`, `oauth_cred_json`) so callers can swap providers on a single request without editing YAML.
 - **Backward-compatible source field.** Request types expose `EffectiveSourcePath()` to accept both `source` and legacy `repo_path` JSON keys.
-- **Audit driver dispatch.** `POST /api/agent/run/audit` takes `driver: "auto"|"both"|"vigolium-audit"|"piolium"`; multi-driver modes run sequentially and multiplex SSE chunks with a `driver` field when streaming.
+- **Audit driver dispatch.** `POST /api/agent/run/audit` takes `driver: "auto"|"both"|"audit"|"piolium"` (default `"auto"` — run audit; fall back to piolium only if audit fails). Multi-driver modes run sequentially under one parent run, expose per-driver BYOK auth (`audit_auth`, `piolium_auth`), and multiplex SSE chunks with a `driver` field when streaming.
+- **OpenAI-compatible endpoint.** `POST /api/agent/chat/completions` exposes the in-process olium engine through the OpenAI Chat Completions wire format so existing SDKs (LangChain, LlamaIndex, custom proxies) can drive Vigolium agents.
 
 ---
 

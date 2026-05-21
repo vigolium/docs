@@ -58,8 +58,8 @@ curl -s https://example.com/api/users | vigolium agent autopilot
 
 ### Intensity presets
 
-| Preset | Max commands | Timeout | Vigolium-audit mode (with `--source`) | Browser |
-|--------|:------------:|:-------:|:------------------------------------:|:-------:|
+| Preset | Max commands | Timeout | Audit mode (with `--source`) | Browser |
+|--------|:------------:|:-------:|:----------------------------:|:-------:|
 | `quick` | 30 | 1h | `lite` | off |
 | `balanced` (default) | 100 | 6h | `balanced` | off |
 | `deep` | 300 | 12h | `deep` | on |
@@ -108,10 +108,10 @@ Both `autopilot` and `swarm` accept `--source <path|git-url|archive>`. When set,
 vigolium agent autopilot -t https://example.com --source ~/src/your-app
 
 # Override the audit depth
-vigolium agent autopilot -t https://example.com --source ~/src/your-app --vigolium-audit=deep
+vigolium agent autopilot -t https://example.com --source ~/src/your-app --audit=deep
 
 # Disable the audit prep
-vigolium agent autopilot -t https://example.com --source ~/src/your-app --vigolium-audit=off
+vigolium agent autopilot -t https://example.com --source ~/src/your-app --audit=off
 
 # Focus on a PR's changed code
 vigolium agent autopilot -t https://example.com --source ./app \
@@ -150,7 +150,7 @@ vigolium agent session --tail       # live-tail the active run
 vigolium agent session --full <id>  # full detail
 ```
 
-Findings ingest into the same `findings` table as native scans, tagged by source (`autopilot`, `swarm`, `archon`, `piolium`). Query them with:
+Findings ingest into the same `findings` table as native scans, tagged by source (`autopilot`, `swarm`, `audit`, `piolium`). Query them with:
 
 ```bash
 vigolium finding list --source autopilot

@@ -10,7 +10,7 @@ Answers to the questions that come up most often. For a system-level picture, st
 
 <AccordionGroup>
   <Accordion title="What is Vigolium?">
-    Vigolium is a high-fidelity web vulnerability scanner written in Go. It combines deterministic, module-based scanning with AI-driven agentic analysis to provide broad and deep coverage of web application security issues. It ships 245 modules (152 active, 93 passive) covering injection flaws, misconfigurations, information disclosure, authentication issues, and more.
+    Vigolium is a high-fidelity web vulnerability scanner written in Go. It combines deterministic, module-based scanning with AI-driven agentic analysis to provide broad and deep coverage of web application security issues. It ships 251 modules (154 active, 97 passive) covering injection flaws, misconfigurations, information disclosure, authentication issues, and more.
   </Accordion>
   <Accordion title="What are the ways to run Vigolium?">
     Three operating modes:
@@ -24,7 +24,7 @@ Answers to the questions that come up most often. For a system-level picture, st
     See [Choosing a Mode](/getting-started/choosing-a-mode).
   </Accordion>
   <Accordion title="What's the difference between native scan and agentic scan?">
-    The **native scan** pipeline is fully deterministic, pure Go, no AI. Requests flow through a fixed sequence of phases (Heuristics → External Harvesting → Spidering → Discovery → DynamicAssessment → KnownIssueScan → Extension).
+    The **native scan** pipeline is fully deterministic, pure Go, no AI. Requests flow through a fixed sequence of phases (Heuristics → External Harvesting → Spidering → Discovery → DynamicAssessment → KnownIssueScan).
 
     **Agentic scan** uses AI agents to drive or augment scanning (`vigolium agent <mode>`). Both write into the same database, so native and AI findings coexist and dedup together. See [Native Scan](/architecture/native-scan) and [Agentic Scan](/architecture/agentic-scan).
   </Accordion>
@@ -82,11 +82,11 @@ Answers to the questions that come up most often. For a system-level picture, st
 
     Note: OpenAI-style function tools are supported by the wire format but not by every model. Models that work well locally: `qwen2.5-coder`, `llama3.1` instruct, `mistral-nemo`. If the agent never calls tools, it's likely a model that silently ignores tool definitions, switch to a tool-trained model.
   </Accordion>
-  <Accordion title="What's the difference between query, autopilot, swarm, and vigolium-audit?">
+  <Accordion title="What's the difference between query, autopilot, swarm, and audit?">
     - **Query**: single-shot prompt; no network scanning. Good for code review, endpoint discovery, secret detection.
     - **Autopilot**: one long-running LLM session with full tool access that decides what to scan and iterates until it halts.
     - **Swarm**: a multi-phase pipeline where native Go does the heavy lifting and AI intervenes at checkpoints (planning, triage, custom extension generation).
-    - **Vigolium Audit**: a foreground multi-phase AI source-code audit.
+    - **Audit**: a foreground multi-phase source-code audit. `vigolium agent audit` is the unified dispatcher driving the embedded vigolium-audit harness and/or piolium via `--driver auto|both|audit|piolium`.
 
     All scan-oriented modes support `--source` for source-aware analysis. See [Agent Mode](/agentic-scan/agent-mode).
   </Accordion>
@@ -144,7 +144,7 @@ Answers to the questions that come up most often. For a system-level picture, st
     Vigolium has a per-host circuit breaker (`hosterrors.Cache`). After `MaxHostError` consecutive errors (default 30) the host is quarantined and the executor skips further items for it. A successful response resets the counter (unless already at threshold). This protects scan throughput against unresponsive hosts.
   </Accordion>
   <Accordion title="Scans seem rate-limited per host">
-    By design. The `HostRateLimiter` gives each host a buffered-channel semaphore with capacity = max-per-host (default 2 concurrent per host). Adjust scanning pace via config or CLI concurrency flags.
+    By design. The `HostRateLimiter` gives each host a buffered-channel semaphore with capacity = max-per-host (CLI default 30 concurrent per host). Adjust scanning pace via config or CLI concurrency flags.
   </Accordion>
   <Accordion title="A noisy module produces only a handful of findings then stops">
     Expected. The executor enforces a per-module finding cap (`MaxFindingsPerModule`, default 10), once a module emits that many findings, further results from it are suppressed and a one-time warning is logged. This keeps injection-style modules from flooding output.

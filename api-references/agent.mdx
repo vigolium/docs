@@ -1,18 +1,19 @@
 ---
 title: "Vigolium API Reference, Agent"
-description: "AI agent API with query, autopilot, and swarm run modes, SSE streaming, session history, and OpenAI-compatible chat."
+description: "AI agent API with query, autopilot, swarm, and audit run modes, SSE streaming, session history, and OpenAI-compatible chat."
 icon: "robot"
 ---
 
 ## Overview
 
-The agent API provides three run modes that mirror the `vigolium agent` CLI subcommands, plus session history and status endpoints:
+The agent API provides four run modes that mirror the `vigolium agent` CLI subcommands, plus session history and status endpoints:
 
 | Endpoint                          | CLI Equivalent              | Description                              |
 |-----------------------------------|-----------------------------|------------------------------------------|
 | `POST /api/agent/run/query`       | `vigolium agent query`      | Single-shot prompt execution             |
 | `POST /api/agent/run/autopilot`   | `vigolium agent autopilot`  | Autonomous AI-driven scanning session    |
 | `POST /api/agent/run/swarm`       | `vigolium agent swarm`      | AI-guided multi-phase vulnerability swarm|
+| `POST /api/agent/run/audit`       | `vigolium agent audit`      | Source-audit dispatcher (vigolium-audit and/or piolium) |
 | `GET /api/agent/status/list`      |,                           | List runs with in-memory status          |
 | `GET /api/agent/status/:id`       |,                           | Get run status by ID                     |
 | `GET /api/agent/sessions`         | `vigolium agent sessions`   | Paginated session history from DB        |
@@ -22,9 +23,9 @@ The agent API provides three run modes that mirror the `vigolium agent` CLI subc
 | `GET /api/agent/sessions/:id/artifacts/{name}` |,              | Read a specific artifact (10 MiB default cap) |
 | `POST /api/agent/chat/completions`|,                           | OpenAI-compatible chat completions       |
 
-All run modes share a global concurrency lock (capped per-mode by `server.agent_heavy_max` / `server.agent_light_max`), exceeding the cap returns `429 Too Many Requests` after `server.agent_queue_timeout`.
+Concurrency is bounded by two pools (`server.agent_heavy_max` for `autopilot`/`swarm`/`audit`, `server.agent_light_max` for `query` and chat completions) plus a per-project heavy cap. New heavy runs return `409 Conflict` once the cap is hit; light runs queue until `server.agent_queue_timeout` elapses and then return `429 Too Many Requests`.
 
-> **Provider overrides are CLI-only.** The server resolves the olium provider once from `agent.olium.*` in `vigolium-configs.yaml` and reuses it across requests. There is no per-request provider/model field, to switch providers on a server-side workload, edit the YAML and reload.
+> **Server-default provider, BYOK per request.** The server resolves the olium provider from `agent.olium.*` in `vigolium-configs.yaml` (which keeps prompt caches stable across requests), but every agent run endpoint also accepts per-request BYOK credentials. Provide any subset of `api_key`, `oauth_token`, `oauth_cred_file`, or `oauth_cred_json` on the same request to override per call. The audit dispatcher additionally accepts `audit_auth` and `piolium_auth` objects to apply different credentials to each driver.
 
 ---
 
@@ -90,7 +91,7 @@ Launches an AI agent that autonomously discovers, scans, and triages vulnerabili
 | Field              | Type     | Required | Description                                                    |
 |--------------------|----------|----------|----------------------------------------------------------------|
 | `prompt`           | string   | No       | Natural language scan prompt (parsed into target/source/focus when explicit fields are empty) |
-| `intensity`        | string   | No       | Scan intensity preset: `"quick"`, `"balanced"` (default), or `"deep"`. Bundles `max_commands`, `timeout`, `archon_mode`, and `browser` settings |
+| `intensity`        | string   | No       | Scan intensity preset: `"quick"`, `"balanced"` (default), or `"deep"`. Bundles `max_commands`, `timeout`, `audit_mode`, and `browser` settings |
 | `target`           | string   | No*      | Target URL to scan (derived from `input` if not set)           |
 | `input`            | string   | No       | Raw input (curl, raw HTTP, Burp XML, URL), target extracted automatically |
 | `agent`            | string   | No       | Optional descriptive label persisted to the run record         |
@@ -101,10 +102,10 @@ Launches an AI agent that autonomously discovers, scans, and triages vulnerabili
 | `focus`            | string   | No       | Focus area hint (e.g. `"API injection"`, `"auth bypass"`)      |
 | `instruction`      | string   | No       | Custom instruction appended to the prompt                      |
 | `timeout`          | string   | No       | Go duration string (default `"6h"`)                            |
-| `max_commands`     | int      | No       | Max LLM turns the agent can take (default `100`)               |
-| `token_budget`     | int      | No       | Cap on cumulative input+output tokens (0 = no cap)             |
+| `max_commands`     | int      | No       | Max LLM turns the agent can take. Intensity preset overrides default: quick=`150`, balanced=`500`, deep=`1500` |
 | `browser`          | bool     | No       | Enable agent-browser for browser-based interactions            |
 | `credentials`      | string   | No       | Credentials for auth preflight (e.g. `"admin/admin123"`)       |
+| `credential_sets`  | object[] | No       | Multiple credential sets keyed by role/persona                  |
 | `auth_required`    | bool     | No       | Require auth/session preparation before the operator starts    |
 | `requires_browser` | bool     | No       | Require browser-assisted auth instead of HTTP-only preflight    |
 | `browser_start_url`| string   | No       | Explicit browser/login start URL                                |
@@ -113,10 +114,16 @@ Launches an AI agent that autonomously discovers, scans, and triages vulnerabili
 | `stream`           | bool     | No       | If `true`, returns an SSE stream                               |
 | `scan_uuid`        | string   | No       | Link results to a specific scan UUID                           |
 | `project_uuid`     | string   | No       | Scope results to a project (falls back to `X-Project-UUID` header) |
-| `archon_mode`      | string   | No       | Vigolium-audit mode: `"lite"` (default, 3-phase), `"balanced"` (6-phase), `"deep"` (10-phase), `"mock"` |
-| `no_archon`        | bool     | No       | Disable automatic vigolium-audit (enabled by default when `source` is set) |
-| `archon`           | string   | No       | **DEPRECATED**, use `no_archon` + `archon_mode` instead. Legacy values: `"lite"`, `"balanced"`, `"deep"`, `"off"` |
+| `audit_mode`       | string   | No       | Vigolium-audit mode: `"lite"` (default, 3-phase), `"balanced"` (6-phase), `"deep"` (10-phase), `"mock"` |
+| `no_audit`         | bool     | No       | Disable automatic vigolium-audit (enabled by default when `source` is set) |
+| `audit`            | string   | No       | Shorthand for `audit_mode`/`no_audit`: `"lite"`, `"balanced"`, `"deep"`, `"mock"`, or `"off"` |
+| `piolium`          | string   | No       | Run a piolium audit in parallel with the autopilot prep. Same value set as `audit` |
+| `triage`           | bool     | No       | Enable an AI triage pass over the autopilot's findings on completion |
 | `upload_results`   | bool     | No       | Upload session bundle to cloud storage on completion (requires `storage` config) |
+| `api_key`          | string   | No       | BYOK API key for this request (overrides server config)         |
+| `oauth_token`      | string   | No       | BYOK OAuth token for this request                                |
+| `oauth_cred_file`  | string   | No       | Path to an OAuth credential JSON file readable by the server     |
+| `oauth_cred_json`  | string   | No       | Inline OAuth credential JSON                                     |
 
 \* At least one of `target`, `input`, `source`, `diff`, or `prompt` is required.
 
@@ -198,16 +205,14 @@ AI agents are called at phases 3, 4, 6, and 9. When inputs exceed `master_batch_
 | Field                  | Type     | Required | Description                                                           |
 |------------------------|----------|----------|-----------------------------------------------------------------------|
 | `prompt`               | string   | No       | Natural language scan prompt                                           |
-| `intensity`            | string   | No       | `"quick"`, `"balanced"` (default), `"deep"`, bundles `discover`, `triage`, `code_audit`, `max_iterations`, `archon`, concurrency, and duration settings |
-| `input`                | string   | No*      | Single input (URL, curl command, raw HTTP, Burp XML, or record UUID)  |
+| `intensity`            | string   | No       | `"quick"`, `"balanced"` (default), `"deep"`, bundles `discover`, `triage`, `code_audit`, `max_iterations`, `audit`, concurrency, and duration settings |
+| `input`                | string   | No*      | Single input (URL, curl command, raw HTTP, Burp XML)                  |
 | `inputs`               | string[] | No*      | Multiple inputs                                                       |
-| `target`               | string   | No       | Target URL (alias for `input` when given alone)                        |
-| `record_uuid`          | string   | No       | HTTP record UUID from the database                                     |
 | `http_request_base64`  | string   | No*      | Base64-encoded raw HTTP request                                        |
 | `http_response_base64` | string   | No       | Base64-encoded raw HTTP response (attached to the request above)      |
 | `url`                  | string   | No       | URL hint for parsing the base64 request                                |
 
-\* At least one of `input`, `inputs`, `target`, `record_uuid`, `http_request_base64`, `source`, `diff`, or `prompt` is required.
+\* At least one of `input`, `inputs`, `http_request_base64`, `source`, `diff`, or `prompt` is required.
 
 **Source analysis:**
 
@@ -236,7 +241,15 @@ AI agents are called at phases 3, 4, 6, and 9. When inputs exceed `master_batch_
 | `triage`               | bool     | No       | Enable AI triage and rescan phases                                     |
 | `force_extensions`     | bool     | No       | Force extension agent to run even when the master returned no extensions |
 | `profile`              | string   | No       | Scanning profile name (e.g. `"light"`, `"thorough"`)                  |
-| `archon`               | string   | No       | Background vigolium-audit: `"lite"`, `"balanced"`, `"deep"`, `"mock"`, `"off"`. Requires `source`. |
+| `audit`                | string   | No       | Background vigolium-audit: `"lite"`, `"balanced"`, `"deep"`, `"mock"`, `"off"`. Requires `source`. |
+| `piolium`              | string   | No       | Background piolium audit (run in parallel with vigolium-audit). Same value set as `audit`. |
+| `auth`                 | object   | No       | Per-host auth configuration (browser-driven login + token rules)       |
+| `auth_required`        | bool     | No       | Require auth/session preparation before the master agent starts        |
+| `requires_browser`     | bool     | No       | Require browser-assisted auth                                          |
+| `browser_start_url`    | string   | No       | Explicit browser/login start URL                                       |
+| `focus_routes`         | string[] | No       | Protected/browser-focused routes to prioritize                          |
+| `credentials`          | string   | No       | Credentials for auth preflight (e.g. `"admin/admin123"`)                |
+| `credential_sets`      | object[] | No       | Multiple credential sets keyed by role/persona                          |
 
 **Concurrency tuning:**
 
@@ -259,7 +272,7 @@ AI agents are called at phases 3, 4, 6, and 9. When inputs exceed `master_batch_
 | `dry_run`              | bool     | No       | Render prompts without executing agents                                 |
 | `show_prompt`          | bool     | No       | Include rendered prompts in output                                      |
 | `stream`               | bool     | No       | If `true`, returns an SSE stream with phase events                     |
-| `timeout`              | string   | No       | Go duration string (default `"15m"`)                                    |
+| `timeout`              | string   | No       | Go duration string (default `"12h"`)                                    |
 | `project_uuid`         | string   | No       | Scope results to a project                                              |
 | `scan_uuid`            | string   | No       | Link results to a specific scan UUID                                    |
 | `upload_results`       | bool     | No       | Upload session bundle to cloud storage on completion                    |
@@ -301,7 +314,7 @@ curl -s -X POST http://localhost:9002/api/agent/run/swarm \
     "input": "https://example.com",
     "source": "/home/user/src/my-app",
     "discover": true,
-    "archon": "lite"
+    "audit": "lite"
   }' | jq .
 
 # Diff-focused on a GitHub PR
@@ -337,6 +350,88 @@ curl -N -X POST http://localhost:9002/api/agent/run/swarm \
 
 ---
 
+## POST /api/agent/run/audit, Source-Audit Driver Dispatcher
+
+Launches a multi-phase source-code audit driven by the embedded vigolium-audit harness and/or the standalone piolium harness against a single source tree under one AgenticScan. Per-driver child rows hang off the parent run; the dispatcher runs a project-wide findings dedup pass once its drivers exit.
+
+**Request body, core fields:**
+
+| Field            | Type    | Required | Description                                                                              |
+|------------------|---------|----------|------------------------------------------------------------------------------------------|
+| `source`         | string  | Yes      | Path to source code, git URL (HTTPS or SSH), or archive file. Legacy alias: `repo_path`. |
+| `driver`         | string  | No       | `"auto"` (default — run audit; fall back to piolium only if `claude`/`codex` CLI is missing), `"both"` (run audit then piolium unconditionally), `"audit"`, or `"piolium"` |
+| `mode`           | string  | No       | Harness mode — see `--list-modes` on `vigolium agent audit` / `vigolium agent audit`. Under `auto`/`both`, restricted to shared modes (`lite`, `balanced`, `deep`, `revisit`, `confirm`, `merge`). |
+| `modes`          | string[]| No       | Chain modes back-to-back (e.g. `["deep","confirm"]`). Audit runs the chain natively in one subprocess; piolium chains via sequential runs collapsed into one aggregated child row. |
+| `intensity`      | string  | No       | `"quick"` → `lite`, `"balanced"` → `balanced`, `"deep"` → chain `[deep, confirm]` |
+| `agent`          | string  | No       | Audit-leg agent selector: `"claude"` or `"codex"`. Layered on top of `provider`. |
+| `provider`       | string  | No       | Olium provider name (e.g. `anthropic-api-key`). Resolves the audit-leg agent and forwards BYOK auth (`anthropic-*` → claude, `openai-*` → codex). |
+| `commit_depth`   | int     | No       | Shallow-clone depth (0 = full history)                                                   |
+| `interactive`    | bool    | No       | Drop into the audit harness interactively (audit-only). Skips NDJSON streaming and findings auto-import. |
+| `no_stream`      | bool    | No       | Disable streaming progress to the client                                                  |
+| `no_dedup`       | bool    | No       | Skip the post-pass project-wide findings dedup                                            |
+| `no_preflight`   | bool    | No       | Skip per-driver preflight checks                                                          |
+| `upload_results` | bool    | No       | Upload session bundle on completion (requires `storage` config)                            |
+| `stream`         | bool    | No       | If `true`, returns an SSE stream with `driver`/`chunk`/`phase`/`done`/`error` events     |
+| `timeout`        | string  | No       | Go duration string                                                                        |
+| `project_uuid`   | string  | No       | Scope results to a project                                                                 |
+| `scan_uuid`      | string  | No       | Link results to a specific scan UUID                                                       |
+
+**Per-driver BYOK overrides** apply different credentials to each leg under `auto`/`both`:
+
+| Field          | Type   | Description                                          |
+|----------------|--------|------------------------------------------------------|
+| `audit_auth`   | object | `{api_key, oauth_token, oauth_cred_file, oauth_cred_json}` applied to the vigolium-audit leg |
+| `piolium_auth` | object | Same shape, applied to the piolium leg               |
+
+**Piolium-specific flags:**
+
+| Field          | Type   | Description                                             |
+|----------------|--------|---------------------------------------------------------|
+| `pi_provider`  | string | Override Pi's provider for the piolium leg              |
+| `pi_model`     | string | Override Pi's model for the piolium leg                 |
+| `plm_*`        | varied | Pass-through flags to piolium's session config           |
+
+**Examples:**
+
+```bash
+# Default: auto — vigolium-audit, fall back to piolium if the CLI is missing
+curl -s -X POST http://localhost:9002/api/agent/run/audit \
+  -H "Content-Type: application/json" \
+  -d '{"source": "/home/user/src/my-app"}' | jq .
+
+# Both drivers, deep intensity (expands to mode chain [deep, confirm])
+curl -s -X POST http://localhost:9002/api/agent/run/audit \
+  -H "Content-Type: application/json" \
+  -d '{
+    "source": "/home/user/src/my-app",
+    "driver": "both",
+    "intensity": "deep"
+  }' | jq .
+
+# Per-driver BYOK
+curl -s -X POST http://localhost:9002/api/agent/run/audit \
+  -H "Content-Type: application/json" \
+  -d '{
+    "source": "/home/user/src/my-app",
+    "driver": "both",
+    "audit_auth":   {"api_key": "sk-ant-..."},
+    "piolium_auth": {"api_key": "sk-..."}
+  }' | jq .
+
+# Streamed multi-driver run (SSE)
+curl -N -X POST http://localhost:9002/api/agent/run/audit \
+  -H "Content-Type: application/json" \
+  -d '{
+    "source": "/home/user/src/my-app",
+    "driver": "both",
+    "stream": true
+  }'
+```
+
+**SSE events for audit:** Each `chunk` event includes a `driver` field (`"audit"` or `"piolium"`). The dispatcher brackets each driver's stream with `driver_start` and `driver_end` events so a UI can group log lines by driver. The `done` event arrives once after both drivers (and the dedup pass) finish.
+
+---
+
 ## Natural Language Prompts
 
 The autopilot and swarm endpoints accept a `prompt` field for natural language scan requests. When `prompt` is provided and no explicit input fields are set (`target`, `input`, `source`), the prompt is parsed by an AI intent extractor that returns structured parameters.
@@ -351,7 +446,7 @@ The intent extractor recognizes: target URLs, source code paths, vulnerability f
 | `instruction`  | `instruction`        | `instruction`     | Remaining guidance                                    |
 | `discover`     |,                    | `discover`        | Inferred when both target and source are present      |
 | `code_audit`   |,                    | `code_audit`      | Inferred when source-only (no target)                 |
-| `archon`       | `archon_mode`        | `archon`          | `"lite"`, `"balanced"`, or `"deep"` when audit agent is mentioned |
+| `audit`        | `audit_mode`         | `audit`           | `"lite"`, `"balanced"`, or `"deep"` when audit agent is mentioned |
 
 ```bash
 # Swarm with a natural language prompt
@@ -378,12 +473,14 @@ curl -s -X POST http://localhost:9002/api/agent/run/autopilot \
 
 All run endpoints support `"stream": true`, which returns a `text/event-stream` response. Each event is a JSON object on a `data:` line.
 
-| Type    | Description                                                        | Modes              |
-|---------|--------------------------------------------------------------------|---------------------|
-| `chunk` | Incremental text output from the agent                             | All                 |
-| `phase` | Phase transition (includes `phase` field)                          | Swarm only          |
-| `done`  | Final event with the complete result object                        | All                 |
-| `error` | Agent run failed; includes `error` message                         | All                 |
+| Type           | Description                                                                  | Modes              |
+|----------------|------------------------------------------------------------------------------|---------------------|
+| `chunk`        | Incremental text output from the agent (audit adds a `driver` field)         | All                 |
+| `phase`        | Phase transition (includes `phase` field)                                    | Swarm, audit        |
+| `driver_start` | Multi-driver dispatcher began streaming a driver                              | Audit (multi-driver)|
+| `driver_end`   | Multi-driver dispatcher finished streaming a driver                           | Audit (multi-driver)|
+| `done`         | Final event with the complete result object                                  | All                 |
+| `error`        | Agent run failed; includes `error` message                                   | All                 |
 
 **Example SSE stream (swarm):**
 
@@ -442,7 +539,7 @@ curl -s http://localhost:9002/api/agent/status/list | jq .
 | Field              | Type     | Description                                                |
 |--------------------|----------|------------------------------------------------------------|
 | `agentic_scan_uuid`| string   | Unique run identifier                                      |
-| `mode`             | string   | `"query"`, `"autopilot"`, or `"swarm"`                     |
+| `mode`             | string   | `"query"`, `"autopilot"`, `"swarm"`, `"audit"`, or `"pipeline"` |
 | `status`           | string   | `"running"`, `"completed"`, or `"failed"`                  |
 | `agent_name`       | string   | Agent label recorded for the run                           |
 | `template_id`      | string   | Prompt template ID (query mode)                            |
@@ -464,7 +561,7 @@ Paginated list of agent sessions from the database. Unlike `/api/agent/status/li
 
 | Parameter | Type   | Default | Description                                      |
 |-----------|--------|---------|--------------------------------------------------|
-| `mode`    | string |,       | Filter by mode: `query`, `autopilot`, `swarm`    |
+| `mode`    | string |,       | Filter by mode: `query`, `autopilot`, `swarm`, `audit` |
 | `limit`   | int    | `50`    | Page size (max `500`)                            |
 | `offset`  | int    | `0`     | Offset for pagination                            |
 
@@ -527,17 +624,20 @@ curl -s http://localhost:9002/api/agent/sessions/agt-550e8400-.../artifacts | jq
 
 ```json
 {
-  "files": [
-    {"path": "swarm-plan.json", "size": 2048},
-    {"path": "extensions/sqli-custom.js", "size": 1024},
-    {"path": "archon-audit/findings/p8-001.md", "size": 4096}
-  ]
+  "agentic_scan_uuid": "agt-550e8400-e29b-41d4-a716-446655440000",
+  "session_dir": "/home/user/.vigolium/agent-sessions/agt-550e8400-...",
+  "artifacts": [
+    {"name": "swarm-plan.json", "size": 2048, "modified_at": "2026-05-21T10:01:00Z", "kind": "file"},
+    {"name": "extensions/sqli-custom.js", "size": 1024, "modified_at": "2026-05-21T10:02:00Z", "kind": "file"},
+    {"name": "vigolium-audit/findings/p8-001.md", "size": 4096, "modified_at": "2026-05-21T10:03:00Z", "kind": "file"}
+  ],
+  "truncated": false
 }
 ```
 
 ## GET /api/agent/sessions/:id/artifacts/{name}, Read Artifact
 
-Read a specific artifact file. Wildcard supports nesting (e.g. `archon-audit/state.json`).
+Read a specific artifact file. Wildcard supports nesting (e.g. `vigolium-audit/state.json`).
 
 | Query param | Type | Description                                                       |
 |-------------|------|-------------------------------------------------------------------|

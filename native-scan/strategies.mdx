@@ -25,7 +25,7 @@ Use `--strategy` to control how much reconnaissance Vigolium performs before dyn
 
 ### Lite, Fast, Minimal Discovery
 
-Runs only the audit phase against the provided targets. No crawling, no content discovery.
+Runs only the dynamic-assessment phase against the provided targets. No crawling, no content discovery.
 
 ```bash
 vigolium scan -t https://example.com --strategy lite
@@ -169,9 +169,9 @@ vigolium scan -t https://example.com --known-issue-scan-severities critical,high
 vigolium scan -t https://example.com --known-issue-scan-templates-dir ~/nuclei-templates/
 ```
 
-### Audit
+### Dynamic Assessment
 
-The core scanning phase. Runs active and passive modules against all discovered HTTP records. Enabled in all strategies.
+The core scanning phase (canonical name `dynamic-assessment`; aliases `audit`, `dast`, `assessment`). Runs active and passive modules against all discovered HTTP records. Enabled in all strategies.
 
 Uses a feedback loop (up to 3 rounds): after each round, checks for newly discovered records and rescans if found.
 
@@ -189,10 +189,10 @@ vigolium scan -t https://example.com --oast-url https://your-oast.example.com/ca
 | Flag | Default | Description |
 |------|---------|-------------|
 | `-c` / `--concurrency` | 50 | Number of concurrent scan workers |
-| `--max-per-host` | 2 | Max concurrent requests per host |
+| `--max-per-host` | 30 | Max concurrent requests per host |
 | `-r` / `--rate-limit` | 100 | Max request submissions per second |
 | `--max-host-error` | 30 | Skip host after N consecutive errors |
-| `--max-findings-per-module` | 15 | Suppress findings after this many per module (0 = unlimited) |
+| `--max-findings-per-module` | 10 | Suppress findings after this many per module (0 = unlimited) |
 | `--timeout` | 15s | Per-request HTTP timeout |
 | `--retries` | 1 | Retry count for failed requests |
 | `--scanning-max-duration` | unset | Override global max scan duration |
@@ -237,7 +237,7 @@ scanning_pace:
   external_harvester:
     max_duration: 5m
 
-  audit:
+  dynamic-assessment:
     concurrency: 50
 ```
 
@@ -250,6 +250,10 @@ Precedence (highest to lowest): CLI flags > scanning profile > per-phase overrid
 | Console | `--format console` (default) | Colored human-readable table output |
 | JSONL | `--format jsonl` or `--json` / `-j` | One JSON object per finding per line |
 | HTML | `--format html -o report.html` | Interactive ag-grid HTML report |
+| Document report | `--format report -o report.docx` | Document-style report (Word) |
+| PDF | `--format pdf -o report.pdf` | PDF report (uses headless Chrome) |
+
+Multiple formats can be combined with a comma, e.g. `--format jsonl,html`.
 
 ```bash
 # JSON output

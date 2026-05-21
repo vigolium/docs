@@ -21,7 +21,7 @@ Vigolium supports multiple scanning modes depending on what you have available: 
 | **Agent, Query** | Source code + provider | `vigolium agent query --prompt-template security-code-review --source ./app` | One-shot AI code review |
 | **Agent, Swarm** | URL (+ optional source) | `vigolium agent swarm -t URL [--source ./app]` | AI plans modules + JS extensions, native scanner runs them |
 | **Agent, Autopilot** | URL (+ optional source) | `vigolium agent autopilot -t URL [--source ./app]` | AI drives bash/files/CLI autonomously |
-| **Agent, Vigolium Audit** | Source code | `vigolium agent vigolium-audit --source ./app --mode deep` | Multi-phase whitebox security audit |
+| **Agent, Audit** | Source code | `vigolium agent audit --source ./app --mode deep` | Multi-phase whitebox security audit (driver dispatcher: `--driver auto\|both\|audit\|piolium`) |
 
 ## Decision Guide
 
@@ -38,7 +38,7 @@ Do you have application source code?
 │
 └── Yes
     ├── One-shot code review? ──────────────── vigolium agent query --prompt-template security-code-review --source ./app
-    ├── Multi-phase code audit? ────────────── vigolium agent vigolium-audit --source ./app --mode deep
+    ├── Multi-phase code audit? ────────────── vigolium agent audit --source ./app --mode deep
     ├── AI-guided dynamic scan w/ source? ──── vigolium agent swarm -t URL --source ./app --code-audit
     └── Autonomous pentest w/ source? ──────── vigolium agent autopilot -t URL --source ./app
 ```
@@ -54,7 +54,7 @@ Phases execute in this order. Each strategy enables a subset of these phases:
 4. Spidering            Browser-based crawling (Chromium), SPA support, form filling
 5. KnownIssueScan       Nuclei templates + Kingfisher secret scanning
 6. Dynamic-Assessment   Active + passive scanner modules against all discovered endpoints
-7. Extension            Custom JS extension modules (when `--only extension` or `--ext` is used)
+                        (user-supplied JS/YAML extensions also dispatch here)
 ```
 
 ## Strategy Comparison
@@ -212,6 +212,6 @@ Profiles slot between CLI flags and the main config file:
 
 ## Source-Aware Scanning
 
-Source code-aware analysis lives in agent mode, not in the native scanner. Use `vigolium agent swarm --source <path>` for AI-driven route extraction + code audit + targeted scanning, `vigolium agent autopilot --source <path>` for autonomous pentest with code context, or `vigolium agent vigolium-audit --source <path> --mode deep` for a standalone multi-phase whitebox audit.
+Source code-aware analysis lives in agent mode, not in the native scanner. Use `vigolium agent swarm --source <path>` for AI-driven route extraction + code audit + targeted scanning, `vigolium agent autopilot --source <path>` for autonomous pentest with code context, or `vigolium agent audit --source <path> --mode deep` for a standalone multi-phase whitebox audit.
 
 See [Agent Mode](/agentic-scan/agent-mode) for the full overview.

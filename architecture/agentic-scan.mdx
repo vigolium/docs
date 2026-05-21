@@ -25,7 +25,8 @@ Vigolium's agent mode runs AI-driven security scans on top of the native scanner
 | `query`      | Single-shot prompt (template or inline). Code review, secret hunt, endpoint discovery. | `pkg/cli/agent.go`          |
 | `autopilot`  | Agentic scan: autonomous operator with full tool access.         | `pkg/cli/agent_autopilot.go`|
 | `swarm`      | Agentic scan: 10-phase guided pipeline (plan → extension → scan → triage). | `pkg/cli/agent_swarm.go`    |
-| `vigolium-audit` | Foreground vigolium-audit (multi-phase AI source-code audit).      | `pkg/cli/agent_archon.go`   |
+| `audit`      | Unified driver dispatcher for source-code audit. `--driver auto\|both\|audit\|piolium` drives the embedded vigolium-audit harness, the standalone piolium harness, or both. | `pkg/cli/agent_audit.go`    |
+| `piolium`    | Direct piolium harness driver (requires a separate `~/.piolium` install). | `pkg/cli/agent_piolium.go`  |
 | `olium`      | Interactive olium TUI or headless prompt.                        | `pkg/cli/agent_olium.go`    |
 | `session`    | List or inspect past agent runs (sessions list / detail view).   | `pkg/cli/agent_session.go`  |
 
@@ -38,7 +39,7 @@ Vigolium's agent mode runs AI-driven security scans on top of the native scanner
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │  CLI                          pkg/cli/agent_*.go                │
-│  query · autopilot · swarm · vigolium-audit · olium · session   │
+│  query · autopilot · swarm · audit · piolium · olium · session  │
 └───────────────────────────────┬─────────────────────────────────┘
                                 │
 ┌───────────────────────────────▼─────────────────────────────────┐
@@ -49,7 +50,10 @@ Vigolium's agent mode runs AI-driven security scans on top of the native scanner
 │     discovery → plan → extension → scan → triage → finalize     │
 │                                                                 │
 │   AutopilotPipelineRunner    autopilot_pipeline.go              │
-│     vigolium-audit (optional, foreground) → autonomous operator │
+│     audit (optional, foreground) → autonomous operator          │
+│                                                                 │
+│   Audit dispatcher     audit_drivers.go + audit_chain.go        │
+│     driver=auto|both|audit|piolium · per-driver child rows      │
 └───────────────────────────────┬─────────────────────────────────┘
                                 │
 ┌───────────────────────────────▼─────────────────────────────────┐
@@ -65,7 +69,8 @@ Vigolium's agent mode runs AI-driven security scans on top of the native scanner
                                 │
 ┌───────────────────────────────▼─────────────────────────────────┐
 │  Providers                    pkg/olium/provider/               │
-│  anthropic · openai · codex (OAuth) · claudecode (CLI)          │
+│  anthropic (API / OAuth / CLI / Vertex) · openai (API /         │
+│  codex-OAuth) · google-vertex · openai-compatible (HTTP)        │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -201,7 +206,7 @@ Phase names prefixed `native-` are pure-Go (no LLM). The pipeline is gated by:
 - `cfg.Discover`, `cfg.CodeAudit`, `cfg.Triage` toggles
 - checkpoint resume, `--resume <session-dir>` skips already-completed phases
 
-A parallel **vigolium-audit** subprocess can run in the background (`cfg.Archon != ""`) when source is provided, contributing source-code audit findings without blocking the swarm.
+A parallel **vigolium-audit** subprocess can run in the background (`cfg.Audit != ""`) when source is provided, contributing source-code audit findings without blocking the swarm. Swarm uses the embedded vigolium-audit harness directly; the multi-driver `agent audit` command layers piolium support on top.
 
 ### Plan & extension phases
 
@@ -242,7 +247,7 @@ If `FollowUpScans` is non-empty and rescan is enabled, the pipeline loops back t
    ┌─────────────────────────────────────────────┐
    │ vigolium-audit (optional, foreground)       │
    │   if --source: run vigolium-audit, freeze   │
-   │   findings into archon-audit/ directory     │
+   │   findings into vigolium-audit/ directory   │
    └─────────────────┬───────────────────────────┘
                      ▼
    ┌─────────────────────────────────────────────┐
@@ -276,10 +281,10 @@ Effort level (`low`/`medium`) is picked from vigolium-audit mode: `balanced`/`de
 ### Intensity presets (autopilot)
 
 | Intensity | MaxCommands | Timeout | Vigolium-audit mode | Browser |
-|-----------|-------------|---------|-------------|---------|
-| quick     | 30          | 1h      | lite        | off     |
-| balanced  | 100         | 6h      | balanced    | off     |
-| deep      | 300         | 12h     | deep        | on      |
+|-----------|-------------|---------|---------------------|---------|
+| quick     | 150         | 1h      | lite                | on      |
+| balanced  | 500         | 6h      | balanced            | on      |
+| deep      | 1500        | 12h     | deep                | on      |
 
 ---
 
@@ -293,7 +298,8 @@ Every swarm and autopilot run writes a session dir under `agent.sessions_dir` (d
 ├── plan.json               # serialized SwarmPlan
 ├── session-config.json     # auth session definitions (login flows, token rules)
 ├── extensions/             # compiled JS extensions (sanitized filenames)
-├── archon-audit/           # vigolium-audit subprocess output (audit-state.json + findings)
+├── vigolium-audit/         # vigolium-audit subprocess output (audit-state.json + findings)
+├── audit-stream.jsonl      # `agent audit` NDJSON stream (when audit driver runs)
 ├── master-prompt.md        # rendered prompt sent to master agent (debug)
 ├── source-analysis-prompt.md
 ├── output.md               # autopilot: agent stream / final transcript
@@ -336,7 +342,8 @@ agent:
       api_key: ""                            # optional; empty = no Authorization header
       extra_headers:                         # optional; applied after standard headers
         # X-Provider: custom
-  archon:
+  audit:
+    # vigolium-audit / piolium harness defaults — see internal/config/agent.go AuditAgentConfig
     # …
   browser:
     # optional agent-browser integration
@@ -353,7 +360,8 @@ CLI flags (`--provider`, `--model`, `--oauth-token`, `--llm-api-key`, `--base-ur
 | Subcommand wiring             | `pkg/cli/agent*.go`                             |
 | Swarm orchestrator            | `pkg/agent/swarm.go`, `swarm_pipeline.go`       |
 | Autopilot orchestrator        | `pkg/agent/autopilot_pipeline.go`               |
-| Vigolium-audit runner         | `pkg/agent/audit_agent.go`                      |
+| Audit driver dispatcher       | `pkg/agent/audit_drivers.go`, `audit_chain.go`  |
+| Audit / piolium runners       | `pkg/agent/audit_agent.go`, `pkg/piolium/`      |
 | Engine (prompt → dispatch)    | `pkg/agent/engine.go`                           |
 | Prompt templates / rendering  | `pkg/agent/prompt/`, `public/presets/prompts/`  |
 | Output parsers (JSON-tolerant)| `pkg/agent/parsing/`                            |

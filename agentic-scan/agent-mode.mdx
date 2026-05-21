@@ -1,13 +1,13 @@
 ---
 title: "Agent Mode"
-description: "Vigolium ships eight agent subcommands under `vigolium agent` covering autonomous scanning, AI-guided pipelines, two source-audit harnesses + a unified driver, single-shot prompts, and an interactive TUI."
+description: "Vigolium ships seven agent subcommands under `vigolium agent` covering autonomous scanning, AI-guided pipelines, a unified source-audit driver, single-shot prompts, and an interactive TUI."
 icon: "robot"
 ---
 
-Vigolium ships **eight agent subcommands** under `vigolium agent`. They split into four families:
+Vigolium ships **seven agent subcommands** under `vigolium agent`. They split into four families:
 
 - **Agentic scan modes**: autonomous or AI-guided vulnerability scanning: `autopilot`, `swarm`
-- **Source audit modes**: multi-phase AI code audit: `vigolium-audit` (Claude/Codex/OpenCode), `piolium` (Pi-native), and `audit` (unified driver that runs both back-to-back)
+- **Source audit modes**: multi-phase AI code audit: `audit` (unified driver for the embedded vigolium-audit harness and/or the standalone piolium harness) and `piolium` (direct piolium driver)
 - **Single-shot / interactive**: `query`, `olium`
 - **Utility**: `session`
 
@@ -24,9 +24,8 @@ Every agent invocation is dispatched through the in-process **olium runtime** (`
 | Run a one-off prompt against code or a target (no scanning loop) | `query` | Single-shot, template-driven, returns structured findings or HTTP records |
 | Hand the agent the wheel for a full autonomous pentest | `autopilot` | One long LLM session with full Bash/Read/Write/Grep/Glob; agent picks strategy |
 | Have the AI **drive the native scanner** on a specific target | `swarm` | Master/worker pipeline: AI plans → native modules execute → optional triage+rescan |
-| Audit source code deeply (secrets, SAST triage, PoC) before or alongside a scan | `vigolium-audit` | Multi-phase code audit on Claude/Codex/OpenCode (`lite`/`balanced`/`deep`); imports findings into the DB |
-| Same multi-phase audit driven through Pi (`pi install` model) | `piolium` | Pi-native piolium harness; same output schema as vigolium-audit, tagged separately in DB |
-| Run both vigolium-audit and piolium back-to-back on the same source under one AgenticScan | `audit` | Unified driver: sequential vigolium-audit→piolium with per-driver child rows + post-pass findings dedup; `--driver=piolium\|vigolium-audit` to force one |
+| Audit source code (secrets, SAST triage, PoC) before or alongside a scan | `audit` | Unified driver dispatcher: drives the embedded vigolium-audit harness, piolium, or both, with per-driver child AgenticScan rows + post-pass findings dedup |
+| Direct piolium harness driver (Pi-native install required) | `piolium` | Skips the dispatcher and runs piolium alone with its own modes |
 | Chat with an LLM interactively in a TUI (debug, explore, ad-hoc) | `olium` | Real-time multi-turn chat; not a security scan, general-purpose agent |
 | Review past agent runs | `session` | Lists prior runs, shows raw output and artifacts |
 
@@ -44,7 +43,7 @@ Every agent invocation is dispatched through the in-process **olium runtime** (`
 
 - **Use for:** pentest-style engagements where you want the agent to be creative and decide what to do.
 - **How it works:** one long-running LLM session with full CLI tool access until the agent calls `halt_scan` or hits limits. When `--source` is provided, vigolium-audit runs first to prepare a frozen whitebox context bundle.
-- **Key flags:** `-t/--target`, `--input` (curl/raw HTTP/Burp XML/URL/stdin), `--source` (auto-runs vigolium-audit), `--focus`, `--max-commands`, `--max-duration`, `--intensity {quick|balanced|deep}`, `--vigolium-audit` (`lite|balanced|deep|off`), `--browser`, `--credentials`, `--diff`, `--last-commits`, `--token-budget`, `--upload-results`.
+- **Key flags:** `-t/--target`, `--input` (curl/raw HTTP/Burp XML/URL/stdin), `--source` (auto-runs vigolium-audit), `--focus`, `--max-commands`, `--max-duration`, `--intensity {quick|balanced|deep}`, `--audit` (`lite|balanced|deep|off`), `--browser`, `--credentials`, `--diff`, `--last-commits`, `--upload-results`.
 
 See [Autopilot](/agentic-scan/autopilot).
 
@@ -52,32 +51,32 @@ See [Autopilot](/agentic-scan/autopilot).
 
 - **Use for:** target-specific scanning when you want structure (planning → native scan → triage), source-aware route discovery, or verification loops.
 - **How it works:** 10-phase pipeline, normalize → auth (opt) → source-analysis (opt) → code-audit (opt) → discover (opt) → plan (AI) → extension → native scan → triage (opt) → rescan (opt).
-- **Key flags:** `-t/--target` (required with `--source`), `--input`, `--record-uuid`, `--source`, `--discover`, `--code-audit`, `--triage`, `--max-iterations`, `-m/--modules`, `--vuln-type`, `--focus`, `--vigolium-audit {lite|balanced|deep|off}`, `--intensity`, `--only`/`--skip`/`--start-from`, `--force-extensions`.
+- **Key flags:** `-t/--target` (required with `--source`), `--input`, `--record-uuid`, `--source`, `--discover`, `--code-audit`, `--triage`, `--max-iterations`, `-m/--modules`, `--vuln-type`, `--focus`, `--audit {lite|balanced|deep|off}`, `--intensity`, `--only`/`--skip`/`--start-from`, `--force-extensions`.
 
 See [Swarm](/agentic-scan/swarm).
 
-### `vigolium-audit`: AI security source audit (Claude/Codex/OpenCode)
+### `audit`: unified source-audit driver
 
-- **Use for:** deep code audit standalone, or as the source-aware companion to `autopilot`/`swarm`.
-- **Modes:** `lite` (3 phases), `balanced`/`scan` (6), `deep` (10), `revisit`, `confirm`, `merge`, `diff`, `status`, `mock`.
-- **Key flags:** `--mode`, `--source <path|git-url>`, `--agent {claude|codex|opencode}`, `--no-stream`.
+- **Use for:** running the embedded vigolium-audit harness and/or the standalone piolium harness against a single source tree under one AgenticScan, with per-driver session subdirs (`{session}/audit/`, `{session}/piolium/`), per-driver child AgenticScan rows under one parent, and a post-pass project-wide findings dedup once both drivers exit.
+- **Driver values (`--driver`):**
+  - `auto` (default) — run vigolium-audit; fall back to piolium only if the `claude`/`codex` CLI required by audit is missing.
+  - `both` — run vigolium-audit then piolium back-to-back, unconditionally.
+  - `audit` — run only the embedded vigolium-audit harness.
+  - `piolium` — run only the standalone piolium harness (equivalent to `vigolium agent piolium`).
+- **Modes:** when the run includes both drivers (`auto` or `both`), `--mode` is restricted to the shared set: `lite`, `balanced`, `deep`, `revisit`, `confirm`, `merge`. Use `--driver=piolium` for `longshot`/`smoke` or `--driver=audit` for `mock`. `--intensity deep` expands to the chain `deep,confirm`.
+- **Agent selection (audit leg only):** `--provider <olium-provider>` resolves the agent **and** forwards that provider's BYOK auth (`anthropic-*` → claude, `openai-*` → codex). `--agent {claude|codex}` is a pure agent selector layered on top of `--provider` (rejected for invalid values; warned under `--driver=piolium`).
+- **Key flags:** `--driver {auto|both|audit|piolium}`, `--mode`, `--modes` (chain), `--intensity {quick|balanced|deep}`, `--source <path|git-url>`, `--commit-depth`, `--interactive`, `--no-stream`, `--no-dedup`, `--upload-results`, `--provider`, `--agent`, plus the `--pi-*` and `--plm-*` passthroughs for the piolium leg. `--list-modes` prints the embedded vigolium-audit binary's mode graph and exits.
+- **REST equivalent:** `POST /api/agent/run/audit` with `driver: "auto"|"both"|"audit"|"piolium"` (default `"auto"`).
 
 See [Agentic Security Audit](/getting-started/agentic-security-audit).
 
-### `piolium`: AI security source audit (Pi-native)
+### `piolium`: direct piolium harness driver
 
-- **Use for:** the same multi-phase audit as `vigolium-audit` but running through the Pi runtime + the user-installed piolium extension. Useful when the host already has Pi configured for non-Anthropic providers (OpenAI/Codex, Gemini).
+- **Use for:** dropping the dispatcher and running piolium alone. Equivalent to `vigolium agent audit --driver piolium`, but exposes piolium-only flags (`longshot`/`smoke` modes, `--plm-*` session passthroughs) without the audit-leg argument parsing.
 - **Modes:** `lite` (4), `balanced` (9), `deep` (17), `revisit` (9), `confirm` (7), `merge` (7), `diff` (1), `longshot` (3), `status`, `smoke`.
 - **Key flags:** `--mode`, `--intensity {quick|balanced|deep}`, `--source <path|git-url>`, `--commit-depth`, `--no-stream`, `--upload-results`, `--pi-provider`, `--pi-model`, plus `--plm-*` passthroughs for piolium's session flags.
 
 See [Agentic Security Audit](/getting-started/agentic-security-audit).
-
-### `audit`: unified driver (vigolium-audit + piolium)
-
-- **Use for:** scoring a single source tree under both audit harnesses with one AgenticScan. Sequential execution (vigolium-audit first, piolium second), per-driver session subdirs (`{session}/archon/`, `{session}/piolium/`), per-driver child AgenticScan rows under one parent, and a post-pass project-wide findings dedup once both drivers exit.
-- **Modes:** when `--driver=both`, only the shared modes are accepted: `lite`, `balanced`, `deep`, `revisit`, `confirm`, `merge`. Use `--driver=piolium` for `longshot`/`smoke` or `--driver=vigolium-audit` for `mock`.
-- **Key flags:** `--driver {piolium|vigolium-audit|both}`, `--mode`, `--intensity`, `--source`, `--commit-depth`, `--no-stream`, `--no-dedup`, `--upload-results`, `--agent` (vigolium-audit platform), plus the `--pi-*` and `--plm-*` flags from `agent piolium`.
-- **REST equivalent:** `POST /api/agent/run/audit` with `driver: "piolium"|"vigolium-audit"|"both"` (default `"both"`).
 
 ### `olium`: interactive TUI chat
 
@@ -90,7 +89,7 @@ See [Agentic Security Audit](/getting-started/agentic-security-audit).
 
 - **Aliases:** `sessions`, `sess`.
 - **Use for:** auditing prior runs, debugging failed scans.
-- **Key flags:** `--mode {query|autopilot|swarm}`, `-n/--limit`, `-o/--offset`, `--tail`, `--full`.
+- **Key flags:** `--mode {query|autopilot|swarm|audit}`, `-n/--limit`, `-o/--offset`, `--tail`, `--full`.
 
 ---
 
@@ -124,15 +123,14 @@ The server exposes the run modes plus a status/artifact surface so a controller 
 | POST   | `/api/agent/run/query`                          | One-shot prompt execution.                                               |
 | POST   | `/api/agent/run/autopilot`                      | Launch an autopilot scan.                                                |
 | POST   | `/api/agent/run/swarm`                          | Launch a swarm scan.                                                     |
-| POST   | `/api/agent/run/vigolium-audit`                 | Launch a vigolium-audit-only audit.                                      |
-| POST   | `/api/agent/run/audit`                          | Unified driver, `driver: "piolium"\|"vigolium-audit"\|"both"` (default `both`). |
+| POST   | `/api/agent/run/audit`                          | Unified audit driver dispatcher, `driver: "auto"\|"both"\|"audit"\|"piolium"` (default `auto`). |
 | GET    | `/api/agent/status/list`                        | List active and historical runs (DB + in-memory merge).                  |
 | GET    | `/api/agent/status/:id`                         | Status of a single run.                                                  |
 | GET    | `/api/agent/sessions`                           | Paginated session history (richer than `/status/list`).                  |
 | GET    | `/api/agent/sessions/:id`                       | Full session detail incl. raw output, plan, child runs.                  |
 | GET    | `/api/agent/sessions/:id/logs`                  | Read or tail `runtime.log` (SSE when `Accept: text/event-stream`).       |
 | GET    | `/api/agent/sessions/:id/artifacts`             | List files inside the session_dir (recursive, capped at 500 entries).    |
-| GET    | `/api/agent/sessions/:id/artifacts/{name}`      | Read one file. Wildcard supports nesting (`archon-audit/state.json`). Optional `?max_bytes=N` cap (default 10 MiB, hard cap 100 MiB). |
+| GET    | `/api/agent/sessions/:id/artifacts/{name}`      | Read one file. Wildcard supports nesting (`vigolium-audit/state.json`). Optional `?max_bytes=N` cap (default 10 MiB, hard cap 100 MiB). |
 | POST   | `/api/agent/chat/completions`                   | OpenAI-compatible chat completions (synchronous).                        |
 
 Run endpoints return `202 Accepted` with `{agentic_scan_uuid, status: "running"}` and execute in the background. Expected workflow:
@@ -141,12 +139,12 @@ Run endpoints return `202 Accepted` with `{agentic_scan_uuid, status: "running"}
 2. Poll `GET /api/agent/status/:id` until `status` leaves `running`.
 3. Fetch the session artifacts via `/api/agent/sessions/:id/logs`, `/artifacts`, or `/artifacts/{name}` for the raw outputs (`output.md`, `swarm-plan.json`, `audit-stream.jsonl`, generated extensions, etc.).
 
-The `audit` endpoint dispatches sequentially when `driver: "both"` (default) and multiplexes SSE chunks with a `driver` field bracketed by `driver_start`/`driver_end` markers when `stream: true`. See [Agentic Security Audit](/getting-started/agentic-security-audit) for the unified-driver overview.
+The `audit` endpoint dispatches sequentially when more than one driver runs (`auto` with fallback or `both`), and multiplexes SSE chunks with a `driver` field bracketed by `driver_start`/`driver_end` markers when `stream: true`. See [Agentic Security Audit](/getting-started/agentic-security-audit) for the unified-driver overview.
 
 Set `stream: true` on the run endpoints to opt into Server-Sent Events instead of the async response, most consumers should stick with the async flow and tail logs on demand.
 
-### Provider overrides are CLI / server-config only
+### Provider overrides
 
-The CLI exposes per-invocation provider flags (`--provider`, `--model`, `--oauth-cred`, `--oauth-token`, `--llm-api-key`, `--system`). These are **not** mirrored on the REST request schemas. The server resolves the provider once from `agent.olium.*` in `vigolium-configs.yaml` and reuses it across requests, which keeps prompt caches stable. To switch providers on a server-side workload, edit the YAML and reload, there is no per-request override field.
+The CLI exposes per-invocation provider flags (`--provider`, `--model`, `--oauth-cred`, `--oauth-token`, `--llm-api-key`, `--system`). The server falls back to `agent.olium.*` in `vigolium-configs.yaml` (which keeps warm sessions and prompt caches stable across requests), but every agent run endpoint also accepts per-request BYOK credentials (`api_key`, `oauth_token`, `oauth_cred_file`, `oauth_cred_json`). The audit dispatcher additionally accepts `audit_auth` and `piolium_auth` for per-driver overrides.
 
 See [API Reference, Agent](/api-references/agent) for the full request/response schemas.

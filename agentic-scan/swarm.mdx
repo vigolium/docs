@@ -277,7 +277,7 @@ A swarm run creates a session directory (default `~/.vigolium/agent-sessions/<ru
 ```
 <sessionDir>/
 ├── swarm-plan.json            ← merged SwarmPlan from master agent
-├── swarm-checkpoint.json      ← phase progress, plan, triage round
+├── checkpoint.json            ← phase progress, plan, triage round
 ├── source-analysis-prompt.md
 ├── source-analysis-output.md
 ├── source-analysis-sections.json
@@ -291,7 +291,7 @@ A swarm run creates a session directory (default `~/.vigolium/agent-sessions/<ru
 └── runtime.log                ← tee'd LLM stream; replay with `vigolium log`
 ```
 
-`swarm-checkpoint.json` is rewritten after every phase. Combined with `--start-from`, it lets a partial run resume without re-paying for earlier phases.
+`checkpoint.json` is rewritten after every phase. Combined with `--start-from`, it lets a partial run resume without re-paying for earlier phases.
 
 ---
 
@@ -345,7 +345,7 @@ vigolium agent swarm -t https://app.example.com \
 | `--master-batch-size` | Records per master-agent batch (default 5) |
 | `--batch-concurrency` | Parallel master batches (default 3) |
 | `--intensity` | `quick` / `balanced` / `deep` preset bundle |
-| `--vigolium-audit` | `lite` / `balanced` / `deep` / `mock` / `off` (parallel source audit) |
+| `--audit` | `lite` / `balanced` / `deep` / `mock` / `off` (parallel source audit) |
 | `--skip-phases`, `--start-from` | Phase control / resume |
 | `--source-analysis-only` | Stop after source analysis |
 | `--force-extensions` | Force the extension agent even when the plan returned none |
@@ -375,13 +375,13 @@ POST /api/agent/run/swarm
   "triage": true,
   "max_iterations": 3,
   "intensity": "balanced",
-  "archon": "lite",
+  "audit": "lite",
   "stream": true,
-  "timeout": "15m"
+  "timeout": "12h"
 }
 ```
 
-At least one of `input`, `inputs`, `target`, `record_uuid`, or `http_request_base64` is required. See [API Reference, Agent](/api-references/agent) for the full schema.
+At least one of `input`, `inputs`, or `http_request_base64` is required (`url` is an optional hint). `timeout` defaults to **12h** when omitted. See [API Reference, Agent](/api-references/agent) for the full schema.
 
 ---
 

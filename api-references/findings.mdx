@@ -19,7 +19,7 @@ Returns paginated vulnerability findings.
 | `scan_id`     | string |            | Filter by scan UUID                               |
 | `module_name` | string |            | Filter by module name                             |
 | `module_type`    | string |            | Filter by module type: `active` or `passive`      |
-| `finding_source` | string |            | Filter by finding source: `audit`, `spa`, `agent`, `oast`, `source-tools`, `extension` |
+| `finding_source` | string |            | Filter by finding source: `dynamic-assessment`, `known-issue-scan`, `agent`, `audit`, `oast`, `extension`, `import` |
 | `search`      | string |            | Search across description, module ID, matched_at  |
 | `sort`        | string | `found_at` | Sort field: `found_at`, `created_at`, `severity`, `module_name`, `module_id`, `confidence` |
 | `order`       | string | `desc`     | Sort order: `asc` or `desc`                       |
@@ -38,7 +38,7 @@ curl -s 'http://localhost:9002/api/findings?domain=example.com&module_name=xss' 
 curl -s 'http://localhost:9002/api/findings?module_type=passive' | jq .
 
 # Filter by finding source
-curl -s 'http://localhost:9002/api/findings?finding_source=audit' | jq .
+curl -s 'http://localhost:9002/api/findings?finding_source=dynamic-assessment' | jq .
 
 # Search findings
 curl -s 'http://localhost:9002/api/findings?search=reflected' | jq .
@@ -55,7 +55,7 @@ curl -s 'http://localhost:9002/api/findings?search=reflected' | jq .
       "module_name": "XSS Scanner",
       "module_type": "active",
       "module_short": "Detects reflected cross-site scripting via parameter injection",
-      "finding_source": "audit",
+      "finding_source": "dynamic-assessment",
       "description": "Reflected XSS via parameter 'q'",
       "severity": "high",
       "confidence": "firm",
@@ -98,7 +98,7 @@ curl -s http://localhost:9002/api/findings/1 | jq .
   "module_name": "XSS Scanner",
   "module_type": "active",
   "module_short": "Detects reflected cross-site scripting via parameter injection",
-  "finding_source": "audit",
+  "finding_source": "dynamic-assessment",
   "description": "Reflected XSS via parameter 'q'",
   "severity": "high",
   "confidence": "firm",
@@ -123,6 +123,32 @@ curl -s http://localhost:9002/api/findings/1 | jq .
 | 400  | Invalid ID (not a number)      |
 | 404  | Finding not found              |
 | 503  | Database unavailable           |
+
+---
+
+## PATCH /api/findings/:id/status, Update Finding Status
+
+Sets the workflow status on a finding (e.g. open / triaged / closed). The status field is opaque to the server — any string is accepted.
+
+```bash
+curl -s -X PATCH http://localhost:9002/api/findings/42/status \
+  -H "Content-Type: application/json" \
+  -d '{"status": "triaged"}' | jq .
+```
+
+```json
+{
+  "id": 42,
+  "status": "triaged"
+}
+```
+
+| Status | Description                |
+|--------|----------------------------|
+| 200    | Status updated             |
+| 400    | Invalid ID or body         |
+| 404    | Finding not found          |
+| 503    | Database not configured    |
 
 ---
 

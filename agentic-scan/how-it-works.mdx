@@ -23,7 +23,8 @@ Vigolium's agent mode runs AI-driven security scans on top of the native scanner
 | `query`      | Single-shot prompt (template or inline). Code review, secret hunt, endpoint discovery. |
 | `autopilot`  | Agentic scan: autonomous operator with full tool access.         |
 | `swarm`      | Agentic scan: 10-phase guided pipeline (plan → extension → scan → triage). |
-| `vigolium-audit` | Foreground vigolium-audit (multi-phase AI source-code audit).    |
+| `audit`      | Unified source-audit dispatcher (drives the embedded vigolium-audit harness, piolium, or both). |
+| `piolium`    | Direct piolium harness driver (Pi-native install required).      |
 | `olium`      | Interactive olium TUI or one-shot non-interactive prompt.        |
 | `session`    | List or inspect past agent runs (sessions list / detail view).   |
 
@@ -36,7 +37,7 @@ Vigolium's agent mode runs AI-driven security scans on top of the native scanner
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │  CLI                          pkg/cli/agent_*.go                │
-│  query · autopilot · swarm · vigolium-audit · olium · session   │
+│  query · autopilot · swarm · audit · piolium · olium · session  │
 └───────────────────────────────┬─────────────────────────────────┘
                                 │
 ┌───────────────────────────────▼─────────────────────────────────┐
@@ -47,7 +48,10 @@ Vigolium's agent mode runs AI-driven security scans on top of the native scanner
 │     discovery → plan → extension → scan → triage → finalize     │
 │                                                                 │
 │   AutopilotPipelineRunner    autopilot_pipeline.go              │
-│     vigolium-audit (optional, foreground) → autonomous operator │
+│     audit (optional, foreground) → autonomous operator          │
+│                                                                 │
+│   Audit driver dispatcher    audit_drivers.go + audit_chain.go  │
+│     driver=auto|both|audit|piolium · per-driver child rows      │
 └───────────────────────────────┬─────────────────────────────────┘
                                 │
 ┌───────────────────────────────▼─────────────────────────────────┐
@@ -63,7 +67,8 @@ Vigolium's agent mode runs AI-driven security scans on top of the native scanner
                                 │
 ┌───────────────────────────────▼─────────────────────────────────┐
 │  Providers                    pkg/olium/provider/               │
-│  anthropic · openai · codex (OAuth) · claudecode (CLI)          │
+│  anthropic (API/OAuth/CLI/Vertex) · openai (API/codex-OAuth) ·  │
+│  google-vertex · openai-compatible (HTTP)                       │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -94,17 +99,20 @@ Native, in-process replacement for the old subprocess pool.
 - **`pkg/olium/engine`**: `Engine.Run(ctx, prompt) <-chan Event` returns a stream of events: `EventTextDelta`, `EventThinkingDelta`, `EventToolCall`, `EventTurnDone` (with token usage), `EventError`. Conversation state (system prompt, tool definitions, prior turns) lives on the engine and is reused across calls when phases share an engine.
 - **`pkg/olium/tool`**: registry of built-in tools (bash, file ops, grep, fetch, …). Autopilot exposes the full set; swarm uses a smaller set per phase.
 - **`pkg/olium/skill`**: optional skill files (Markdown SKILL.md packages) that augment the system prompt; loaded from embedded assets and `~/.vigolium/skills/`.
-- **`pkg/olium/provider`**: provider dispatch (five drivers):
+- **`pkg/olium/provider`**: provider dispatch (eight drivers):
 
   | Provider              | Auth source                                           |
   |-----------------------|-------------------------------------------------------|
-  | `codex-oauth`         | `oauth_cred_path` (JSON from `codex login`)           |
+  | `openai-codex-oauth`  | `oauth_cred_path` (JSON from `codex login`)           |
   | `anthropic-api-key`   | `llm_api_key` or `$ANTHROPIC_API_KEY`                 |
-  | `claude-oauth`        | `oauth_token` (from `claude setup-token`); falls back to `$ANTHROPIC_API_KEY` |
+  | `anthropic-oauth`     | `oauth_token` (from `claude setup-token`); falls back to `$ANTHROPIC_API_KEY` |
   | `openai-api-key`      | `llm_api_key` or `$OPENAI_API_KEY`                    |
-  | `claude-code-cli`     | shells out to the local `claude` binary                |
+  | `anthropic-cli`       | shells out to the local `claude` binary               |
+  | `anthropic-vertex`    | `oauth_cred_path` (GCP SA JSON or `$GOOGLE_APPLICATION_CREDENTIALS`) + `google_cloud_project` / `google_cloud_location` |
+  | `google-vertex`       | same GCP creds; routes `gemini-*` models             |
+  | `openai-compatible`   | `custom_provider.base_url` (required), `custom_provider.api_key` (optional), `custom_provider.model_id`, `custom_provider.extra_headers` (Ollama / OpenRouter / LM Studio / vLLM / Groq / Together / LocalAI / custom proxies) |
 
-Configured under `agent.olium` in `vigolium-configs.yaml`. Per-call deadline defaults to 10 minutes (`call_timeout_sec`).
+Default provider when nothing is configured is `openai-compatible` with `gemma4:latest` (a local Ollama endpoint). Configured under `agent.olium` in `vigolium-configs.yaml`. Per-call deadline defaults to 10 minutes (`call_timeout_sec`).
 
 ### 2.3 Prompt templates
 
@@ -190,7 +198,7 @@ Phase names prefixed `native-` are pure-Go (no LLM). The pipeline is gated by:
 - `cfg.Discover`, `cfg.CodeAudit`, `cfg.Triage` toggles
 - checkpoint resume, `--resume <session-dir>` skips already-completed phases
 
-A parallel **vigolium-audit** subprocess can run in the background (`cfg.Archon != ""`) when source is provided, contributing source-code audit findings without blocking the swarm.
+A parallel **vigolium-audit** subprocess can run in the background (`cfg.Audit != ""`) when source is provided, contributing source-code audit findings without blocking the swarm. Swarm uses the embedded vigolium-audit harness directly; the multi-driver `agent audit` command layers piolium support on top.
 
 ### Plan & extension phases
 
@@ -231,7 +239,7 @@ If `FollowUpScans` is non-empty and rescan is enabled, the pipeline loops back t
    ┌─────────────────────────────────────────────┐
    │ vigolium-audit (optional, foreground)       │
    │   if --source: run vigolium-audit, freeze   │
-   │   findings into archon-audit/ directory     │
+   │   findings into vigolium-audit/ directory   │
    └─────────────────┬───────────────────────────┘
                      ▼
    ┌─────────────────────────────────────────────┐
@@ -265,10 +273,10 @@ Effort level (`low`/`medium`) is picked from vigolium-audit mode: `balanced`/`de
 ### Intensity presets (autopilot)
 
 | Intensity | MaxCommands | Timeout | Vigolium-audit mode | Browser |
-|-----------|-------------|---------|-------------|---------|
-| quick     | 30          | 1h      | lite        | off     |
-| balanced  | 100         | 6h      | balanced    | off     |
-| deep      | 300         | 12h     | deep        | on      |
+|-----------|-------------|---------|---------------------|---------|
+| quick     | 150         | 1h      | lite                | on      |
+| balanced  | 500         | 6h      | balanced            | on      |
+| deep      | 1500        | 12h     | deep                | on      |
 
 ---
 
@@ -282,13 +290,14 @@ Every swarm and autopilot run writes a session dir under `agent.sessions_dir` (d
 ├── swarm-plan.json         # serialized SwarmPlan
 ├── session-config.json     # auth session definitions (login flows, token rules)
 ├── extensions/             # compiled JS extensions (sanitized filenames)
-├── archon-audit/           # vigolium-audit subprocess output (audit-state.json + findings)
+├── vigolium-audit/         # vigolium-audit subprocess output (audit-state.json + findings)
+├── piolium/                # piolium subprocess output (when audit dispatcher runs piolium)
 ├── master-output.md        # rendered prompt sent to master agent (debug)
 ├── source-analysis-output.md
 ├── code-audit-output.md
 ├── output.md               # autopilot: agent stream / final transcript
 ├── runtime.log             # raw runtime log mirror (for `vigolium agent log <uuid>`)
-├── audit-stream.jsonl      # vigolium-audit: streaming agent events
+├── audit-stream.jsonl      # `agent audit` streaming agent events (NDJSON)
 ├── inputs.json             # normalized input records
 └── skills/                 # copied embedded skills (vigolium-scanner, agent-browser)
 ```
@@ -312,25 +321,28 @@ agent:
     max_high_risk: 20
     min_risk_score: 50
   olium:
-    provider: codex-oauth          # or anthropic-api-key | openai-api-key | claude-oauth | claude-code-cli
-    model: gpt-5.5                 # provider default if empty
+    provider: openai-compatible    # openai-codex-oauth | anthropic-api-key | openai-api-key | anthropic-oauth | anthropic-cli | anthropic-vertex | google-vertex | openai-compatible
+    model: gemma4:latest           # provider default if empty
     oauth_cred_path: ~/.codex/auth.json
     llm_api_key: ${ANTHROPIC_API_KEY}
     reasoning_effort: medium
     max_tokens: 1000000
-    max_turns: 32
+    max_turns: 32                  # short non-autopilot uses; autopilot uses its own cap (DefaultAutopilotMaxTurns=200)
     max_concurrent: 4              # global cap on in-flight provider calls
     call_timeout_sec: 600          # per-call deadline; -1 = no timeout
-  archon:
+    custom_provider:               # only used when provider == openai-compatible
+      base_url: http://localhost:11434/v1   # Ollama; OpenRouter / LM Studio / vLLM also work
+      model_id: gemma4:latest
+      api_key: ""
+  audit:
     enable: false
     mode: lite
-    platform: claude               # claude | codex | opencode
   browser:
     enable: true
     binary_path: agent-browser
 ```
 
-CLI flags (`--provider`, `--model`, `--oauth-cred`, `--oauth-token`, `--llm-api-key`) override the config at runtime.
+CLI flags (`--provider`, `--model`, `--oauth-cred`, `--oauth-token`, `--llm-api-key`) override the config at runtime. The REST API also accepts per-request BYOK credentials.
 
 ---
 
@@ -341,7 +353,8 @@ CLI flags (`--provider`, `--model`, `--oauth-cred`, `--oauth-token`, `--llm-api-
 | Subcommand wiring             | `pkg/cli/agent*.go`                             |
 | Swarm orchestrator            | `pkg/agent/swarm.go`, `swarm_pipeline.go`       |
 | Autopilot orchestrator        | `pkg/agent/autopilot_pipeline.go`               |
-| Vigolium-audit runner         | `pkg/agent/audit_agent.go`                      |
+| Audit driver dispatcher       | `pkg/agent/audit_drivers.go`, `audit_chain.go`  |
+| Vigolium-audit / piolium runners | `pkg/agent/audit_agent.go`, `pkg/piolium/`   |
 | Engine (prompt → dispatch)    | `pkg/agent/engine.go`                           |
 | Prompt templates / rendering  | `pkg/agent/prompt/`, `public/presets/prompts/`  |
 | Output parsers (JSON-tolerant)| `pkg/agent/parsing/`                            |

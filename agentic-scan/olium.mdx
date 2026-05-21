@@ -7,7 +7,7 @@ icon: "atom"
 `olium` is the in-process AI agent runtime that powers every agentic feature in Vigolium. It ships as both:
 
 - **A user-facing command**: `vigolium agent olium` (aliases: `vigolium olium`, `vigolium ol`), for interactive chat in a TUI or scripted one-shot prompts.
-- **A library**: `pkg/olium/`, that the autopilot, swarm, query, vigolium-audit-prep, and source-analysis paths all dispatch through. There are **no subprocess SDK backends**; every AI call in vigolium goes through this engine.
+- **A library**: `pkg/olium/`, that the autopilot, swarm, query, vigolium-audit-prep, and source-analysis paths all dispatch through. There are **no subprocess SDK or ACP backends**; every AI call in vigolium goes through this engine.
 
 For a higher-level comparison against the other agent subcommands, see [Agent Mode](/agentic-scan/agent-mode).
 
@@ -20,7 +20,7 @@ A turn-based, tool-using LLM agent written in Go. Components:
 | Layer | Lives in | Responsibility |
 |---|---|---|
 | **Engine** | `pkg/olium/engine/` | Multi-turn loop: provider stream → tool dispatch → history append → repeat |
-| **Provider** | `pkg/olium/provider/` | LLM backend, five drivers (codex-oauth, anthropic-api-key, claude-oauth, openai-api-key, claude-code-cli) |
+| **Provider** | `pkg/olium/provider/` | LLM backend, eight drivers (openai-codex-oauth, anthropic-api-key, anthropic-oauth, openai-api-key, anthropic-cli, anthropic-vertex, google-vertex, openai-compatible) |
 | **Tools** | `pkg/olium/tool/` | The eight built-in primitives the model can call (bash, file ops, search, web fetch) |
 | **Skills** | `pkg/olium/skill/` | SKILL.md workflow files (agentskills.io format) discovered from project, user, and embedded scopes |
 | **TUI** | `pkg/olium/tui/` | Bubble Tea front-end (inline scrollback, slash commands, live tool cards) |
@@ -46,7 +46,7 @@ Surrounding behavior:
 
 - **Tool result truncation / spill**: results larger than `MaxToolResultBytes` (default 16 KiB) get head+tail truncation with an elision marker. If `SpillDir` is set (autopilot does this), the full payload spills to `<SpillDir>/tool-results/` and the model gets a head excerpt plus an on-disk path it can `read_file`.
 - **Per-tool timeout**: each tool invocation gets its own deadline (default 5 minutes). A runaway `bash curl` can't hang the whole session.
-- **Prompt caching**: opt-in via `EnablePromptCache`. Autopilot turns it on; the Anthropic provider then writes `cache_control: ephemeral` markers on the system prompt and tool list, cutting repeated-prefix tokens by ~90 % across long runs. Providers without caching ignore the flag.
+- **Prompt caching**: opt-in via `EnablePromptCache`. Autopilot turns it on; the Anthropic providers write `cache_control: ephemeral` markers and the Codex OAuth provider writes `prompt_cache_key` headers, cutting repeated-prefix tokens by ~90 % across long runs. `openai-api-key`, `openai-compatible` (Ollama / OpenRouter / LM Studio / vLLM / Groq / …), and `google-vertex` do not emit cache markers, so the flag is silently ignored for them.
 - **Skills**: when a registry is loaded the engine injects an `<available_skills>` block into the system prompt at construction, and registers a `load_skill` tool the model can call to fetch a skill body on demand.
 
 ---
@@ -93,21 +93,24 @@ Prints assistant text to **stdout**; thinking deltas, tool start/end cards, and 
 
 ## Providers
 
-Five drivers in `pkg/olium/provider/`. The provider name spells out the auth mechanism so it's obvious which credential field applies:
+Eight drivers in `pkg/olium/provider/`. The provider ID is vendor-first so it's obvious which credential field applies:
 
-| Provider | Auth | Default model | Source of credential |
+| Provider | Auth | Default / typical model | Source of credential |
 |---|---|---|---|
-| `codex-oauth` *(default)* | OAuth credential file | `gpt-5.5` | `--oauth-cred` → `agent.olium.oauth_cred_path` → `~/.codex/auth.json` (produced by `codex login`) |
+| `openai-codex-oauth` | OAuth credential file | `gpt-5.5` | `--oauth-cred` → `agent.olium.oauth_cred_path` → `~/.codex/auth.json` (produced by `codex login`) |
 | `anthropic-api-key` | `x-api-key` header | `claude-opus-4-7` | `--llm-api-key` → `agent.olium.llm_api_key` → `$ANTHROPIC_API_KEY` |
-| `claude-oauth` | Bearer token (Claude Code OAuth) | `claude-opus-4-7` | `--oauth-token` → `agent.olium.oauth_token` → `$ANTHROPIC_API_KEY` (produced by `claude setup-token`) |
+| `anthropic-oauth` | Bearer token (Claude Code OAuth) | `claude-opus-4-7` | `--oauth-token` → `agent.olium.oauth_token` → `$ANTHROPIC_API_KEY` (produced by `claude setup-token`) |
 | `openai-api-key` | `x-api-key` header | `gpt-5.5` | `--llm-api-key` → `agent.olium.llm_api_key` → `$OPENAI_API_KEY` |
-| `claude-code-cli` | (none, subprocess) | `claude-opus-4-7` | `--claude-bin` (default `claude` on `$PATH`) |
+| `anthropic-cli` | (none, subprocess) | `claude-opus-4-7` | `--claude-bin` (default `claude` on `$PATH`) |
+| `anthropic-vertex` | GCP SA JSON | `claude-opus-4-7` | `agent.olium.oauth_cred_path` (or `$GOOGLE_APPLICATION_CREDENTIALS`) + `google_cloud_project` / `google_cloud_location`; routes `claude-*` models to publishers/anthropic |
+| `google-vertex` | GCP SA JSON | `gemini-2.5-pro` | Same GCP creds as `anthropic-vertex`; routes `gemini-*` models to publishers/google |
+| `openai-compatible` *(default)* | optional bearer | `gemma4:latest` (Ollama) | `custom_provider.base_url` (required), `custom_provider.api_key` (optional), `custom_provider.model_id`, `custom_provider.extra_headers` (Ollama / OpenRouter / LM Studio / vLLM / Together / Groq / LocalAI / custom proxies) |
 
-With no `--provider` flag and no YAML override, vigolium auto-detects to **`codex-oauth`**. The `claude-oauth` provider also prepends a Claude Code preamble to the system prompt and adds the `oauth-2025-04-20` beta header so it's accepted on the same endpoint as `anthropic-api-key`.
+With no `--provider` flag and no YAML override, vigolium defaults to **`openai-compatible`** with `gemma4:latest` against a local Ollama endpoint, so a freshly initialized config works out of the box without any cloud credentials. The `anthropic-oauth` provider also prepends a Claude Code preamble to the system prompt and adds the `oauth-2025-04-20` beta header so it's accepted on the same endpoint as `anthropic-api-key`.
 
 Codex auth refreshes itself: it parses the JWT, checks expiry with a 60 s skew, and posts to `/oauth/token` with the stored refresh token, rewriting `~/.codex/auth.json` (mode `0o600`).
 
-> **Note:** the REST API does **not** mirror these per-invocation flags. The server resolves the provider once from `agent.olium.*` in `vigolium-configs.yaml` and reuses it across requests so warm caches stay stable. To switch providers server-side, edit the YAML and reload.
+> **Note:** the REST API falls back to `agent.olium.*` in `vigolium-configs.yaml` (which keeps warm sessions and prompt caches stable across requests), but every agent run endpoint also accepts per-request BYOK credentials (`api_key`, `oauth_token`, `oauth_cred_file`, `oauth_cred_json`). The audit dispatcher additionally accepts `audit_auth` / `piolium_auth` for per-driver overrides.
 
 ---
 
@@ -180,12 +183,13 @@ In the TUI, type `/skill:<name> [args]` to inline-expand a skill body into your 
 ## CLI flags
 
 ```text
---provider          codex-oauth | anthropic-api-key | claude-oauth | openai-api-key | claude-code-cli
+--provider          openai-codex-oauth | anthropic-api-key | anthropic-oauth | openai-api-key | anthropic-cli | anthropic-vertex | google-vertex | openai-compatible
 --model             provider-specific (empty = provider default)
---oauth-cred        OAuth credential file (codex-oauth; default ~/.codex/auth.json)
---oauth-token       Claude Code OAuth bearer token (claude-oauth)
+--oauth-cred        OAuth credential file (openai-codex-oauth; default ~/.codex/auth.json). Also the GCP SA JSON for the Vertex providers.
+--oauth-token       Claude Code OAuth bearer token (anthropic-oauth)
 --llm-api-key       API key for anthropic-api-key / openai-api-key
---claude-bin        Path to the `claude` binary (claude-code-cli)
+--claude-bin        Path to the `claude` binary (anthropic-cli)
+--base-url          Override custom_provider.base_url (openai-compatible)
 --system            Override the built-in system prompt
 -p, --prompt        Initial prompt (alternative to a positional arg). Forces non-interactive mode.
 --stdin             Force reading the prompt from stdin
@@ -202,16 +206,23 @@ The full `agent.olium` block:
 ```yaml
 agent:
   olium:
-    provider: codex-oauth          # codex-oauth | anthropic-api-key | claude-oauth | openai-api-key | claude-code-cli
-    model: gpt-5.5                 # empty = provider default
-    oauth_cred_path: ~/.codex/auth.json
-    oauth_token: ""                # claude-oauth; supports ${ENV_VAR}; falls back to $ANTHROPIC_API_KEY
+    provider: openai-compatible    # openai-codex-oauth | anthropic-api-key | anthropic-oauth | openai-api-key | anthropic-cli | anthropic-vertex | google-vertex | openai-compatible
+    model: gemma4:latest           # empty = provider default
+    oauth_cred_path: ~/.codex/auth.json  # also GCP SA JSON for anthropic-vertex / google-vertex
+    oauth_token: ""                # anthropic-oauth; supports ${ENV_VAR}; falls back to $ANTHROPIC_API_KEY
     llm_api_key: ""                # supports ${ENV_VAR}; falls back to $ANTHROPIC_API_KEY / $OPENAI_API_KEY
+    google_cloud_project: ""       # Vertex providers; $GOOGLE_CLOUD_PROJECT wins
+    google_cloud_location: ""      # Vertex providers; default us-central1
     reasoning_effort: medium       # minimal|low|medium|high|xhigh (codex)
     system_prompt: ""              # empty = built-in olium prompt
+    custom_provider:               # only used when provider == openai-compatible
+      base_url: http://localhost:11434/v1   # full chat-completions URL also works
+      model_id: gemma4:latest               # fallback for olium.model
+      api_key: ""                           # optional
+      extra_headers: []                     # curl-style "Key: Value" entries
     max_tokens: 1000000
     temperature: 0.0
-    max_turns: 32
+    max_turns: 32                  # short non-autopilot uses; autopilot uses its own cap (DefaultAutopilotMaxTurns=200)
     cache_size: 1024               # LRU; 0 disables
     max_concurrent: 4              # global cap on simultaneous provider calls; 0 = unbounded
     call_timeout_sec: 600          # per-call deadline; negative = no timeout (parent ctx only)
@@ -221,7 +232,7 @@ Adjacent config blocks worth knowing:
 
 - `agent.sessions_dir`: where per-run session directories go. Default `~/.vigolium/agent-sessions/`.
 - `agent.browser`: toggles `agent-browser` integration (the binary `web_fetch` shells out to in `mode: browser`).
-- `agent.archon`: controls the optional vigolium-audit prep step that autopilot/swarm can stack ahead of the olium loop.
+- `agent.audit`: controls the optional vigolium-audit / piolium prep step that autopilot/swarm can stack ahead of the olium loop.
 
 ---
 

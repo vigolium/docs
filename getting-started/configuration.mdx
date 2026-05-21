@@ -102,7 +102,7 @@ Available strategies and their default phases:
 
 > **Phase aliases:** `dynamic-assessment` is the canonical name for active/passive vulnerability scanning. `audit`, `dast`, and `assessment` are accepted aliases on `--only` / `--skip` flags. `discovery` accepts `deparos` / `discover`; `spidering` accepts `spitolas`; `extension` accepts `ext`.
 
-For source-aware whitebox analysis, use `vigolium agent swarm --source <path>` or `vigolium agent vigolium-audit --source <path>` instead of a native scan strategy. See [Agent Mode](/agentic-scan/agent-mode).
+For source-aware whitebox analysis, use `vigolium agent swarm --source <path>` or `vigolium agent audit --source <path>` instead of a native scan strategy. See [Agent Mode](/agentic-scan/agent-mode).
 
 ### `scanning_pace`
 
@@ -296,8 +296,8 @@ agent:
 
   # Olium engine — used by every agent subcommand
   olium:
-    provider: openai-codex-oauth   # openai-codex-oauth | anthropic-api-key | anthropic-oauth | openai-api-key | anthropic-cli | anthropic-vertex | google-vertex | openai-compatible
-    model: gpt-5.5                 # empty = provider default
+    provider: openai-compatible    # openai-codex-oauth | anthropic-api-key | anthropic-oauth | openai-api-key | anthropic-cli | anthropic-vertex | google-vertex | openai-compatible (default: openai-compatible)
+    model: gemma4:latest           # empty = provider default; matches custom_provider.model_id default
     oauth_cred_path: ~/.codex/auth.json    # openai-codex-oauth provider
     oauth_token: ""                # anthropic-oauth bearer token (from `claude setup-token`); supports ${ENV_VAR}
     llm_api_key: ""                # for anthropic-api-key / openai-api-key; supports ${ENV_VAR}; falls back to provider env
@@ -313,17 +313,17 @@ agent:
     # Custom OpenAI-compatible backend (used when provider == openai-compatible).
     # Drives Ollama, OpenRouter, LM Studio, vLLM, etc.
     custom_provider:
-      base_url: ""                 # e.g. http://localhost:11434/v1 (Ollama)
-      model_id: ""                 # backend-specific model id, e.g. gemma4:latest
-      api_key: ""                  # optional; leave empty to skip Authorization header
-      headers: {}                  # extra HTTP headers
-      timeout_sec: 0               # per-call timeout override; 0 = inherit call_timeout_sec
+      base_url: http://localhost:11434/v1   # e.g. http://localhost:11434/v1 (Ollama)
+      model_id: gemma4:latest               # backend-specific model id
+      api_key: ""                           # optional; leave empty to skip Authorization header; supports ${ENV_VAR}
+      extra_headers: []                     # list of curl-style "Key: Value" strings, applied after standard headers
 
-    # Vertex AI (anthropic-vertex / google-vertex)
-    vertex:
-      project_id: ""               # GCP project id
-      region: us-central1          # GCP region hosting the model
-      credentials_path: ""         # path to service-account JSON; empty = ADC
+    # Vertex AI (anthropic-vertex / google-vertex) — GCP project / region.
+    # Credentials come from `oauth_cred_path` (service-account JSON) or
+    # $GOOGLE_APPLICATION_CREDENTIALS. $GOOGLE_CLOUD_PROJECT and
+    # $GOOGLE_CLOUD_LOCATION override these YAML values.
+    google_cloud_project: ""       # GCP project id
+    google_cloud_location: ""      # GCP region; default us-central1
 
   # LLM config for JavaScript extension agent API (vigolium.agent.* in extensions)
   llm:
@@ -355,27 +355,29 @@ agent:
     enable: true
     binary_path: agent-browser     # default: looked up on $PATH
 
-  # Vigolium-audit integration
-  archon:
-    enable: false                  # auto-enabled by --vigolium-audit flag
+  # Vigolium-audit integration (embedded harness)
+  audit:
+    enable: false                  # auto-enabled by --audit flag on autopilot/swarm
     mode: lite                     # lite | balanced | deep | mock
-    platform: claude               # claude | codex | opencode
-    plugin_dir: ""                 # default: ~/.vigolium/archon-audit/
     sync_interval: 30              # seconds between state syncs
+    # The audit driver runs the `claude` or `codex` CLI. There is no
+    # platform knob here — the agent is resolved from agent.olium.provider
+    # (anthropic-* → claude, openai-* → codex), overridable per-run with
+    # --provider or --agent {claude|codex} on `vigolium agent audit`.
 ```
 
 Provider quick reference:
 
 | Provider | Default model | Credential source |
 |----------|--------------|--------------------|
-| `openai-codex-oauth` *(default)* | `gpt-5.5` | `oauth_cred_path` (`~/.codex/auth.json`) |
+| `openai-codex-oauth` | `gpt-5.5` | `oauth_cred_path` (`~/.codex/auth.json`) |
 | `anthropic-api-key` | `claude-opus-4-7` | `llm_api_key` or `$ANTHROPIC_API_KEY` |
 | `anthropic-oauth` | `claude-opus-4-7` | `oauth_token` (from `claude setup-token`); falls back to `$ANTHROPIC_API_KEY` |
 | `openai-api-key` | `gpt-5.5` | `llm_api_key` or `$OPENAI_API_KEY` |
 | `anthropic-cli` | `claude-opus-4-7` | local `claude` binary on `$PATH` |
-| `anthropic-vertex` | `claude-opus-4-6` | GCP service-account JSON (or ADC) via `agent.olium.vertex` |
-| `google-vertex` | `gemini-2.5-pro` | GCP service-account JSON (or ADC) via `agent.olium.vertex` |
-| `openai-compatible` | none, pick one | `agent.olium.custom_provider` (Ollama, OpenRouter, LM Studio, vLLM, …) |
+| `anthropic-vertex` | `claude-opus-4-6` | GCP service-account JSON (or ADC) via `google_cloud_project` / `google_cloud_location` |
+| `google-vertex` | `gemini-2.5-pro` | GCP service-account JSON (or ADC) via `google_cloud_project` / `google_cloud_location` |
+| `openai-compatible` *(default)* | `gemma4:latest` (via `custom_provider.model_id`) | `agent.olium.custom_provider` (Ollama, OpenRouter, LM Studio, vLLM, …) |
 
 CLI flags `--provider`, `--model`, `--oauth-cred`, `--oauth-token`, `--llm-api-key`, `--base-url` override these per-invocation. The REST API does **not** mirror these overrides, server-side workloads use the YAML config exclusively. See [Setting Up the Agent](/getting-started/setup-agent) for a step-by-step walkthrough or [Olium Agent](/agentic-scan/olium) for full provider details.
 
@@ -474,7 +476,7 @@ oast:
 
 ### `source_aware`
 
-Storage location for cloned source repositories. Used when `--source` receives a git URL (autopilot, swarm, vigolium-audit, query). Static analysis tooling (ast-grep, semgrep, etc.) has been removed, for AI-driven code audit, use `vigolium agent vigolium-audit` or `vigolium agent swarm --source --code-audit`.
+Storage location for cloned source repositories. Used when `--source` receives a git URL (autopilot, swarm, audit, query). Static analysis tooling (ast-grep, semgrep, etc.) has been removed, for AI-driven code audit, use `vigolium agent audit` or `vigolium agent swarm --source --code-audit`.
 
 ```yaml
 source_aware:

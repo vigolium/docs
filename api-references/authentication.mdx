@@ -98,6 +98,19 @@ Include the token as a Bearer token in the `Authorization` header for all subseq
 curl -H "Authorization: Bearer vgl_abc123..." http://localhost:9002/api/info
 ```
 
+## Optional Per-Project Access Control
+
+Projects can carry an allowlist of users that may access their data — `allowed_emails` (exact match) or `allowed_domains` (suffix match) on the project row. The server reads the `X-User-Email` request header to gate access; a missing header bypasses the check, a present-but-unauthorized email returns `403 Forbidden`.
+
+```bash
+curl -H "Authorization: Bearer vgl_abc123..." \
+     -H "X-Project-UUID: proj-uuid" \
+     -H "X-User-Email: alice@example.com" \
+     http://localhost:9002/api/findings
+```
+
+Setting `VIGOLIUM_PROJECT_READONLY=true` disables all mutating `vigolium project` CLI subcommands for the calling host.
+
 ## Disabling Authentication
 
 Set `no_auth: true` in `vigolium-configs.yaml` or pass the `--no-auth` flag to the server command to disable authentication entirely. This is not recommended for production use.

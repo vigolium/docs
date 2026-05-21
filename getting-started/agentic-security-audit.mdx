@@ -1,6 +1,6 @@
 ---
 title: "Agentic Security Audit"
-description: "Multi-phase AI-driven whitebox source-code audit, vigolium-audit (embedded, Claude/Codex/OpenCode) and piolium (Pi-native), with a unified driver that runs both."
+description: "Multi-phase AI-driven whitebox source-code audit, vigolium-audit (embedded, Claude/Codex) and piolium (Pi-native), with a unified driver that runs both."
 icon: "shield-keyhole"
 ---
 
@@ -8,10 +8,10 @@ Vigolium's agentic security audit is a multi-phase whitebox source-code audit dr
 
 Two harnesses cover the audit surface:
 
-- **`vigolium agent vigolium-audit`**: embedded driver that runs through the `claude` CLI (Claude / Codex / OpenCode). Up to 11 phases at `deep`. No extra install.
-- **`vigolium agent piolium`**: Pi-native driver. Up to 17 phases at `deep`. Requires the `pi` runtime and the `piolium` extension. Supports any provider Pi supports, including local models.
+- **`vigolium agent audit --driver=audit`**: embedded driver that drives the `claude` or `codex` CLI under the hood. Up to 12 phases at `deep`. No extra install.
+- **`vigolium agent piolium`** (or `vigolium agent audit --driver=piolium`): Pi-native driver. Up to 17 phases at `deep`. Requires the `pi` runtime and the `piolium` extension. Supports any provider Pi supports, including local models.
 
-Both produce findings in the same on-disk schema and DB shape; you can run them together via `vigolium agent audit`.
+Both produce findings in the same on-disk schema and DB shape; the unified `vigolium agent audit` dispatcher can run either harness alone, both side-by-side, or auto-pick based on what is available.
 
 <Frame caption="Vigolium Audit CLI">
   <img src="/images/audit/vigolium-cli-agent-audit.png" alt="vigolium agent audit running in the terminal" />
@@ -22,35 +22,35 @@ Both produce findings in the same on-disk schema and DB shape; you can run them 
 ## Prerequisites
 
 - A working olium provider (Claude / OpenAI / Codex / local). See [Setting Up the Agent](/getting-started/setup-agent).
-- For `vigolium-audit`, the `claude` CLI on `$PATH` (it ships embedded in the vigolium binary, but the harness drives `claude` under the hood).
+- For the embedded audit driver, either the `claude` or `codex` CLI on `$PATH` — the embedded harness drives whichever one matches your configured olium provider (anthropic-* → claude, openai-* → codex), or pass `--agent claude|codex` to override.
 - For `piolium`, `pi` on `$PATH` plus `pi install git:git@github.com:vigolium/piolium.git`.
 
 Verify your setup with the smoke test:
 
 ```bash
-vigolium agent vigolium-audit --source . --mode lite
+vigolium agent audit --driver=audit --source . --mode lite
 ```
 
 If that streams phase output and writes findings to the DB, you're wired up.
 
 ---
 
-## Quick Start, `vigolium agent vigolium-audit`
+## Quick Start, `vigolium agent audit`
 
-The embedded driver, fastest path to a first audit. Drives `claude` (or `codex`/`opencode`) against a source tree.
+The unified driver, fastest path to a first audit. By default (`--driver=auto`) it runs the embedded vigolium-audit harness and only falls back to piolium if audit is unavailable.
 
 ```bash
 # Lite (3 phases, CI-friendly)
-vigolium agent vigolium-audit --source ~/src/your-app --mode lite
+vigolium agent audit --source ~/src/your-app --mode lite
 
-# Balanced (6 phases, default — adds SAST + adversarial review)
-vigolium agent vigolium-audit --source ~/src/your-app
+# Balanced (9 phases, default — adds SAST + adversarial review)
+vigolium agent audit --source ~/src/your-app
 
-# Deep (11 phases — commit archaeology, cold-verify, variant hunting)
-vigolium agent vigolium-audit --source ~/src/your-app --mode deep
+# Deep (12 phases — commit archaeology, cold-verify, variant hunting)
+vigolium agent audit --source ~/src/your-app --mode deep
 
-# Use Codex instead of Claude
-vigolium agent vigolium-audit --source ~/src/your-app --mode balanced --agent codex
+# Use Codex instead of Claude for the embedded audit driver
+vigolium agent audit --source ~/src/your-app --mode balanced --agent codex
 ```
 
 <Columns cols={2}>
@@ -75,10 +75,18 @@ vigolium agent vigolium-audit --source ~/src/your-app --mode balanced --agent co
 | Mode | Phases | When to use |
 |------|:------:|-------------|
 | `lite` | 3 | CI/PR gates, routine triage. Quick recon, secrets scan, fast SAST. |
-| `balanced` (default) | 6 | Daily regression scans. Adds intelligence, knowledge-base, deep probe, FP review, PoC. |
-| `deep` | 11 | Pre-release / compliance audits. Adds commit archaeology, patch bypass, adversarial debate, cold verification, variant hunting. |
-| `mock` |, | Wire-up test, emits sample output without spending tokens. |
-| `revisit` / `confirm` / `merge` / `diff` | varies | Re-audit, validate, deduplicate, or PR-diff workflows on top of an existing audit. |
+| `balanced` (default) | 9 | Daily regression scans. Adds intelligence, knowledge-base, deep probe, FP review, PoC. |
+| `deep` | 12 | Pre-release / compliance audits. Adds commit archaeology, patch bypass, adversarial debate, cold verification, variant hunting. |
+| `revisit` | 10 | Second offensive pass on the same code. Reuses prior KB; surfaces findings round one missed. |
+| `confirm` / `merge` | 7 | Boot-and-verify existing findings (`confirm`) or normalize results from multiple inputs (`merge`). |
+| `diff` | 1 | Incremental audit limited to changes since the last audited commit. |
+| `longshot` | 3 | Hail-mary file-by-file hunt (also available as a piolium mode). |
+| `reinvest` | 3 | Cross-agent re-verification of CRITICAL/HIGH findings using a *different* agent platform. Audit-only. |
+| `refresh` | varies | Routing convenience: revisit if a prior KB exists, otherwise a fresh deep pass. Audit-only. |
+| `mock` | — | Wire-up test, emits sample output without spending tokens. Audit-only. |
+| `smoke` | — | Piolium-only smoke test. |
+
+Run `vigolium agent audit --list-modes` to print the full mode graph and time estimates for the embedded audit binary.
 
 ---
 
@@ -111,27 +119,30 @@ See [Agent Mode](/agentic-scan/agent-mode) for the full flag reference and the `
 
 ---
 
-## Running both, `vigolium agent audit`
+## Running both, `--driver=both`
 
-The unified driver runs `vigolium-audit` and `piolium` back-to-back against the same source tree under one parent `AgenticScan`, with per-driver child rows and a post-pass project-wide findings dedup.
+`vigolium agent audit` is the unified dispatcher. By default (`--driver=auto`) it runs the embedded audit harness and only falls back to piolium if audit is unavailable. Pass `--driver=both` to run audit and piolium back-to-back against the same source tree under one parent `AgenticScan`, with per-driver child rows and a post-pass project-wide findings dedup.
 
 ```bash
-# Both drivers, balanced mode (default)
+# Auto (default): audit, fall back to piolium only if audit is unavailable
 vigolium agent audit --source ~/src/your-app
 
+# Both drivers, sequential
+vigolium agent audit --driver both --source ~/src/your-app
+
 # Force a single driver
-vigolium agent audit --driver piolium        --source ./backend --mode lite
-vigolium agent audit --driver vigolium-audit --source ./backend --agent claude
+vigolium agent audit --driver piolium --source ./backend --mode lite
+vigolium agent audit --driver audit   --source ./backend --agent claude
 
 # Both drivers, deep intensity, against a remote git URL
-vigolium agent audit --source git@github.com:org/repo.git --intensity deep
+vigolium agent audit --driver both --source git@github.com:org/repo.git --intensity deep
 ```
 
 <Frame caption="vigolium agent audit running vigolium-audit + piolium together">
   <img src="/images/audit/vigolium-audit-with-piolium.png" alt="vigolium agent audit with both drivers" />
 </Frame>
 
-When `--driver=both`, mode must be in the shared set (`lite` / `balanced` / `deep` / `revisit` / `confirm` / `merge`). Driver-specific modes (`longshot`/`smoke` for piolium, `mock` for vigolium-audit) require `--driver=piolium` or `--driver=vigolium-audit`.
+When `--driver=auto` or `--driver=both`, mode must be in the shared set (`lite` / `balanced` / `deep` / `revisit` / `confirm` / `merge`). Driver-specific modes (`longshot` / `smoke` for piolium; `mock` / `reinvest` / `refresh` for audit) require `--driver=piolium` or `--driver=audit`.
 
 ---
 
@@ -141,10 +152,10 @@ Findings land in the same `findings` table as the rest of Vigolium, tagged by so
 
 ```bash
 # All audit findings (both drivers)
-vigolium finding list --source piolium,archon
+vigolium finding list --source piolium,audit
 
-# Just vigolium-audit
-vigolium finding list --source archon
+# Just the embedded vigolium-audit harness
+vigolium finding list --source audit
 
 # Just piolium
 vigolium finding list --source piolium
@@ -154,8 +165,8 @@ Session artifacts (state, raw findings, reports) land under:
 
 ```
 ~/.vigolium/agent-sessions/<scan-uuid>/
-├── archon-audit/   # vigolium-audit output (audit-state.json + findings/ + reports)
-├── piolium-audit/  # piolium output (same schema)
+├── vigolium-results/   # vigolium-audit output (audit-state.json + findings/ + reports)
+├── piolium-audit/      # piolium output (same schema)
 ├── audit-stream.jsonl
 └── runtime.log
 ```
@@ -168,10 +179,10 @@ When you pair `--source` with `vigolium agent autopilot` or `vigolium agent swar
 
 ```bash
 # Source-aware autopilot — vigolium-audit runs first (balanced mode)
-vigolium agent autopilot -t https://example.com --source ~/src/your-app --vigolium-audit=balanced
+vigolium agent autopilot -t https://example.com --source ~/src/your-app --audit=balanced
 
 # Swarm with a background lite audit
-vigolium agent swarm -t https://example.com --source ./src --vigolium-audit
+vigolium agent swarm -t https://example.com --source ./src --audit
 ```
 
 See [Agentic Scanning](/getting-started/agentic-scan) for the full autopilot/swarm flow.

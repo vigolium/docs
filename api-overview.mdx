@@ -8,15 +8,18 @@ icon: "code"
 
 ### [Overview](/api-references/overview)
 
-Server startup, authentication, and general endpoints.
+Server startup, authentication, and general endpoints. The following routes are public (no auth):
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/` | App info |
+| GET | `/` | Static UI |
 | GET | `/health` | Health check |
-| GET | `/server-info` | Server info (uptime, DB driver, queue depth) |
+| GET | `/server-info` | Server info (uptime, queue depth, totals) |
 | GET | `/swagger/*` | Swagger UI |
-| GET | `/metrics` | Prometheus metrics |
+| GET | `/metrics` | Prometheus metrics (response gated by `--enable-metrics`) |
+| POST | `/api/auth/login` | File-based login → bearer token |
+| GET | `/api/info` | App info / build metadata |
+| GET | `/api/user/info` | Current user |
 
 ### [HTTP Records](/api-references/http-records)
 
@@ -32,13 +35,15 @@ Server startup, authentication, and general endpoints.
 |--------|----------|-------------|
 | GET | `/api/findings` | List findings (paginated, filterable) |
 | GET | `/api/findings/:id` | Get finding detail |
+| PATCH | `/api/findings/:id/status` | Update finding status (open/triaged/closed) |
 | DELETE | `/api/findings/:id` | Delete finding |
 
 ### [Ingestion](/api-references/ingestion)
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/api/ingest-http` | Ingest HTTP data (URL, curl, OpenAPI, Burp, Postman) |
+| POST | `/api/ingest-http` | Ingest HTTP data (URL, curl, OpenAPI, Burp, Postman, HAR, Nuclei) |
+| POST | `/api/import` | Bulk import scans/records/findings (incl. `gs://...` and uploaded archives) |
 
 ### [Scan](/api-references/scan)
 
@@ -46,14 +51,18 @@ Server startup, authentication, and general endpoints.
 |--------|----------|-------------|
 | POST | `/api/scan-url` | Scan a single URL |
 | POST | `/api/scan-request` | Scan a raw HTTP request |
-| POST | `/api/scan` | Trigger scan over ingested records |
-| GET | `/api/scan/status` | Current scan status |
-| DELETE | `/api/scan` | Cancel running scan |
+| POST | `/api/scans/run` | Trigger a target scan |
 | POST | `/api/scan-records` | Scan specific HTTP records by UUID |
+| POST | `/api/scan-all-records` | Scan filtered records |
+| GET | `/api/scan/status` | Current scan status (latest/global) |
 | GET | `/api/scans` | List scan history |
 | GET | `/api/scans/:uuid` | Get scan detail |
+| GET | `/api/scans/:uuid/logs` | Scan logs (SSE supported) |
 | DELETE | `/api/scans/:uuid` | Delete scan |
 | POST | `/api/scans/:uuid/stop` | Stop a running scan |
+| POST | `/api/scans/:uuid/pause` | Pause a scan |
+| POST | `/api/scans/:uuid/resume` | Resume a scan |
+| POST | `/api/scans/:uuid/update` | Adjust scan parameters mid-run |
 
 ### [Stats](/api-references/stats)
 
@@ -113,6 +122,28 @@ Server startup, authentication, and general endpoints.
 | PUT | `/api/extensions/:name` | Edit extension |
 | GET | `/api/extensions/docs` | List JS API functions |
 
+### [Projects](/api-references/projects)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/projects` | List projects + aggregate stats |
+| POST | `/api/projects` | Create project |
+| GET | `/api/projects/:uuid` | Get project |
+| PUT | `/api/projects/:uuid` | Update project |
+| DELETE | `/api/projects/:uuid` | Delete project (reassigns data to default) |
+
+### [Database](/api-references/database)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/db/tables` | List tables |
+| GET | `/api/db/tables/:table/columns` | Table column metadata |
+| GET | `/api/db/tables/:table/records` | Generic record listing |
+| GET | `/api/db/tables/:table/records/:id` | Get record |
+| POST | `/api/db/tables/:table/records` | Insert record (admin) |
+| PUT | `/api/db/tables/:table/records/:id` | Update record (admin) |
+| DELETE | `/api/db/tables/:table/records/:id` | Delete record (admin) |
+
 ### [Agent](/api-references/agent)
 
 | Method | Endpoint | Description |
@@ -120,6 +151,7 @@ Server startup, authentication, and general endpoints.
 | POST | `/api/agent/run/query` | Single-shot agent prompt execution |
 | POST | `/api/agent/run/autopilot` | Autonomous AI-driven scanning session |
 | POST | `/api/agent/run/swarm` | AI-guided multi-phase vulnerability swarm |
+| POST | `/api/agent/run/audit` | Source-audit driver dispatcher (`driver: auto\|both\|audit\|piolium`) |
 | GET | `/api/agent/status/list` | List agent runs |
 | GET | `/api/agent/status/:id` | Agent run status |
 | GET | `/api/agent/sessions` | Paginated session history |

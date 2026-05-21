@@ -268,7 +268,7 @@ type phaseInfra struct {
 Built in order:
 1. **Notifier**: Telegram and/or Discord backends (from config or env vars).
 2. **Services**: wraps Options, Notifier, DedupManager, and HostErrors (circuit breaker for unresponsive hosts).
-3. **HostRateLimiter**: per-host concurrency control (default: 2 concurrent per host, 1000 max tracked hosts, 30s idle eviction).
+3. **HostRateLimiter**: per-host concurrency control (CLI default 30 concurrent per host, 1000 max tracked hosts, 30s idle eviction).
 4. **HTTP Requester**: HTTP client with retry, proxy, redirect, and middleware support.
 5. **ScopeMatcher**: host/path/status/content-type/body-string filtering from config.
 6. **JS Engine**: Grafana Sobek engine for JavaScript extensions, including pre/post hook chains.
@@ -541,6 +541,7 @@ type InsertionPoint interface {
 | `INS_PARAM_XML_ATTR` | 4 | XML attribute value |
 | `INS_PARAM_MULTIPART_ATTR` | 5 | Multipart attribute value |
 | `INS_PARAM_JSON` | 6 | JSON value |
+| `INS_PARAM_AMF` | 7 | AMF parameter value |
 | `INS_HEADER` | 32 | HTTP header value |
 | `INS_URL_PATH_FOLDER` | 33 | REST URL path folder |
 | `INS_PARAM_NAME_URL` | 34 | URL parameter name |
@@ -549,6 +550,7 @@ type InsertionPoint interface {
 | `INS_URL_PATH_FILENAME` | 37 | REST URL path filename |
 | `INS_USER_PROVIDED` | 64 | User-defined position |
 | `INS_EXTENSION_PROVIDED` | 65 | Extension-provided position |
+| `INS_UNKNOWN` | 127 | Unknown / unclassified |
 
 ### InsertionPoint Implementations
 
