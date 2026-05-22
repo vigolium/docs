@@ -214,12 +214,12 @@ vigolium agent autopilot -t https://app.example.com --intensity deep \
   --browser --credentials "admin/admin123"
 ```
 
-### Halt and Token Budget
+### Bounding a CI run
 
 ```bash
-# CI scan with a token budget cap
+# CI scan bounded by intensity preset and wall-clock
 vigolium agent autopilot -t https://example.com \
-  --intensity quick --token-budget 200000 --max-duration 30m
+  --intensity quick --max-duration 30m
 ```
 
 ## Vigolium-Audit: Source Audit
@@ -228,19 +228,19 @@ Vigolium-audit is the dedicated whitebox audit mode. It runs as a foreground com
 
 ```bash
 # Standalone — multi-phase audit
-vigolium agent vigolium-audit --source ./app --mode deep
+vigolium agent audit --source ./app --mode deep
 
 # Lite mode (CI-friendly, 3 phases)
-vigolium agent vigolium-audit --source ./app --mode lite
+vigolium agent audit --source ./app --mode lite
 
 # Use a different agent CLI
-vigolium agent vigolium-audit --source ./app --mode balanced --agent codex
+vigolium agent audit --source ./app --mode balanced --agent codex
 ```
 
-Findings ingest into the same database as the rest of vigolium with `finding_source: archon`. Query them with:
+Findings ingest into the same database as the rest of vigolium with `finding_source: audit`. Query them with:
 
 ```bash
-vigolium finding list --source archon
+vigolium finding list --source audit
 ```
 
 See [Agentic Security Audit](/getting-started/agentic-security-audit) for the full guide.

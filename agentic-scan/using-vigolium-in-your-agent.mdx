@@ -315,20 +315,20 @@ vigolium run audit -t https://example.com
 vigolium scan -t https://example.com --only audit
 ```
 
-**Run only SPA (security posture assessment via Nuclei):**
+**Run only the Nuclei known-issue scan (critical/high only):**
 ```
-> Run Nuclei-based security posture assessment, only critical and high severity
+> Run Nuclei-based known-issue checks, only critical and high severity
 ```
 ```bash
-vigolium run spa -t https://example.com --spa-severities critical,high
+vigolium run known-issue-scan -t https://example.com --known-issue-scan-severities critical,high
 ```
 
-**Run only SAST (static analysis on source code):**
+**Run a whitebox source-code audit (SAST):**
 ```
-> Run static analysis on my Go app, filter for gin-related rules
+> Run a security audit on my Go app's source
 ```
 ```bash
-vigolium run sast --repo /path/to/app --rule gin
+vigolium agent audit --source /path/to/app
 ```
 
 **Run only external harvest (Wayback, Common Crawl, OTX):**
@@ -677,12 +677,12 @@ vigolium agent autopilot -t https://example.com
 vigolium agent autopilot -t https://api.example.com --source ./src --focus "auth bypass"
 ```
 
-**Custom limits (fewer commands, shorter wall-clock):**
+**Custom limits (lighter intensity, shorter wall-clock):**
 ```
-> Limit the agent to 50 commands and 15 minutes
+> Run a quick scan capped at 15 minutes
 ```
 ```bash
-vigolium agent autopilot -t https://example.com --max-commands 50 --max-duration 15m
+vigolium agent autopilot -t https://example.com --intensity quick --max-duration 15m
 ```
 
 **Preview the system prompt (dry run):**
@@ -1082,12 +1082,12 @@ vigolium export --format jsonl --only findings,http -o results.jsonl
 vigolium export --format html -o report.html
 ```
 
-**Lite export (omit raw HTTP data):**
+**Lightweight export (omit raw HTTP request/response bytes):**
 ```
 > Export URLs only, without raw request/response data
 ```
 ```bash
-vigolium export --lite --only http -o urls.jsonl
+vigolium export --omit-response --only http -o urls.jsonl
 ```
 
 **Export with search filter:**
@@ -1200,20 +1200,20 @@ vigolium source add --hostname example.com --git https://github.com/org/repo
 vigolium source ls
 ```
 
-**Run SAST only:**
+**Run a source-code audit (SAST) only:**
 ```
-> Run static analysis on the source code
+> Run a security audit on the source code
 ```
 ```bash
-vigolium run sast --repo /path/to/app
+vigolium agent audit --source /path/to/app
 ```
 
-**SAST with rule filtering:**
+**Deeper multi-phase audit:**
 ```
-> Run SAST, only gin-related rules
+> Run a thorough deep-mode source audit
 ```
 ```bash
-vigolium run sast --repo /path/to/app --rule gin
+vigolium agent audit --source /path/to/app --mode deep
 ```
 
 ---

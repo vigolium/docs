@@ -43,7 +43,7 @@ Every agent invocation is dispatched through the in-process **olium runtime** (`
 
 - **Use for:** pentest-style engagements where you want the agent to be creative and decide what to do.
 - **How it works:** one long-running LLM session with full CLI tool access until the agent calls `halt_scan` or hits limits. When `--source` is provided, vigolium-audit runs first to prepare a frozen whitebox context bundle.
-- **Key flags:** `-t/--target`, `--input` (curl/raw HTTP/Burp XML/URL/stdin), `--source` (auto-runs vigolium-audit), `--focus`, `--max-commands`, `--max-duration`, `--intensity {quick|balanced|deep}`, `--audit` (`lite|balanced|deep|off`), `--browser`, `--credentials`, `--diff`, `--last-commits`, `--upload-results`.
+- **Key flags:** `-t/--target`, `--input` (curl/raw HTTP/Burp XML/URL/stdin), `--source` (auto-runs vigolium-audit), `--focus`, `--max-duration`, `--intensity {quick|balanced|deep}` (sets the command budget, audit mode, browser, and pre-scan strategy), `--audit` (`lite|balanced|deep|off`), `--triage`, `--plan-file`, `--browser`, `--credentials`, `--diff`, `--last-commits`, `--upload-results`.
 
 See [Autopilot](/agentic-scan/autopilot).
 

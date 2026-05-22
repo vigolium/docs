@@ -102,7 +102,7 @@ Eight drivers in `pkg/olium/provider/`. The provider ID is vendor-first so it's 
 | `anthropic-oauth` | Bearer token (Claude Code OAuth) | `claude-opus-4-7` | `--oauth-token` → `agent.olium.oauth_token` → `$ANTHROPIC_API_KEY` (produced by `claude setup-token`) |
 | `openai-api-key` | `x-api-key` header | `gpt-5.5` | `--llm-api-key` → `agent.olium.llm_api_key` → `$OPENAI_API_KEY` |
 | `anthropic-cli` | (none, subprocess) | `claude-opus-4-7` | `--claude-bin` (default `claude` on `$PATH`) |
-| `anthropic-vertex` | GCP SA JSON | `claude-opus-4-7` | `agent.olium.oauth_cred_path` (or `$GOOGLE_APPLICATION_CREDENTIALS`) + `google_cloud_project` / `google_cloud_location`; routes `claude-*` models to publishers/anthropic |
+| `anthropic-vertex` | GCP SA JSON | `claude-opus-4-6` | `agent.olium.oauth_cred_path` (or `$GOOGLE_APPLICATION_CREDENTIALS`) + `google_cloud_project` / `google_cloud_location`; routes `claude-*` models to publishers/anthropic |
 | `google-vertex` | GCP SA JSON | `gemini-2.5-pro` | Same GCP creds as `anthropic-vertex`; routes `gemini-*` models to publishers/google |
 | `openai-compatible` *(default)* | optional bearer | `gemma4:latest` (Ollama) | `custom_provider.base_url` (required), `custom_provider.api_key` (optional), `custom_provider.model_id`, `custom_provider.extra_headers` (Ollama / OpenRouter / LM Studio / vLLM / Together / Groq / LocalAI / custom proxies) |
 

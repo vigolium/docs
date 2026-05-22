@@ -74,7 +74,7 @@ Focus on changed code only, perfect for PR gates:
 # GitHub PR diff (auto-fetches changed files via REST API)
 vigolium agent autopilot -t $TARGET_URL --source . \
   --diff "https://github.com/$GITHUB_REPOSITORY/pull/$PR_NUMBER" \
-  --intensity quick --token-budget 200000
+  --intensity quick
 
 # Last N commits
 vigolium agent autopilot -t $TARGET_URL --source . --last-commits 5 --intensity quick

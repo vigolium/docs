@@ -136,7 +136,7 @@ vigolium agent autopilot -t https://staging.example.com \
 | `--files` |, | Specific files to include (relative to `--source`) |
 | `--focus` |, | Focus area hint (e.g. `"auth bypass"`, `"API injection"`) |
 | `--instruction` / `--instruction-file` |, | Custom instruction appended to prompt |
-| `--intensity` | `balanced` | Preset bundle: `quick` / `balanced` / `deep` |
+| `--intensity` | `balanced` | Preset bundle: `quick` / `balanced` / `deep`. Sets the command budget (quick=150, balanced=500, deep=1500 turns), audit mode, browser, and pre-scan strategy |
 | `--audit` | `lite` (with `--source`) | Vigolium-audit mode: `lite` / `balanced` / `deep` / `mock` / `off` |
 | `--browser` | false | Enable agent-browser for browser-based interactions |
 | `--credentials` |, | Credentials for auth preflight (e.g. `"admin/admin123"`) |
@@ -146,8 +146,11 @@ vigolium agent autopilot -t https://staging.example.com \
 | `--focus-routes` |, | Protected/browser-focused routes to prioritize |
 | `--diff` |, | Focus on changed code (PR URL, `main...branch`, `HEAD~N`) |
 | `--last-commits` |, | Shorthand for `--diff HEAD~N` |
-| `--max-commands` | 500 (balanced) | Max LLM turns the agent can take. Intensity preset sets this — quick=150, balanced=500, deep=1500. |
-| `--max-duration` | 6h | Wall-clock cap |
+| `--max-duration` | 6h | Wall-clock cap (intensity preset sets this — quick=1h, balanced=6h, deep=12h) |
+| `--triage` | false | Run an AI triage pass over findings after the scan (confirm real issues vs false positives) |
+| `--plan-file` |, | Plan file mixing free-text guidance + raw HTTP request(s); owns the instruction + seed input (mutually exclusive with `--input`/`--instruction`/`--instruction-file`) |
+| `--piolium` |, | Run piolium audit instead of vigolium-audit when `--source` is set (`lite`/`balanced`/`deep`/`longshot`/…); empty auto-picks piolium when `pi` is installed |
+| `--no-prescan` | false | Skip the native pre-scan that seeds http_records before the operator (target-only runs; no-op with `--source`) |
 | `--upload-results` | false | Upload session bundle to cloud storage on completion |
 | `--provider` | *(config)* | Olium provider override |
 | `--model` | *(config)* | Model id override |
@@ -222,7 +225,7 @@ Supported provider IDs:
 | `anthropic-oauth`      | `claude-opus-4-7`    | Bearer token from `claude setup-token` (`--oauth-token` / `$ANTHROPIC_API_KEY`) |
 | `openai-api-key`       | `gpt-5.5`            | `--llm-api-key` / `$OPENAI_API_KEY`                       |
 | `anthropic-cli`        | `claude-opus-4-7`    | The local `claude` binary on `$PATH`                      |
-| `anthropic-vertex`     | `claude-opus-4-7`    | GCP service-account JSON + project/location               |
+| `anthropic-vertex`     | `claude-opus-4-6`    | GCP service-account JSON + project/location               |
 | `google-vertex`        | `gemini-2.5-pro`     | Same GCP creds; routes `gemini-*` models                  |
 | `openai-compatible`    | `gemma4:latest`      | `custom_provider.base_url` (Ollama, OpenRouter, LM Studio, vLLM, …); `api_key` optional |
 

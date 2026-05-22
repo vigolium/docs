@@ -248,8 +248,8 @@ vigolium agent autopilot -t https://example.com --provider anthropic-api-key
 vigolium agent autopilot -t https://example.com --browser --credentials "admin/admin123"
 
 # Limits and previews
-vigolium agent autopilot -t https://example.com --max-commands 200 --max-duration 4h
-vigolium agent autopilot -t https://example.com --token-budget 2000000
+vigolium agent autopilot -t https://example.com --intensity deep --max-duration 4h
+vigolium agent autopilot -t https://example.com --intensity quick --triage
 vigolium agent autopilot -t https://example.com --source ./src --dry-run
 vigolium agent autopilot -t https://example.com --source ./src --show-prompt
 ```

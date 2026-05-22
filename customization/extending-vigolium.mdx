@@ -636,7 +636,7 @@ Default provider is `openai-compatible` with model `gemma4:latest` (a local Olla
 | `anthropic-oauth` | `claude-opus-4-7` | `oauth_token` from `claude setup-token` (or `$ANTHROPIC_API_KEY`) |
 | `openai-api-key` | `gpt-5.5` | `llm_api_key` or `$OPENAI_API_KEY` |
 | `anthropic-cli` | `claude-opus-4-7` | shells out to the local `claude` binary on `$PATH` |
-| `anthropic-vertex` | `claude-opus-4-7` | GCP service-account JSON (or `$GOOGLE_APPLICATION_CREDENTIALS`) + project/location |
+| `anthropic-vertex` | `claude-opus-4-6` | GCP service-account JSON (or `$GOOGLE_APPLICATION_CREDENTIALS`) + project/location |
 | `google-vertex` | `gemini-2.5-pro` | same GCP creds; routes `gemini-*` models |
 | `openai-compatible` *(default)* | `gemma4:latest` | `custom_provider.base_url` (Ollama / OpenRouter / LM Studio / vLLM / Groq / …); `api_key` optional |
 
@@ -700,7 +700,7 @@ agent:
 ### Cons
 
 - **Provider lock-in to supported drivers**: only the eight drivers above are recognised; arbitrary custom CLIs are not pluggable as backends anymore.
-- **Cost**: LLM API calls still have token costs; `--max-commands` (autopilot) caps the iteration budget.
+- **Cost**: LLM API calls still have token costs; the `--intensity` preset (autopilot) caps the iteration budget — `quick` is the lightest, `deep` the heaviest.
 
 ### When to use
 

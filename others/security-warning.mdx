@@ -6,7 +6,7 @@ icon: "shield-exclamation"
 
 <Info>
 Vigolium is a powerful offensive security tool. Two parts of the system are intentionally permissive so they can do their job, and you should understand the trade-offs before running them on a machine you care about.
-<Info>
+</Info>
 
 ## Agent mode runs with no sandbox
 
@@ -41,7 +41,7 @@ Anything the agent reads, HTTP responses from the target, file contents, tool ou
 This is not hypothetical. Any LLM-driven workflow that pipes untrusted data into a model with shell access is exposed to it, and offensive tooling, by definition, points the agent at hostile inputs.
 
 <Warning>
-**Assume any target you scan in agent mode can attempt to take over the agent.** The mitigations are the same as for the sandbox concerns above, contain the blast radius, do not the credentials or filesystem access the agent has go beyond what the engagement needs.
+**Assume any target you scan in agent mode can attempt to take over the agent.** The mitigations are the same as for the sandbox concerns above, contain the blast radius, and don't let the credentials or filesystem access the agent has go beyond what the engagement needs.
 </Warning>
 
 In practice:
