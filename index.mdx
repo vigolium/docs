@@ -8,7 +8,7 @@ mode: "wide"
   <img src="/images/vigolium-main-workbench.png" alt="Vigolium Workbench showing scan overview with severity breakdown and individual finding details" />
 </Frame>
 
-Vigolium is a high-fidelity web vulnerability scanner that fuses agentic AI with native speed, modularity, and precision. It combines deterministic multi-phase scanning with AI-driven autonomous analysis to deliver comprehensive security coverage, from injection flaws and access control issues to framework-specific vulnerabilities and blind out-of-band attacks.
+[Vigolium](https://github.com/vigolium/vigolium) is a high-fidelity web vulnerability scanner that fuses agentic AI with native speed, modularity, and precision. It combines deterministic multi-phase scanning with AI-driven autonomous analysis to deliver comprehensive security coverage, from injection flaws and access control issues to framework-specific vulnerabilities and blind out-of-band attacks.
 
 The platform is built around three key components that work together to provide a complete vulnerability scanning solution.
 
@@ -26,6 +26,63 @@ The platform is built around three key components that work together to provide 
   </Card>
 </Columns>
 
+
+## <Icon icon="download" /> Installation
+
+<Tabs>
+  <Tab title="Native Installation (Recommended)">
+  ```bash
+  curl -fsSL https://vigolium.com/install.sh | bash
+  ```
+  Installs `~/.local/bin/vigolium` and adds it to your shell profile. The installer verifies the SHA-256 checksum before installing.
+  </Tab>
+
+  <Tab title="npm" icon="npm">
+  ```bash
+  npm install -g @vigolium/vigolium
+  ```
+  Thin launcher that pulls the prebuilt binary for your platform as an optional dependency (Node 16+).
+  </Tab>
+
+  <Tab title="Bun" icon="bolt">
+  ```bash
+  bun add -g @vigolium/vigolium
+  ```
+  Installs the Vigolium launcher globally with Bun. Same prebuilt-binary launcher as the npm install path; Bun is just a faster package manager.
+  </Tab>
+
+  <Tab title="Homebrew" icon="apple">
+  ```bash
+  brew install vigolium/tap/vigolium
+  ```
+  Installs the latest release from the Vigolium tap on macOS and Linux. Upgrade with `brew upgrade vigolium`.
+  </Tab>
+
+  <Tab title="Docker" icon="docker">
+  ```bash
+  docker pull j3ssie/vigolium:latest
+  docker run --rm j3ssie/vigolium:latest scan -h
+  ```
+  The container entrypoint is the `vigolium` binary, pass any subcommand directly.
+  </Tab>
+
+  <Tab title="Build from Source" icon="bolt">
+  ```bash
+  git clone https://github.com/vigolium/vigolium.git
+  cd vigolium
+  make build
+  ```
+  Requires Go 1.26+, Bun 1.3.11+, `git`, and `make`. Always use `make build` (not `go build`), it injects version metadata.
+  </Tab>
+
+  <Tab title="Windows">
+    <Check>Vigolium only supports Linux and macOS natively. Windows users should use WSL or the Docker image.</Check>
+  </Tab>
+</Tabs>
+
+For a guided walkthrough including validation and your first scan, see the [Quickstart](/getting-started/quickstart).
+
+---
 
 ## <Icon icon="radar" /> Scanning Mode
 

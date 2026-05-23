@@ -8,7 +8,7 @@ icon: "rocket"
   <img src="/images/vigolium-install.png" />
 </Frame>
 
-## Step 1: Install Vigolium Open Source
+## Step 1: Install [Vigolium Open Source](https://github.com/vigolium/vigolium)
 
 <Tabs>
   <Tab title="Native Installation (Recommended)">
@@ -16,13 +16,6 @@ icon: "rocket"
   curl -fsSL https://vigolium.com/install.sh | bash
   ```
   Installs `~/.local/bin/vigolium` and adds it to your shell profile. The installer verifies the SHA-256 checksum before installing.
-  </Tab>
-
-  <Tab title="Homebrew" icon="apple">
-  ```bash
-  brew install vigolium/tap/vigolium
-  ```
-  Installs the latest release from the Vigolium tap on macOS and Linux. Upgrade with `brew upgrade vigolium`.
   </Tab>
 
   <Tab title="npm" icon="npm">
@@ -37,6 +30,13 @@ icon: "rocket"
   bun add -g @vigolium/vigolium
   ```
   Installs the Vigolium launcher globally with Bun. Same prebuilt-binary launcher as the npm install path; Bun is just a faster package manager.
+  </Tab>
+
+  <Tab title="Homebrew" icon="apple">
+  ```bash
+  brew install vigolium/tap/vigolium
+  ```
+  Installs the latest release from the Vigolium tap on macOS and Linux. Upgrade with `brew upgrade vigolium`.
   </Tab>
 
   <Tab title="Docker" icon="docker">
