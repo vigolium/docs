@@ -36,14 +36,13 @@ Agentic scanning uses AI agents to drive or augment the scanning process. Invoke
 | Mode | Command | Description |
 |------|---------|-------------|
 | **Query** | `vigolium agent query` | Single-shot prompt execution. Good for code review, endpoint discovery, secret detection. No network scanning. |
-| **Autopilot** | `vigolium agent autopilot` | Autonomous AI-driven pentest. The olium engine drives bash, file ops, and the vigolium CLI until it calls `halt_scan`. |
-| **Swarm** | `vigolium agent swarm` | 10-phase pipeline where native Go handles heavy lifting and AI intervenes at checkpoints, planning attacks, triaging results, generating custom JS scanner extensions. |
+| **Autopilot** | `vigolium agent autopilot` | Autonomous AI-driven pentest. The olium engine discovers endpoints, runs scans, and triages findings on its own, driving bash, file ops, and the vigolium CLI until it calls `halt_scan`. Supports diff-focused runs (`--diff`), `--intensity` preset bundles, and session resume. |
+| **Swarm** | `vigolium agent swarm` | AI-guided pipeline for targeted single-request or full-scope (`--discover`) scanning. The master agent selects modules, generates custom JS scanner extensions, runs code audit and SAST, executes scans, and triages results, with native Go handling the heavy lifting while AI intervenes at checkpoints. |
 | **Audit** | `vigolium agent audit` | Unified whitebox security audit driver (lite / balanced / deep). Runs the embedded vigolium-audit harness, the standalone piolium harness, or both side-by-side under one parent scan. |
 | **Piolium** | `vigolium agent piolium` | Pi-native whitebox audit driver (separate install). Up to 17 phases at `deep`, the most thorough audit available. |
 | **Olium** | `vigolium olium` / `vigolium ol` | Interactive TUI chat or one-shot non-interactive prompt, the underlying agent runtime. |
 
 All scan-oriented modes support `--source` for source-aware analysis and store session artifacts (plans, extensions, output) under `~/.vigolium/agent-sessions/`.
-
 
 ### Native Scan
 
