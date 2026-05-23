@@ -83,7 +83,7 @@ vigolium agent audit --source ~/src/your-app --mode deep
 vigolium agent audit --driver audit --source ~/src/your-app --mode deep
 
 # Piolium, the most thorough audit available
-vigolium agent piolium --source ~/src/your-app --mode deep
+vigolium agent audit --driver=piolium --source ~/src/your-app --mode deep
 
 # Run both side-by-side under one parent scan, with project-wide dedup
 vigolium agent audit --driver both --source ~/src/your-app

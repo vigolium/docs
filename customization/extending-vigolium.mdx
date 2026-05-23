@@ -674,21 +674,11 @@ vigolium ol --provider openai-api-key --llm-api-key "$OPENAI_API_KEY"
 
 The olium engine exposes eight built-in tools to the model: `bash`, `read_file`, `write_file`, `edit_file`, `ls`, `grep`, `glob`, `web_fetch`. Autopilot adds two security-specific tools: `halt_scan` (model-driven exit) and `report_finding` (DB-backed finding ingestion). See [Olium Agent](/agentic-scan/olium) for the full tool reference.
 
-### LLM config (for JS extensions only)
+### LLM config (for JS extensions)
 
-The `agent.llm` section configures the LLM provider used by `vigolium.agent.*` APIs inside JavaScript extensions, separate from the olium engine that powers `vigolium agent` subcommands.
+The `vigolium.agent.*` APIs available to JavaScript extensions dispatch through the same in-process **olium** engine that powers the `vigolium agent` subcommands. Configure the provider once under `agent.olium` — see [Olium Agent](/agentic-scan/olium) for the full provider/model options.
 
-```yaml
-agent:
-  llm:
-    provider: anthropic    # or openai
-    model: claude-sonnet-4-20250514
-    api_key_env: ANTHROPIC_API_KEY
-    max_tokens: 4096
-    temperature: 0.0
-    cache_size: 256        # LRU cache; 0 = disabled
-    cache_ttl: 300         # seconds
-```
+> **Note:** The legacy `agent.llm` config block is **deprecated and ignored**. The JS extension agent API now resolves its provider from `agent.olium`; remove any `agent.llm` section from your config.
 
 ### Pros
 

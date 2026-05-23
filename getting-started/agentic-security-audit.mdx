@@ -9,7 +9,7 @@ Vigolium's agentic security audit is a multi-phase whitebox source-code audit dr
 Two harnesses cover the audit surface:
 
 - **`vigolium agent audit --driver=audit`**: embedded driver that drives the `claude` or `codex` CLI under the hood. Up to 12 phases at `deep`. No extra install.
-- **`vigolium agent piolium`** (or `vigolium agent audit --driver=piolium`): Pi-native driver. Up to 17 phases at `deep`. Requires the `pi` runtime and the `piolium` extension. Supports any provider Pi supports, including local models.
+- **`vigolium agent audit --driver=piolium`**: Pi-native driver. Up to 17 phases at `deep`. Requires the `pi` runtime and the `piolium` extension. Supports any provider Pi supports, including local models.
 
 Both produce findings in the same on-disk schema and DB shape; the unified `vigolium agent audit` dispatcher can run either harness alone, both side-by-side, or auto-pick based on what is available.
 
@@ -146,13 +146,13 @@ bun install -g @earendil-works/pi-coding-agent
 pi install git:git@github.com:vigolium/piolium.git
 
 # Run a balanced audit
-vigolium agent piolium --source ~/src/your-app
+vigolium agent audit --driver=piolium --source ~/src/your-app
 
 # Deep (17 phases, the most thorough audit available)
-vigolium agent piolium --source ~/src/your-app --mode deep
+vigolium agent audit --driver=piolium --source ~/src/your-app --mode deep
 
 # Override pi's provider/model for a single run
-vigolium agent piolium --source ~/src/your-app \
+vigolium agent audit --driver=piolium --source ~/src/your-app \
   --pi-provider vertex-anthropic --pi-model claude-opus-4-6
 ```
 

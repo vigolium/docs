@@ -266,7 +266,7 @@ vigolium agent audit --source .
 # Run both drivers back-to-back, unconditionally
 vigolium agent audit --driver both --source ./backend
 
-# Single driver (equivalent to agent piolium for the piolium leg)
+# Single driver — piolium only (no audit, no fallback)
 vigolium agent audit --driver piolium --source ./backend --mode lite
 vigolium agent audit --driver audit   --source ./backend --agent claude
 

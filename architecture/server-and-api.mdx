@@ -29,11 +29,11 @@ Vigolium runs as a long-lived service via `vigolium server`, a Fiber REST API th
    │            shared Repository (SQLite / PostgreSQL)          │
    └───────────────────────────────────────────────────────────┘
             ▲                                  ▲
-            │ optional transparent proxy       │ vigolium-ingestor
+            │ optional transparent proxy       │ vigolium ingest
             │ (--ingest-proxy-port :9003)      │ (remote client)
 ```
 
-The server is `pkg/server/` (Fiber). It owns no scan logic of its own, it wraps the same `internal/runner` native pipeline and the same `pkg/agent` orchestrators the CLI uses, so behavior is identical whichever entry point launches a scan. Three traffic sources feed the same `RecordWriter` → repository path: the `/api/ingest-http` endpoint, the optional transparent HTTP proxy, and the standalone `vigolium-ingestor` client.
+The server is `pkg/server/` (Fiber). It owns no scan logic of its own, it wraps the same `internal/runner` native pipeline and the same `pkg/agent` orchestrators the CLI uses, so behavior is identical whichever entry point launches a scan. Three traffic sources feed the same `RecordWriter` → repository path: the `/api/ingest-http` endpoint, the optional transparent HTTP proxy, and the `vigolium ingest` client.
 
 ### Middleware chain
 

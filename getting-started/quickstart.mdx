@@ -18,6 +18,13 @@ icon: "rocket"
   Installs `~/.local/bin/vigolium` and adds it to your shell profile. The installer verifies the SHA-256 checksum before installing.
   </Tab>
 
+  <Tab title="Homebrew" icon="apple">
+  ```bash
+  brew install vigolium/tap/vigolium
+  ```
+  Installs the latest release from the Vigolium tap on macOS and Linux. Upgrade with `brew upgrade vigolium`.
+  </Tab>
+
   <Tab title="npm" icon="npm">
   ```bash
   npm install -g @vigolium/vigolium
@@ -207,7 +214,7 @@ vigolium update --skip-templates # only reinstall the binary
 vigolium update -F               # skip the confirmation prompt
 ```
 
-npm and Docker installs are upgraded through their own tooling (`npm update -g @vigolium/vigolium` / `docker pull`), not `vigolium update`.
+Homebrew, npm, and Docker installs are upgraded through their own tooling (`brew upgrade vigolium` / `npm update -g @vigolium/vigolium` / `docker pull`), not `vigolium update`.
 
 
 ## Next steps

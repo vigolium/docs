@@ -257,7 +257,7 @@ Findings land under `~/.vigolium/agent-sessions/<scan-uuid>/vigolium-results/`. 
 
 ## 6. Piolium audit, Pi-native driver
 
-`vigolium agent piolium` runs a separate, more thorough audit (17 phases at `deep`) via the **Pi coding-agent runtime**. Unlike vigolium-audit, piolium is **not** embedded, you install it once and vigolium drives the `pi` binary.
+`vigolium agent audit --driver=piolium` runs a separate, more thorough audit (17 phases at `deep`) via the **Pi coding-agent runtime**. Unlike vigolium-audit, piolium is **not** embedded, you install it once and vigolium drives the `pi` binary.
 
 ```bash
 # 1. Install Pi runtime.
@@ -273,12 +273,12 @@ pi list                                # verify "piolium" appears
 pi login                               # or: pi /login
 
 # 4. Run an audit.
-vigolium agent piolium --source ~/src/your-app                            # balanced (default)
-vigolium agent piolium --source ~/src/your-app --mode lite               # quick triage
-vigolium agent piolium --source ~/src/your-app --intensity deep          # full 17-phase
+vigolium agent audit --driver=piolium --source ~/src/your-app                            # balanced (default)
+vigolium agent audit --driver=piolium --source ~/src/your-app --mode lite               # quick triage
+vigolium agent audit --driver=piolium --source ~/src/your-app --intensity deep          # full 17-phase
 
 # 5. Override pi's provider/model just for this run if you want.
-vigolium agent piolium --source ~/src/your-app \
+vigolium agent audit --driver=piolium --source ~/src/your-app \
   --pi-provider vertex-anthropic --pi-model claude-opus-4-6
 ```
 
@@ -318,7 +318,7 @@ vigolium agent autopilot -t https://example.com --intensity quick --max-duration
 vigolium agent audit --source . --mode lite
 
 # Piolium audit (requires pi + piolium installed):
-vigolium agent piolium --source . --mode lite
+vigolium agent audit --driver=piolium --source . --mode lite
 ```
 
 If any of these errors out, the message points at the missing piece, usually an unset env var, a wrong `agent.olium.provider`, or a missing binary.

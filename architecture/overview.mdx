@@ -31,7 +31,7 @@ Vigolium can operate as a CLI tool for one-off scans, as a persistent REST API s
 |------|--------|-------------|
 | **CLI Scanner** | `vigolium scan` | Run scans directly from the command line against targets, input files (OpenAPI, Postman, Burp, cURL, HAR), or source code paths. |
 | **Server Mode** | `vigolium server` | Launch a REST API server with Swagger UI. Ingest traffic, trigger scans, query findings, and run agent sessions over HTTP. |
-| **Ingestor Client** | `vigolium-ingestor` | Lightweight client that captures and forwards HTTP traffic to a running Vigolium server for analysis. |
+| **Ingestor Client** | `vigolium ingest` | Lightweight client that captures and forwards HTTP traffic to a running Vigolium server for analysis. |
 
 ## Scanning Paradigms
 
@@ -72,7 +72,7 @@ Agentic scanning uses AI agents to drive or augment the scanning process. Invoke
 | **Autopilot** | `vigolium agent autopilot` | One long-running LLM session with full bash/file/web tools plus `report_finding` and `halt_scan`. The agent decides what to scan, runs scans, inspects results, and iterates until it halts. |
 | **Swarm** | `vigolium agent swarm` | Multi-phase pipeline where native Go handles heavy lifting and AI intervenes at checkpoints, planning attacks, triaging results, and generating custom JS scanner extensions. |
 | **Audit** | `vigolium agent audit` | Unified driver dispatcher. `--driver auto\|both\|audit\|piolium` drives the embedded vigolium-audit harness, the standalone piolium harness, or both side-by-side under one parent scan. |
-| **Piolium** | `vigolium agent piolium` | Direct access to the standalone piolium audit harness (requires a separate `~/.piolium` install). |
+| **Piolium** | `vigolium agent audit --driver=piolium` | Direct access to the standalone piolium audit harness (requires a separate `~/.piolium` install). |
 | **Olium** | `vigolium agent olium` (or `vigolium ol`) | Direct interactive TUI access to the olium engine. Use `-p` for a non-interactive one-shot prompt. |
 
 All agent modes support `--source` for source-aware analysis and store session artifacts (plans, extensions, output) in a configurable sessions directory.
