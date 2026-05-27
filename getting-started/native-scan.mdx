@@ -129,10 +129,17 @@ vigolium run dynamic-assessment --stateless -t https://example.com \
   --format jsonl -o results
 ```
 
-Multiple targets from a file, each target gets an isolated temporary database, and the output filename is suffixed per host so results don't overwrite:
+Multiple targets from a file scan into one shared temporary database and export to a single unified output file by default:
 
 ```bash
 vigolium scan --stateless -T targets.txt --format jsonl -o results
+# -> results.jsonl (all targets combined)
+```
+
+Add `--split-by-host` to instead scan each target in its own isolated temporary database and write a separate per-host output file (the filename is suffixed with the host so results don't overwrite):
+
+```bash
+vigolium scan --stateless -T targets.txt --split-by-host --format jsonl -o results
 # -> results-example.com.jsonl, results-test.example.com.jsonl, ...
 ```
 
@@ -249,7 +256,7 @@ vigolium scan --stateless -t https://example.com \
   --auth "admin:Cookie:session_id=abc123" \
   --format jsonl -o results
 
-# Session / auth-config file (YAML or JSON)
+# Single session or multi-session bundle file (YAML or JSON)
 vigolium scan --stateless -t https://example.com \
   --auth-file ./admin-session.yaml \
   --format jsonl -o results

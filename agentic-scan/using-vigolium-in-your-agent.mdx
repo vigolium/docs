@@ -1150,54 +1150,25 @@ vigolium export --only modules
 
 ### 10. Whitebox / Source-Aware Scanning
 
-**Scan with local source code:**
+Source-aware scanning runs through the agent modes via the `--source` flag — the native `vigolium scan` does not take source code. Use `agent swarm` for an AI-driven source-aware DAST scan, or `agent audit` for a source-only (SAST) review.
+
+**Source-aware scan with local source code:**
 ```
 > Whitebox scan with source code in ./src
 ```
 ```bash
-vigolium scan -t https://example.com --source ./src --strategy whitebox
+vigolium agent swarm --target https://example.com --source ./src
 ```
+`--target` is required whenever `--source` is given. The source-analysis and code-audit phases run automatically when `--source` is present.
 
 **Scan with source cloned from Git:**
 ```
-> Clone the repo and run a whitebox scan
+> Clone the repo and run a source-aware scan
 ```
 ```bash
-vigolium scan -t https://example.com \
-  --source-url https://github.com/org/repo --strategy whitebox
-```
-
-**Link source code to a hostname first, then scan:**
-```
-> Link the source repo to example.com, then whitebox scan
-```
-```bash
-vigolium source add --hostname example.com --path ./src
-vigolium scan -t https://example.com --strategy whitebox
-```
-
-**Link source with metadata:**
-```
-> Link source with language and framework info
-```
-```bash
-vigolium source add --hostname api.example.com --path ./src -l go -f gin
-```
-
-**Link source from Git URL:**
-```
-> Clone and link a GitHub repo
-```
-```bash
-vigolium source add --hostname example.com --git https://github.com/org/repo
-```
-
-**List linked source repos:**
-```
-> Show all linked source repositories
-```
-```bash
-vigolium source ls
+# Clone first, then point --source at the local checkout
+git clone https://github.com/org/repo /tmp/repo
+vigolium agent swarm --target https://example.com --source /tmp/repo
 ```
 
 **Run a source-code audit (SAST) only:**
