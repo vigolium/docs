@@ -164,63 +164,6 @@ vigolium scan --stateless -i traffic.har -I har --format jsonl -o results
 vigolium scan --stateless -i nuclei.jsonl -I nuclei --format jsonl -o results
 ```
 
-## Burp Suite integration
-
-The **Vigolium Burp extension** is the native scanner wrapped as a Burp Suite tab. It lets you ingest live proxy traffic into Vigolium and trigger a full-parameter scan against any request you have in front of you, all without leaving Burp. Under the hood, the extension calls the same `/api/ingest-http` and `/api/scan` endpoints documented in [Server Mode](/getting-started/server-and-ingestion), so every finding lands in the same database as your CLI scans.
-
-<Frame caption="Vigolium tab in Burp Suite, findings, request/response, and live scan status">
-  <img src="/images/vigolium-burp-extension-1.png" />
-</Frame>
-
-**What you get inside Burp**
-
-- A **Findings** table fed live by Vigolium as it scans, severity, confidence, module, matched URL, sortable and filterable.
-- The full **Request / Response** pair for the selected finding, so you can pivot back into Repeater or Intruder without leaving the row.
-- A scan stream at the top showing each module as it runs against the ingested request (active/passive, insertion points, finding count).
-- Two one-click actions on any request in Burp's context menu, **Send to Native Scan** and **Send to Agentic Scan**, that trigger a fresh scan with all parameters (headers, cookies, body fields, path segments) preserved exactly as captured.
-
-### Configuring the extension
-
-Open the **Settings** tab in the Vigolium panel to point the extension at a running Vigolium server and tune what gets sent:
-
-<Frame caption="Vigolium extension Settings tab, server connection, scan options, shortcuts, proxy interception, and filter rules">
-  <img src="/images/vigolium-burp-extension-2.png" />
-</Frame>
-
-| Section | What it controls |
-|---------|------------------|
-| **Server Connection** | Vigolium API endpoint (e.g. `http://localhost:9002`) and the API key (`VIGOLIUM_API_KEY`). Click **Test Connection** to verify before ingesting. |
-| **Scan Options** | Optional parameters sent with every ingested request (timeout, scan ID, module overrides). Leave blank for server defaults. |
-| **Keyboard Shortcuts** | Bindings for **Send to Vigolium**, **Send to Native Scan**, and **Send to Agentic Scan** so you can fire a scan from any Burp tab without using the menu. |
-| **Proxy Interception** | Toggle to forward every request flowing through Burp Proxy to Vigolium. Combine with **Only in-scope requests** to limit ingestion to your Burp target scope. |
-| **Request Statistics** | Live counters of what's been forwarded, succeeded, failed, and queued, plus the in-flight scan count. |
-| **Proxy Filter Rules** | Per-rule allow/deny filters (file extension, HTTP method, host) so static assets and out-of-scope hosts don't pollute the database. |
-
-### Typical workflow
-
-1. **Start the Vigolium server** with an API key and (optionally) a proxy port:
-
-   ```bash
-   export VIGOLIUM_API_KEY=my-secret-key
-   vigolium server --ingest-proxy-port 9003
-   ```
-
-2. **Load the extension** in Burp (Extensions → Add → select the Vigolium JAR), open the **Vigolium** tab, and fill in **Server Connection** with your endpoint and API key. Hit **Test Connection**.
-
-3. **Ingest traffic** in one of two ways:
-   - **Passive**: enable **Proxy Interception** so every in-scope request browsed through Burp is forwarded to `/api/ingest-http` and stored.
-   - **On demand**: right-click any request in Proxy / Repeater / Target → **Send to Vigolium** to ingest just that request.
-
-4. **Trigger a scan** with all parameters preserved. Right-click the request and choose **Send to Native Scan** (deterministic Go modules) or **Send to Agentic Scan** (LLM-driven). Every header, cookie, body field, and path segment becomes an insertion point, the same coverage as `vigolium scan-request -i request.txt` on the CLI.
-
-5. **Watch findings stream in** under the **Findings** tab. Selecting a row loads the matched request/response so you can verify or pivot back into Burp.
-
-<Callout icon="circle-info" color="#3B82F6" iconType="regular">
-  The extension never runs the scanner inside Burp's JVM, it just forwards requests and polls the Vigolium server for findings. That means scans are bounded by your Vigolium server's resources, not Burp's, and findings remain in the database after Burp is closed.
-</Callout>
-
-For installation, build instructions, and the full settings reference see the [Burp Extension](/integrations/burp-extension) page.
-
 ## Tuning a scan
 
 ```bash
