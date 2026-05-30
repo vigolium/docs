@@ -114,13 +114,24 @@ When a file is found at `/a/b/c/file.txt`, the engine extracts `/a/`, `/a/b/`, `
 
 ## Deduplication
 
-Multiple layers prevent redundant work:
+Multiple layers prevent redundant work **during** the crawl:
 
 - **Task-level**: FNV-1a hash prevents duplicate task enqueueing
 - **Request-level**: Cache prevents sending the same HTTP request twice
 - **URL-level**: DiskSet tracks processed URLs
 - **Body-level**: Hash prevents re-analyzing identical responses with JSScan
 - **Directory/file trackers**: Prevent re-processing the same discovery
+
+### Output deduplication
+
+Before discoveries are saved and handed to the scanner, two more layers run over the collected results:
+
+- **Exact body dedup**: Records are keyed on `host + status + response-body hash`. Identical bodies served across different paths collapse to one (the shortest path is kept). The hash covers only the response body — not the raw response — so volatile headers (`Date`, `Set-Cookie`) and header ordering don't defeat it.
+- **Near-identical cluster cap**: A backstop for catch-all / SPA targets that answer `200` with the same page for *every* path (where each response differs by a few bytes or words, so the exact hash and soft-404 detection can't collapse them). Records are grouped into clusters by `host + status + content-type`, with body **size and word count each within 0.5%**; at most `dedup_cluster_cap` records (default **10**) are kept per cluster, preferring the shallowest paths. Because the band is relative, small distinct responses (e.g. JSON API endpoints) need a near-exact match to cluster and are never collapsed — only large near-identical pages are capped.
+
+<Note>
+The cluster cap is on by default. Set `discovery.dedup_cluster_cap: 0` to disable it, or raise/lower the value to keep more/fewer representatives per cluster. It trims both the report and the downstream dynamic-assessment workload, since the capped records are never emitted to the scanner.
+</Note>
 
 ## Built-In Modules
 
