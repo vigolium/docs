@@ -37,7 +37,7 @@ Active modules send modified requests to detect vulnerabilities via fuzzing, inj
 | Module ID | Name | Description | Severity | Confidence | Tags |
 |---|---|---|---|---|---|
 | `active-sqli-error-based` | SQLi Error Based | Error-based SQLi via database error messages (MySQL, PostgreSQL, MSSQL, Oracle, SQLite) | Critical | Certain | `sqli`, `injection` |
-| `active-sqli-boolean-blind` | Blind SQL Injection (Boolean-Based) | Boolean-based blind SQLi via TRUE/FALSE payload pairs with triple verification | High | Certain | `sqli`, `injection` |
+| `active-sqli-boolean-blind` | Blind SQL Injection (Boolean-Based) | Boolean-based blind SQLi using a randomized boundary matrix with difflib-style page-similarity comparison, a multi-round/multi-factor logic battery (AND/OR oracle, alternating comparison operators, invalid-syntax probe), and WAF-adaptive payload mutation. Only reports 200-vs-200 differentials with a large body-size delta (rejects status-flip false positives) | High | Certain | `sqli`, `injection`, `heavy` |
 
 ### NoSQL Injection
 
@@ -164,7 +164,7 @@ Active modules send modified requests to detect vulnerabilities via fuzzing, inj
 |---|---|---|---|---|---|
 | `active-sqli-time-based-header` | SQLi Time Based - Header | Time-based SQL injection in HTTP headers | Critical | Certain | `injection`, `sqli`, `heavy` |
 | `active-sqli-time-based-params` | SQLi Time Based - Params | Time-based SQL injection in parameters | Critical | Certain | `injection`, `sqli`, `heavy` |
-| `active-sqli-time-blind` | Blind SQL Injection (Time-Based) | Time-based blind SQL injection | High | Firm | `injection`, `sqli`, `heavy` |
+| `active-sqli-time-blind` | Blind SQL Injection (Time-Based) | Time-based blind SQLi with a per-target statistical delay threshold and multi-round confirmation that the delay scales with the injected sleep value (rejects fixed/jitter delays); prioritizes payloads by any DBMS identified for the host | High | Firm | `injection`, `sqli`, `heavy` |
 
 ### SSRF & SSTI (Blind)
 
