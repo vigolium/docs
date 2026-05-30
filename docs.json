@@ -32,14 +32,14 @@
             "pages": [
               "getting-started/overview",
               "getting-started/quickstart",
-              "getting-started/web-ui",
               "getting-started/choosing-a-mode",
               "getting-started/native-scan",
               "getting-started/setup-agent",
               "getting-started/agentic-scan",
               "getting-started/agentic-security-audit",
-              "getting-started/configuration",
+              "getting-started/web-ui",
               "getting-started/output-and-reporting"
+              "getting-started/configuration",
             ]
           },
           {
