@@ -38,8 +38,8 @@
               "getting-started/agentic-scan",
               "getting-started/agentic-security-audit",
               "getting-started/web-ui",
-              "getting-started/output-and-reporting"
-              "getting-started/configuration",
+              "getting-started/output-and-reporting",
+              "getting-started/configuration"
             ]
           },
           {
