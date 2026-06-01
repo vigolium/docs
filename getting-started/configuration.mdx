@@ -144,6 +144,7 @@ discovery:
   save_response_body: true
   enable_malformed_path_probe: false
   dedup_cluster_cap: 10        # keep at most N near-identical responses per cluster (omit = 10, 0 = disabled)
+  auto_fuzz_low_yield: true    # auto-enable FUZZ on the original target when spidering came up empty or hit an SSO wall (omit = on)
   enrich_targets: false        # feed paths from spidering/harvest into discovery
 
   recursion:
