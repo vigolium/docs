@@ -16,6 +16,7 @@ The agent API provides four run modes that mirror the `vigolium agent` CLI subco
 | `POST /api/agent/run/audit`       | `vigolium agent audit`      | Source-audit dispatcher (vigolium-audit and/or piolium) |
 | `GET /api/agent/status/list`      |,                           | List runs with in-memory status          |
 | `GET /api/agent/status/:id`       |,                           | Get run status by ID                     |
+| `POST /api/agent/scans/:uuid/cancel` |,                        | Cancel an in-flight agent run            |
 | `GET /api/agent/sessions`         | `vigolium agent sessions`   | Paginated session history from DB        |
 | `GET /api/agent/sessions/:id`     |,                           | Full session detail with debug fields    |
 | `GET /api/agent/sessions/:id/logs`|,                           | Raw `runtime.log` (plain text or SSE tail)|
@@ -540,7 +541,7 @@ curl -s http://localhost:9002/api/agent/status/list | jq .
 |--------------------|----------|------------------------------------------------------------|
 | `agentic_scan_uuid`| string   | Unique run identifier                                      |
 | `mode`             | string   | `"query"`, `"autopilot"`, `"swarm"`, `"audit"`, or `"pipeline"` |
-| `status`           | string   | `"running"`, `"completed"`, or `"failed"`                  |
+| `status`           | string   | `"running"`, `"completed"`, `"failed"`, or `"cancelled"`   |
 | `agent_name`       | string   | Agent label recorded for the run                           |
 | `template_id`      | string   | Prompt template ID (query mode)                            |
 | `finding_count`    | int      | Number of findings produced                                |
@@ -552,6 +553,28 @@ curl -s http://localhost:9002/api/agent/status/list | jq .
 | `current_phase`    | string   | Currently executing phase (swarm, running)                  |
 | `phases_run`       | string[] | Completed phases (swarm)                                    |
 | `swarm_result`     | object   | Full swarm result (swarm, completed runs)                  |
+
+---
+
+## POST /api/agent/scans/:uuid/cancel, Cancel an Agent Run
+
+Aborts an in-flight agent run (autopilot, swarm, query, or audit) by cancelling its context. The run unwinds and its finalization records the terminal `cancelled` status. This is the endpoint the workbench UI's "Cancel run" button calls.
+
+```bash
+curl -s -X POST \
+  http://localhost:9002/api/agent/scans/agt-661f9511-f3ac-52e5-b827-557766551111/cancel \
+  -H "Authorization: Bearer my-secret-key" | jq .
+```
+
+```json
+{
+  "agentic_scan_uuid": "agt-661f9511-f3ac-52e5-b827-557766551111",
+  "status": "cancelling",
+  "message": "cancellation requested"
+}
+```
+
+Returns `404` with `{"error": "run not found or already finished"}` when no run with that UUID is currently running in this process (already finished, never started, or unknown). Cancellation only targets runs executing in the server process that receives the request.
 
 ---
 

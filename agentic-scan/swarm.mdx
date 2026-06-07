@@ -341,6 +341,10 @@ vigolium agent swarm -t https://app.example.com \
 | `--code-audit` | Force code audit (auto-on with `--source` for balanced/deep) |
 | `--discover` | Run native discovery before planning |
 | `--triage` | Enable verify-and-rescan loop |
+| `--skill` | Force-load these skills by name into triage, bypassing planner selection (repeatable or comma-separated) |
+| `--skill-tag` | Force-load every skill carrying one of these tags into triage (e.g. `xss,idor`) |
+| `--no-skill-filter` | Load the full skill set into triage; ignore planner selection |
+| `--db-isolate` | Scan into a private temp DB, then merge results into `--db` at the end (SQLite only) |
 | `--max-iterations` | Triage rounds (preset-driven default) |
 | `--master-batch-size` | Records per master-agent batch (default 5) |
 | `--batch-concurrency` | Parallel master batches (default 3) |

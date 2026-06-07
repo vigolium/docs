@@ -312,13 +312,37 @@ agent:
     max_concurrent: 4              # global cap on simultaneous in-flight provider calls
     call_timeout_sec: 600          # per-call deadline; -1 = no enforced timeout
 
+    # Skills always loaded for autopilot/swarm regardless of planner selection.
+    # Empty = built-in default [triage-finding, write-jsext]. The CLI flags
+    # --skill / --skill-tag / --no-skill-filter override selection per-run.
+    always_on_skills: []
+
     # Custom OpenAI-compatible backend (used when provider == openai-compatible).
-    # Drives Ollama, OpenRouter, LM Studio, vLLM, etc.
+    # Drives Ollama, OpenRouter, LM Studio, vLLM, Together, Groq, etc.
     custom_provider:
       base_url: http://localhost:11434/v1   # e.g. http://localhost:11434/v1 (Ollama)
       model_id: gemma4:latest               # backend-specific model id
       api_key: ""                           # optional; leave empty to skip Authorization header; supports ${ENV_VAR}
       extra_headers: []                     # list of curl-style "Key: Value" strings, applied after standard headers
+
+      # OpenRouter provider routing — typed knob for the request "provider" object.
+      # Only fields you set are sent; unset fields are dropped from the wire body.
+      provider_routing:
+        order: []                  # upstream provider slugs in preference order
+        only: []                   # restrict to these provider slugs
+        ignore: []                 # exclude these provider slugs
+        allow_fallbacks: true      # false = strict (only the chosen providers)
+        sort: ""                   # price | throughput | latency
+        quantizations: []          # e.g. [fp8, int8]
+        data_collection: ""        # allow | deny
+        require_parameters: false  # only providers that honour every request parameter
+        zdr: false                 # Zero Data Retention providers only
+
+      # Generic JSON-body passthrough merged into every openai-compatible request
+      # (OpenRouter extensions, vLLM/Together body options, etc.). Reserved keys
+      # (model, messages, tools, stream, stream_options) are rejected. Don't set a
+      # `provider` key here if you also use provider_routing — use one or the other.
+      extra_body: {}
 
     # Vertex AI (anthropic-vertex / google-vertex) — GCP project / region.
     # Credentials come from `oauth_cred_path` (service-account JSON) or
@@ -422,6 +446,12 @@ known_issue_scan:
   severities: []                   # filter: critical, high, medium, low, info
   templates_dir: ""                # custom templates path
   enrich_targets: true             # feed discovered paths into known-issue scan
+
+  # Remap the severity a finding is recorded with, keyed by nuclei template ID.
+  # Default tones down generic config.json exposure (often only public base
+  # URLs / feature flags). Add your own template-ID → severity entries.
+  severity_overrides:
+    config-json-exposure-fuzz: medium   # critical | high | medium | low | info
 ```
 
 ### `mutation_strategy`

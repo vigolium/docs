@@ -1,6 +1,6 @@
 ---
 title: "Transparent Proxy"
-description: "Use Vigolium's built-in HTTP proxy to passively record all traffic for scanning."
+description: "Use Vigolium's built-in HTTP proxy to passively record traffic for scanning, including HTTPS via optional MITM interception."
 icon: "network-wired"
 ---
 
@@ -25,7 +25,40 @@ This starts two listeners:
 
 The proxy sits between your tools and the target. All HTTP traffic passing through is automatically recorded in the database as HTTP records, ready for scanning.
 
-HTTPS CONNECT tunneling is passed through without recording -the proxy cannot inspect encrypted traffic without acting as a MITM, so TLS tunnels are forwarded transparently.
+By default, HTTPS CONNECT tunneling is passed through without recording — the proxy cannot inspect encrypted traffic without acting as a MITM, so TLS tunnels are forwarded transparently. To record HTTPS too, enable [MITM interception](#https-interception-mitm).
+
+## HTTPS Interception (MITM)
+
+Add `--proxy-mitm` to intercept HTTPS through the ingest proxy using a generated CA. TLS traffic is decrypted, recorded as HTTP records, and (with `-S`) scanned — just like plain HTTP.
+
+```bash
+vigolium server --ingest-proxy-port 9003 --proxy-mitm
+
+# Intercept and continuously scan decrypted HTTPS traffic
+vigolium server --ingest-proxy-port 9003 --proxy-mitm -S
+```
+
+On startup the server prints the path to the generated CA certificate (default `~/.vigolium/ca/vigolium-ca.pem`). **Your client must trust this CA** or HTTPS requests will fail certificate validation. Install it into your OS/browser trust store, or point your tool at it directly:
+
+```bash
+# curl trusting the CA explicitly
+curl --cacert ~/.vigolium/ca/vigolium-ca.pem -x http://localhost:9003 https://example.com/api/users
+```
+
+| Flag | Description |
+|------|-------------|
+| `--proxy-mitm` | Intercept HTTPS through `--ingest-proxy-port` using a generated CA so TLS traffic is recorded (and scanned with `-S`). |
+| `--proxy-insecure` | When intercepting HTTPS, skip verification of the **upstream** server's TLS certificate (useful for self-signed targets). |
+| `--export-ca <path>` | Write the ingest-proxy MITM CA certificate to `<path>` and exit (generates the CA if needed). Use this to distribute the CA to clients ahead of time. |
+
+```bash
+# Export the CA without starting the proxy, then trust it on your clients
+vigolium server --export-ca ./vigolium-ca.pem
+```
+
+<Callout icon="triangle-alert" color="#F59E0B" iconType="regular">
+  Only trust the Vigolium MITM CA on machines you control during testing, and remove it afterward — any party holding the CA private key can forge TLS certificates for those clients.
+</Callout>
 
 ## Usage Examples
 

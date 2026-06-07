@@ -1,12 +1,12 @@
 ---
 title: "Scanner Modules Reference"
-description: "Reference for Vigolium's 251 scanner modules, 154 active and 97 passive, covering the OWASP Top 10 and beyond."
+description: "Reference for Vigolium's 262 scanner modules, 166 active and 96 passive, covering the OWASP Top 10 and beyond."
 icon: "cubes"
 ---
 
-Vigolium ships with **251 scanner modules**, 154 active and 97 passive, covering the OWASP Top 10 and beyond. Run `vigolium module ls` for the up-to-date enabled list (the registry can grow between releases without a docs refresh).
+Vigolium ships with **262 scanner modules**, 166 active and 96 passive, covering the OWASP Top 10 and beyond. Run `vigolium module ls` for the up-to-date enabled list (the registry can grow between releases without a docs refresh).
 
-Active modules send modified requests to detect vulnerabilities; passive modules analyze existing request/response pairs without generating traffic. Recent additions include the MCP scanner suite, sensitive-header-leak detector, and DOM XSS confirm module, see `vigolium module ls --tag mcp` and `--tag xss` to view them.
+Active modules send modified requests to detect vulnerabilities; passive modules analyze existing request/response pairs without generating traffic. Recent additions include the OS command-injection suite (results/OAST/time-based), the URL-parser-confusion and routing-based SSRF family, and a cache-poisoned-DoS probe, see `vigolium module ls --tag command-injection`, `--tag ssrf`, and `--tag cpdos` to view them.
 
 ## Severity Scale
 
@@ -20,7 +20,7 @@ Active modules send modified requests to detect vulnerabilities; passive modules
 
 ---
 
-## Active Modules (154)
+## Active Modules (166)
 
 Active modules send modified requests to detect vulnerabilities via fuzzing, injection, and behavioral analysis. The list below is a curated highlight, run `vigolium module ls --type active` for the full list.
 
@@ -66,6 +66,9 @@ Active modules send modified requests to detect vulnerabilities via fuzzing, inj
 | Module ID | Name | Description | Severity | Confidence | Tags |
 |---|---|---|---|---|---|
 | `active-code-exec` | Code Execution (RCE) | OS command injection via time-based blind (sleep/delay measurement) | Critical | Certain | `rce`, `injection` |
+| `command-injection-echo` | OS Command Injection (Results-Based) | In-band OS command injection confirmed by reflecting a unique arithmetic marker, baseline-compared over multiple rounds to suppress false positives | Critical | Certain | `rce`, `command-injection`, `injection` |
+| `command-injection-oast` | OS Command Injection (Out-of-Band) | Blind OS command injection via DNS/HTTP OAST callbacks (classified distinctly from SSRF/XXE) | Critical | Certain | `rce`, `command-injection`, `oast` |
+| `command-injection-timing` | OS Command Injection (Time-Based) | Time-based blind OS command injection with delay-scaling confirmation across rounds | Critical | Tentative | `rce`, `command-injection`, `injection`, `heavy` |
 | `active-crlf-injection` | CRLF Injection | CRLF injection in HTTP headers via CR/LF character sequences | Medium | Firm | `injection` |
 | `active-xxe-generic` | XXE Generic | XML external entity injection in generic XML endpoints | Critical | Certain | `xxe`, `injection` |
 | `active-insecure-deserialization` | Insecure Deserialization | Error-based detection for Java, PHP, Python, Ruby, and .NET deserialization | High | Firm | `injection` |
@@ -76,8 +79,12 @@ Active modules send modified requests to detect vulnerabilities via fuzzing, inj
 | Module ID | Name | Description | Severity | Confidence | Tags |
 |---|---|---|---|---|---|
 | `active-ssrf-detection` | SSRF Detection | SSRF via in-band probes (internal IPs, cloud metadata) with response differential | High | Firm | `ssrf`, `injection` |
-| `active-oast-probe` | OAST Probe | Blind vulnerabilities (blind SSRF, blind XXE, blind RCE) via DNS/HTTP callbacks | High | Certain | `ssrf`, `injection` |
+| `active-oast-probe` | OAST Probe | Blind vulnerabilities (blind SSRF, blind XXE, blind RCE) via DNS/HTTP callbacks, plus "Collaborator Everywhere" OAST headers | High | Certain | `ssrf`, `injection` |
 | `active-proxy-pingback` | Proxy Pingback | Open proxy/callback endpoints via OAST URL injection | High | Certain | `ssrf`, `injection` |
+| `ssrf-filter-bypass` | SSRF Filter Bypass (URL Parser Confusion) | SSRF that defeats URL allow/deny filters via parser confusion (`@`, `#`, backslash, embedded credentials) | High | Firm | `ssrf`, `injection`, `heavy` |
+| `ssrf-protocol-smuggling` | SSRF Protocol Smuggling (CRLF in URL) | SSRF via CRLF-in-URL protocol smuggling against fetchers that don't sanitize the target URL | High | Firm | `ssrf`, `injection`, `heavy` |
+| `routing-ssrf` | Routing-Based SSRF (Request-Line) | Routing-based SSRF from PortSwigger's "Cracking the Lens" — absolute-URI / `@` / `///` request-line targets with OAST + internal-marker confirmation | High | Firm | `ssrf`, `proxy`, `routing`, `oast`, `heavy` |
+| `upgrade-routing-ssrf` | WebSocket-Upgrade SSRF Filter Bypass | Routing SSRF that bypasses filters via a WebSocket `Upgrade`, confirmed by a with-vs-without differential | High | Firm | `ssrf`, `proxy`, `websocket`, `heavy` |
 
 ### Misconfiguration
 
@@ -87,6 +94,7 @@ Active modules send modified requests to detect vulnerabilities via fuzzing, inj
 | `active-spring-actuator-misconfig` | Spring Actuator Misconfiguration | Exposed Spring Boot actuator endpoints leaking env vars, health, config | High | Firm | `misconfiguration` |
 | `active-host-header-injection` | Host Header Injection | Host header injection via value reflection (password reset/cache poisoning) | Medium | Firm | `misconfiguration` |
 | `active-web-cache-poisoning` | Web Cache Poisoning | Cache poisoning via unkeyed header injection (X-Forwarded-Host, X-Forwarded-Scheme) | High | Firm | `misconfiguration` |
+| `cache-poisoned-dos` | Cache-Poisoned Denial of Service (CPDoS) | CPDoS via header-only HMO/HHO variants that make a shared cache store and replay an origin error; safe unique-buster oracle, never affects shared keys | Medium | Firm | `cache-poisoning`, `cpdos`, `dos` |
 
 ### Access Control
 
@@ -98,6 +106,7 @@ Active modules send modified requests to detect vulnerabilities via fuzzing, inj
 | `active-idor-detection` | IDOR Detection | Missing authorization on object ID parameters via neighbor ID probing | High | Tentative | `auth-bypass` |
 | `active-mass-assignment` | Mass Assignment | Mass assignment via injecting privilege keys into JSON APIs | High | Firm | `auth-bypass` |
 | `active-open-redirect` | Open Redirect | Open redirect via injected external URL in Location/meta refresh | Medium | Firm | `auth-bypass` |
+| `open-redirect-confusion` | Open Redirect via URL Parser Confusion | Open redirect reached through URL-parser-confusion payloads (`@`, backslash, embedded host) that slip past naive redirect validation | High | Firm | `open-redirect`, `ssrf`, `moderate` |
 
 ### Path Analysis
 
@@ -106,6 +115,7 @@ Active modules send modified requests to detect vulnerabilities via fuzzing, inj
 | `active-path-normalization` | Path Normalization | Path normalization vulnerabilities via traversal payloads against middleware/reverse proxy | High | Firm | `misconfiguration` |
 | `active-nginx-off-by-slash` | Nginx Off-by-Slash | Nginx alias traversal via missing trailing slash | High | Tentative | `misconfiguration` |
 | `active-nginx-path-escape` | Nginx Path Escape Detection | Diff-based detection for alias traversal, URL encoding bypass, semicolon injection | High | Firm | `misconfiguration` |
+| `reverse-proxy-path-confusion` | Reverse Proxy Path Confusion | Reaches access-controlled backend paths the reverse proxy and origin normalize differently (encoded slashes, dot-segments, semicolons) | High | Firm | `proxy`, `access-control`, `heavy` |
 
 ### Differential & Behavior Detection
 
@@ -297,7 +307,7 @@ Active modules send modified requests to detect vulnerabilities via fuzzing, inj
 
 ---
 
-## Passive Modules (97)
+## Passive Modules (96)
 
 Passive modules analyze existing request/response pairs without sending new traffic.
 

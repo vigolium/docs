@@ -148,6 +148,10 @@ vigolium agent autopilot -t https://staging.example.com \
 | `--last-commits` |, | Shorthand for `--diff HEAD~N` |
 | `--max-duration` | 6h | Wall-clock cap (intensity preset sets this — quick=1h, balanced=6h, deep=12h) |
 | `--triage` | false | Run an AI triage pass over findings after the scan (confirm real issues vs false positives) |
+| `--skill` |, | Force-load these skills by name, bypassing the pre-flight selection (repeatable or comma-separated) |
+| `--skill-tag` |, | Force-load every skill carrying one of these tags (e.g. `xss,idor`) |
+| `--no-skill-filter` | false | Load the full skill set; skip the pre-flight skill selection |
+| `--db-isolate` | false | Scan into a private temporary database, then merge results into `--db` at the end (lets parallel runs share one DB; SQLite only) |
 | `--plan-file` |, | Plan file mixing free-text guidance + raw HTTP request(s); owns the instruction + seed input (mutually exclusive with `--input`/`--instruction`/`--instruction-file`) |
 | `--piolium` |, | Run piolium audit instead of vigolium-audit when `--source` is set (`lite`/`balanced`/`deep`/`longshot`/…); empty auto-picks piolium when `pi` is installed |
 | `--no-prescan` | false | Skip the native pre-scan that seeds http_records before the operator (target-only runs; no-op with `--source`) |

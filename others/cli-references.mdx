@@ -15,6 +15,12 @@ vigolium --full-example      # Curated tour of all common usage
 vigolium version             # Build and version info
 ```
 
+The global `--soft-fail` flag forces an exit code of `0` even when a command fails (the error is still printed to stderr). It keeps a failing `vigolium` call from interrupting the wrapping script or CI pipeline:
+
+```bash
+vigolium scan -t https://example.com --soft-fail
+```
+
 ## Scanning
 
 Run the full native pipeline against one or more targets.
@@ -61,6 +67,25 @@ vigolium scan -t https://example.com --project-name my-project
 vigolium scan -t https://example.com --oast-url https://interact.sh/abc123
 vigolium scan -t https://example.com --known-issue-scan-tags cve,misconfig --known-issue-scan-severities critical,high
 ```
+
+### Parallel & isolated scans
+
+Scan many targets at once, or let several parallel scans share one database without write contention.
+
+```bash
+# Fan out a target list across N isolated child processes, one per-host output file each
+vigolium scan -T targets.txt -P 4 --stateless --split-by-host --format jsonl -o results
+
+# Parallel into one shared DB: each worker scans into a private temp DB, then merges into --db
+vigolium scan -T targets.txt -P 4 --db-isolate --db shared.db --format jsonl,html -o report
+
+# Single scan into a private temp DB merged back into --db (no write contention)
+vigolium scan -t https://example.com --db-isolate --db shared.db
+```
+
+- `-P, --parallel N` — scan up to N targets concurrently as isolated child processes. Requires either `-S --split-by-host` (per-host outputs) or `--db-isolate` (merge into one `--db`). Real in-flight requests ≈ `N × --concurrency`.
+- `--db-isolate` — scan into a private temporary SQLite DB and merge results into `--db` at the end (SQLite only; not combinable with `--stateless`).
+- `--split-by-host` — in stateless multi-target mode, write a separate `base-<host>.<ext>` output file per target.
 
 ## Running a Single Phase
 
@@ -115,7 +140,19 @@ vigolium server                                              # Default host/port
 vigolium server --host 0.0.0.0 --service-port 8443
 vigolium server --no-auth                                    # Local use only — disables bearer auth
 vigolium server -t https://example.com --scan-on-receive     # Auto-scan ingested traffic
+
+# Transparent ingest proxy (records traffic flowing through it)
+vigolium server --ingest-proxy-port 9003
+
+# Intercept HTTPS too via a generated MITM CA (trust the CA printed at startup)
+vigolium server --ingest-proxy-port 9003 --proxy-mitm -S
+vigolium server --ingest-proxy-port 9003 --proxy-mitm --proxy-insecure   # skip upstream TLS verification
+
+# Export the MITM CA certificate and exit (generates it if needed)
+vigolium server --export-ca ./vigolium-ca.pem
 ```
+
+See [Transparent Proxy](/server-mode/proxy) for the full MITM workflow.
 
 ## Database & Results
 
@@ -203,6 +240,10 @@ vigolium agent --list-templates
 ```bash
 vigolium agent swarm -t https://example.com --discover
 vigolium agent swarm -t https://example.com --discover --focus 'API injection'
+
+# Skill control (force-load attack-vector skills, bypass planner selection)
+vigolium agent swarm -t https://example.com --discover --skill-tag xss,idor
+vigolium agent swarm -t https://example.com --discover --no-skill-filter
 ```
 
 ### `agent autopilot`: autonomous agentic scan
@@ -229,6 +270,11 @@ vigolium agent autopilot --input "curl -X POST -H 'Content-Type: application/jso
 
 # Focus the agent on specific vulnerability classes
 vigolium agent autopilot -t https://example.com --focus "auth bypass and IDOR"
+
+# Skill control — force-load skills by name or tag, or skip pre-flight selection
+vigolium agent autopilot -t https://example.com --skill idor-blast-radius
+vigolium agent autopilot -t https://example.com --skill-tag xss,idor
+vigolium agent autopilot -t https://example.com --no-skill-filter
 
 # Intensity presets — quick (CI/PR), balanced (default), deep (pentest)
 vigolium agent autopilot -t https://example.com --intensity deep
@@ -294,6 +340,16 @@ vigolium agent audit --source ./backend --no-preflight
 # Pull source from a cloud-storage archive, upload results when done
 vigolium agent audit --source gs://my-bucket/snapshots/repo.tar.gz
 vigolium agent audit --source ./backend --upload-results
+```
+
+### `log`: replay an agentic session
+
+Every olium agent run (autopilot, swarm, query, `olium`) writes a Pi-compatible `transcript.jsonl`. Replay it as a rendered conversation, or dump the raw JSONL:
+
+```bash
+vigolium log                       # Replay the most recent agentic session
+vigolium log <session-id>          # Replay a specific session
+vigolium log --raw                 # Print the raw transcript JSONL verbatim instead of the rendered replay
 ```
 
 ## Configuration
