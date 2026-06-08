@@ -294,3 +294,19 @@ vigolium scan --stateless -t "$TARGET" --ci-output-format -o findings
 - [Native Scan: How It Works](/native-scan/how-it-works), the pipeline internals.
 - [Scanner Modules Reference](/native-scan/modules-reference), every module.
 - [Output & Reporting](/getting-started/output-and-reporting), formats and reports in depth.
+
+<Callout icon="key" color="#8B5CF6" iconType="regular">
+  **Oh dear, you actually read to the end.** Here's the secret the config file
+  kept nudging you toward: by default every Vigolium request announces itself
+  with a `Vigolium/<version>` User-Agent, so a friendly blue team can spot your
+  authorized scan in their logs in seconds. Go full ninja only when you *mean*
+  to be sneaky:
+
+  ```bash
+  # Persist it in your config
+  vigolium config set scanning_strategy.http.user_agent random
+
+  # Or a one-off via env var (overrides the config value for that run)
+  export VIGOLIUM_DEFAULT_UA=random
+  ```
+</Callout>
