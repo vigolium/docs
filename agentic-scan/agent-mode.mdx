@@ -57,6 +57,7 @@ See [Swarm](/agentic-scan/swarm).
 
 ### `audit`: unified source-audit driver
 
+- **Alias:** `vigolium audit` is a top-level alias for `vigolium agent audit` (identical flags).
 - **Use for:** running the embedded vigolium-audit harness and/or the standalone piolium harness against a single source tree under one AgenticScan, with per-driver session subdirs (`{session}/audit/`, `{session}/piolium/`), per-driver child AgenticScan rows under one parent, and a post-pass project-wide findings dedup once both drivers exit.
 - **Driver values (`--driver`):**
   - `auto` (default) — run vigolium-audit; fall back to piolium only if the `claude`/`codex` CLI required by audit is missing.
@@ -66,6 +67,8 @@ See [Swarm](/agentic-scan/swarm).
 - **Modes:** when the run includes both drivers (`auto` or `both`), `--mode` is restricted to the shared set: `lite`, `balanced`, `deep`, `revisit`, `confirm`, `merge`. Use `--driver=piolium` for `longshot`/`smoke` or `--driver=audit` for `mock`. `--intensity deep` expands to the chain `deep,confirm`.
 - **Agent selection (audit leg only):** `--provider <olium-provider>` resolves the agent **and** forwards that provider's BYOK auth (`anthropic-*` → claude, `openai-*` → codex). `--agent {claude|codex}` is a pure agent selector layered on top of `--provider` (rejected for invalid values; warned under `--driver=piolium`).
 - **Key flags:** `--driver {auto|both|audit|piolium}`, `--mode`, `--modes` (chain), `--intensity {quick|balanced|deep}`, `--source <path|git-url>`, `--commit-depth`, `--interactive`, `--no-stream`, `--no-dedup`, `--upload-results`, `--provider`, `--agent`, plus the `--pi-*` and `--plm-*` passthroughs for the piolium leg. `--list-modes` prints the embedded vigolium-audit binary's mode graph and exits.
+- **Raw output (audit leg):** `--keep-raw` is **on by default** (CLI), retaining `<source>/vigolium-results/` in the source tree; `--clean-raw` removes it after the run (the session copy is always kept). `--keep-raw`+`--clean-raw` is an error. The REST `keep_raw` default is unchanged (off).
+- **One-shot report:** `-S`/`--stateless` runs the audit into a throwaway temp DB (main DB untouched, like `vigolium scan -S`) and auto-writes a self-contained HTML report to `vigolium-result/vigolium-audit-report.html` (override with `-o`/`--output`; supports `gs://` and `{ts}`). Not valid with `--interactive`.
 - **REST equivalent:** `POST /api/agent/run/audit` with `driver: "auto"|"both"|"audit"|"piolium"` (default `"auto"`).
 
 See [Agentic Security Audit](/getting-started/agentic-security-audit).

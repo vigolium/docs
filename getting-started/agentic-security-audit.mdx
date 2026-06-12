@@ -39,6 +39,8 @@ If that streams phase output and writes findings to the DB, you're wired up.
 
 The unified driver, fastest path to a first audit. By default (`--driver=auto`) it runs the embedded vigolium-audit harness and only falls back to piolium if audit is unavailable.
 
+<Tip>`vigolium audit` is a top-level alias for `vigolium agent audit` — every flag and example below works with the shorter form too.</Tip>
+
 ```bash
 # Lite (3 phases, CI-friendly)
 vigolium agent audit --source ~/src/your-app --mode lite
@@ -211,6 +213,35 @@ Session artifacts (state, raw findings, reports) land under:
 ├── audit-stream.jsonl
 └── runtime.log
 ```
+
+---
+
+## Raw output in the source tree, `--keep-raw` / `--clean-raw`
+
+During a run vigolium-audit writes its working output (raw scanner output, draft findings, intermediate workspaces) to `<source>/vigolium-results/`, and vigolium syncs a copy into the session directory above.
+
+- **`--keep-raw` is on by default** — the `<source>/vigolium-results/` copy is retained after the run so you can review it or re-import it. (Audit leg only; no effect on piolium.)
+- **`--clean-raw`** removes `<source>/vigolium-results/` from the source tree after the run. The session-directory copy is always kept either way. `--keep-raw` and `--clean-raw` together is an error.
+
+<Note>The REST `keep_raw` default is unchanged (off) — this default flip is CLI-only.</Note>
+
+---
+
+## One-shot report, `-S` / `--stateless`
+
+`-S`/`--stateless` runs the entire audit against a throwaway temporary database (your main DB is left untouched, mirroring `vigolium scan -S`) and, when it finishes, auto-renders a self-contained HTML report from the run's findings — no separate `vigolium import` step.
+
+```bash
+# Audit and produce a standalone HTML report; nothing persisted to the main DB
+vigolium audit --source ~/src/your-app -S
+
+# Override the report destination (default: vigolium-result/vigolium-audit-report.html)
+vigolium audit --source ~/src/your-app -S -o reports/my-app-{ts}.html
+```
+
+The report is written to `vigolium-result/vigolium-audit-report.html` by default; `-o`/`--output` overrides it and supports `gs://<project>/<key>` upload and the `{ts}` timestamp placeholder. `-S` cannot be combined with `--interactive`.
+
+<Note>Without `-S`, findings persist to your database as usual; build a report afterward with `vigolium import <results-dir> --format html -o report.html` or `vigolium export`.</Note>
 
 ---
 
