@@ -49,6 +49,7 @@ vigolium scan -t https://example.com --module-tag spring --module-tag injection
 # Output and reporting
 vigolium scan -t https://example.com --format jsonl -o results.jsonl
 vigolium scan -t https://example.com --format html -o report.html
+vigolium scan -S -t https://example.com --format sqlite -o scan      # standalone .sqlite (stateless only)
 
 # Network controls
 vigolium scan -t https://example.com --proxy http://127.0.0.1:8080
@@ -167,6 +168,11 @@ vigolium db stats --detailed
 vigolium traffic                  # Alias for `db ls --table http_records`
 vigolium traffic login            # Filter to login-related records
 vigolium finding                  # Fuzzy-search findings
+vigolium finding xss --markdown   # Render matches as Markdown (evidence + http blocks) to stdout
+
+# Read a standalone export directly (project scoping off, never writes to your DB)
+vigolium finding -S --db ./scan.jsonl --min-severity high
+vigolium traffic -S --db ./scan.sqlite --status 500 -n 20
 
 # Export
 vigolium export --format jsonl -o full-export.jsonl
@@ -177,6 +183,8 @@ vigolium export --format html -o report.html
 # Cleanup
 vigolium db clean --scan-uuid my-scan
 ```
+
+`finding`/`traffic` accept `-S/--stateless` + `--db <file>` to read a `--format jsonl` export or a standalone `.sqlite` directly, and `--markdown` to print the matched items as Markdown (under `-S`, add `--compact` to window long responses around the match).
 
 ## Strategies & Phases
 

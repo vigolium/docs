@@ -15,7 +15,7 @@ icon: "file-export"
 
 ## Output Formats
 
-The `--format` flag controls the output format. Three formats are available:
+The `--format` flag controls the output format. Four formats are available:
 
 ### Console (default)
 
@@ -66,6 +66,18 @@ HTML format is supported for:
 - Scan results (findings)
 - Discovery phase output (discovered URLs and endpoints)
 - Spidering phase output (crawled pages)
+
+### SQLite
+
+```bash
+vigolium scan --stateless --target https://example.com --format sqlite -o scan
+```
+
+Dumps the run's standalone database to `<output>.sqlite` (via SQLite `VACUUM INTO`), producing a single self-contained file you can reopen later with `vigolium finding`/`traffic` (see [Reading a Standalone Export](#reading-a-standalone-export)). Aliases: `sqlite3`, `db`.
+
+- Requires `-S/--stateless` and `-o/--output`. Stateless runs use a per-run temporary database, so "this scan's SQLite" is well-defined; a persisted run writes into the shared project DB, where it would be ambiguous (use `vigolium export` for that).
+- Combines with other formats: `--format sqlite,html -o scan` writes both `scan.sqlite` and `scan.html`.
+- Under `--split-by-host`, each per-host file is named `<base>-<host>.sqlite`.
 
 ## Severity Scale
 
@@ -198,3 +210,30 @@ vigolium traffic list --project my-project
 ```
 
 Results are scoped to the active project. Use `--project` to specify a project, or set a default with `vigolium project use <name>`. See the [projects documentation](/others/projects) for details on multi-tenancy and project scoping.
+
+### Reading a Standalone Export
+
+`finding` and `traffic` can read a file directly instead of your project database, which is handy for inspecting a `--format jsonl` export or a foreign `.sqlite` file from another machine. Pass `-S/--stateless` together with `--db <file>`:
+
+```bash
+# Browse a scan's JSONL export with all the normal filters and sorting
+vigolium finding -S --db ./scan.jsonl --min-severity medium
+vigolium traffic -S --db ./scan.jsonl --status 500 -n 20
+
+# A standalone .sqlite (e.g. from --format sqlite) works too
+vigolium finding -S --db ./scan.sqlite --json --with-records
+```
+
+`-S/--stateless` turns project scoping **off**, so every row in the file is shown regardless of the `project_uuid` it carries. Nothing is written to your project database (a JSONL source is loaded into a throwaway in-memory SQLite). The source type is auto-detected by extension, falling back to a header sniff (`.jsonl`/`.ndjson` vs the `SQLite format 3` magic / `.sqlite`/`.sqlite3`/`.db`).
+
+### Rendering a Finding or Record as Markdown
+
+`--markdown` prints the selected findings/records as Markdown — evidence plus request/response in fenced `http` blocks — to stdout. Pipe it to a file or a viewer like `glow`, and pair it with `--id`, a fuzzy search term, or `-n 1` to focus a single item:
+
+```bash
+vigolium finding xss --markdown > findings.md
+vigolium finding -S --db ./scan.jsonl --id 42 --markdown
+vigolium traffic -S --db ./scan.jsonl search-term -n 1 --markdown
+```
+
+Under `-S/--stateless`, add `--compact` to window the response around the finding's match (`matched_at` / `extracted_results`) — or cap a record's body to a preview — so a long page doesn't flood the console. Without `--compact`, bodies render in full.

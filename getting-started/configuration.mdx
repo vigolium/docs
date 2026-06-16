@@ -422,6 +422,7 @@ database:
     journal_mode: WAL              # DELETE | TRUNCATE | PERSIST | MEMORY | WAL | OFF
     synchronous: NORMAL            # OFF | NORMAL | FULL | EXTRA
     cache_size: 10000
+    max_open_conns: 8              # WAL reader pool: concurrent readers + 1 writer
 
   postgres:
     host: localhost

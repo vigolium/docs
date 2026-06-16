@@ -181,6 +181,15 @@ vigolium scan -t https://example.com --format jsonl -o results.jsonl
 vigolium scan -t https://example.com --format html -o report.html
 ```
 
+**Scan to a standalone SQLite file:**
+```
+> Run a one-off scan and give me a self-contained .sqlite I can reopen later
+```
+```bash
+vigolium scan -S -t https://example.com --format sqlite -o scan
+```
+`--format sqlite` (aliases `sqlite3`, `db`) requires `-S/--stateless` + `-o`; reopen it with `vigolium finding -S --db scan.sqlite`.
+
 **Scan with custom scanning profile:**
 ```
 > Use the aggressive scanning profile
@@ -928,6 +937,24 @@ vigolium finding --search "sql injection"
 ```bash
 vigolium finding --watch 5s
 ```
+
+**Render a finding as Markdown (evidence + request/response):**
+```
+> Give me finding 42 as Markdown I can paste into a report
+```
+```bash
+vigolium finding --id 42 --markdown > finding-42.md
+```
+
+**Read a standalone export without a project DB:**
+```
+> Browse the high-severity findings in this scan.jsonl export
+```
+```bash
+vigolium finding -S --db ./scan.jsonl --min-severity high
+vigolium traffic -S --db ./scan.sqlite --status 500 -n 20
+```
+`-S/--stateless` + `--db` reads a `--format jsonl` export or a standalone `.sqlite` directly with project scoping off, writing nothing to your project DB.
 
 **Replay stored traffic (re-send requests):**
 ```

@@ -252,6 +252,7 @@ Precedence (highest to lowest): CLI flags > scanning profile > per-phase overrid
 | HTML | `--format html -o report.html` | Interactive ag-grid HTML report |
 | Document report | `--format report -o report.docx` | Document-style report (Word) |
 | PDF | `--format pdf -o report.pdf` | PDF report (uses headless Chrome) |
+| SQLite | `--format sqlite -o scan` (needs `-S`) | Standalone DB dump (`VACUUM INTO`); aliases `sqlite3`, `db` |
 
 Multiple formats can be combined with a comma, e.g. `--format jsonl,html`.
 
