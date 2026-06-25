@@ -277,6 +277,7 @@ server:
   auth_api_key: ""                 # auto-generated if empty; also set via VIGOLIUM_API_KEY
   service_port: 9002
   ingest_proxy_port: 0             # 0 = disabled
+  mirror_fs_path: ""               # mirror ingested traffic + findings to this dir as a live filesystem tree (see --mirror-fs)
   cors_allowed_origins: reflect-origin
   enable_metrics: true
   agent_heavy_max: 5               # max concurrent autopilot/swarm runs via API

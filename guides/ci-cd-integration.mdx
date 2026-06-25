@@ -18,9 +18,27 @@ vigolium scan -t $TARGET_URL --strategy lite --format jsonl -o results.jsonl
 
 The `lite` strategy skips browser spidering and heavy discovery, making it suitable for time-constrained CI environments. JSONL output produces one JSON object per line, which is straightforward to parse in scripts.
 
-## Exit Codes
+## Exit-Code Gating with `--fail-on`
 
-Check Vigolium's exit code to determine whether findings were reported. A non-zero exit code can be used to fail a CI pipeline gate when vulnerabilities are detected. Consult `vigolium scan --help` for the exact exit code semantics in your version.
+Use `--fail-on <severity>` to make a scan exit non-zero when it finds anything at or above a severity threshold — the cleanest way to gate a pipeline without post-processing JSONL. It accepts `info`, `low`, `medium`, `high`, or `critical`:
+
+```bash
+# Fail the build if any high or critical finding is present
+vigolium scan -t $TARGET_URL --strategy lite --fail-on high --format jsonl -o results.jsonl
+```
+
+- Output is always written **before** the gate is evaluated, so your report and exit status stay consistent.
+- The gate is scoped to the scan it runs in. Under `-P/--parallel`, it is evaluated **per child process**.
+- It works on `scan`, `scan-url`, `scan-request`, and `run`.
+
+To keep a wrapping script or CI step from being interrupted while still surfacing the error on stderr, add `--soft-fail`, which forces exit code `0` even when `--fail-on` (or any other error) would otherwise fail the command:
+
+```bash
+# Record findings and never break the pipeline, even on critical findings
+vigolium scan -t $TARGET_URL --fail-on critical --soft-fail --format jsonl -o results.jsonl
+```
+
+If you need finer control than a single severity threshold, fall back to parsing JSONL with `jq` (see below).
 
 ## JSONL Output for Parsing
 

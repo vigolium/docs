@@ -29,9 +29,10 @@ Run the full native pipeline against one or more targets.
 # Single target
 vigolium scan -t https://example.com
 
-# Multiple targets
+# Multiple targets (-t and -T/--target-file are both repeatable and combine)
 vigolium scan -t https://example.com -t https://api.example.com
 vigolium scan -T targets.txt
+vigolium scan -T prod.txt -T staging.txt
 
 # Scanning profiles and strategies
 vigolium scan -t https://example.com --strategy deep
@@ -50,11 +51,16 @@ vigolium scan -t https://example.com --module-tag spring --module-tag injection
 vigolium scan -t https://example.com --format jsonl -o results.jsonl
 vigolium scan -t https://example.com --format html -o report.html
 vigolium scan -S -t https://example.com --format sqlite -o scan      # standalone .sqlite (stateless only)
+vigolium scan -t https://example.com --format fs -o run             # browsable run-traffic/ + run-findings/ tree
 
 # Network controls
 vigolium scan -t https://example.com --proxy http://127.0.0.1:8080
 vigolium scan -t https://example.com -c 100 --rate-limit 200
 vigolium scan -t https://example.com --scanning-max-duration 2h
+
+# CI/agent exit-code gating
+vigolium scan -t https://example.com --fail-on high       # exit non-zero on any high+ finding
+vigolium scan -t https://example.com --fail-on high --soft-fail   # surface the error but always exit 0
 
 # Custom JS extensions
 vigolium scan -t https://example.com --ext custom-check.js
@@ -82,11 +88,16 @@ vigolium scan -T targets.txt -P 4 --db-isolate --db shared.db --format jsonl,htm
 
 # Single scan into a private temp DB merged back into --db (no write contention)
 vigolium scan -t https://example.com --db-isolate --db shared.db
+
+# Resume an interrupted stateless fan-out (skips targets that already completed)
+vigolium scan -T targets.txt -P 4 --stateless --split-by-host --format jsonl -o results --resume
+vigolium scan --resume                                              # auto-discover *.progress.json in cwd
 ```
 
 - `-P, --parallel N` — scan up to N targets concurrently as isolated child processes. Requires either `-S --split-by-host` (per-host outputs) or `--db-isolate` (merge into one `--db`). Real in-flight requests ≈ `N × --concurrency`.
 - `--db-isolate` — scan into a private temporary SQLite DB and merge results into `--db` at the end (SQLite only; not combinable with `--stateless`).
 - `--split-by-host` — in stateless multi-target mode, write a separate `base-<host>.<ext>` output file per target.
+- `--resume` — resume a prior `-S -T --split-by-host -P` run from its `<output>.progress.json` manifest, scanning only the targets that didn't finish. Run bare (no other flags) to auto-discover the manifest in the current directory and relaunch the saved run.
 
 ## Running a Single Phase
 
@@ -141,6 +152,7 @@ vigolium server                                              # Default host/port
 vigolium server --host 0.0.0.0 --service-port 8443
 vigolium server --no-auth                                    # Local use only — disables bearer auth
 vigolium server -t https://example.com --scan-on-receive     # Auto-scan ingested traffic
+vigolium server --mirror-fs ./mirror                         # Live-mirror ingested traffic + findings to a filesystem tree
 
 # Transparent ingest proxy (records traffic flowing through it)
 vigolium server --ingest-proxy-port 9003
@@ -169,6 +181,7 @@ vigolium traffic                  # Alias for `db ls --table http_records`
 vigolium traffic login            # Filter to login-related records
 vigolium finding                  # Fuzzy-search findings
 vigolium finding xss --markdown   # Render matches as Markdown (evidence + http blocks) to stdout
+vigolium finding --min-severity high --confidence certain,firm   # Filter by severity floor + confidence
 
 # Read a standalone export directly (project scoping off, never writes to your DB)
 vigolium finding -S --db ./scan.jsonl --min-severity high
@@ -179,6 +192,7 @@ vigolium export --format jsonl -o full-export.jsonl
 vigolium export --format jsonl --only findings
 vigolium export --format jsonl --only findings,http
 vigolium export --format html -o report.html
+vigolium export --format fs -o run            # browsable run-traffic/ + run-findings/ tree (also on `db export`)
 
 # Cleanup
 vigolium db clean --scan-uuid my-scan

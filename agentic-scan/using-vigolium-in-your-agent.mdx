@@ -190,6 +190,15 @@ vigolium scan -S -t https://example.com --format sqlite -o scan
 ```
 `--format sqlite` (aliases `sqlite3`, `db`) requires `-S/--stateless` + `-o`; reopen it with `vigolium finding -S --db scan.sqlite`.
 
+**Scan to a browsable filesystem tree (no DB needed):**
+```
+> Scan and give me the traffic + findings as files I can grep
+```
+```bash
+vigolium scan -t https://example.com --format fs -o run
+```
+`--format fs` writes two sibling dirs off the `-o` base — `run-traffic/` and `run-findings/` — so you can investigate with plain `ls`/`grep`/`jq`. Each `<host>/<id>.req` is the raw, replayable request (strip the leading `@target` line), `<id>.resp.headers`/`<id>.resp.body` hold the gzip-decoded response, and `<id>.md` under `-findings/` is the finding cross-linked to its `.req`. Start from `index.json` in each dir — `jq` it to map every id to its url/status/severity. Works with or without `-S`; honors `--omit-response`. See [Output and Reporting](/getting-started/output-and-reporting#filesystem-fs) for the full layout.
+
 **Scan with custom scanning profile:**
 ```
 > Use the aggressive scanning profile
@@ -481,6 +490,15 @@ vigolium server -t https://example.com --scan-on-receive
 ```bash
 vigolium server --ingest-proxy-port 8080
 ```
+
+**Mirror ingested traffic to files in real time:**
+```
+> Run the server and mirror everything it ingests into ./mirror so I can grep it live
+```
+```bash
+vigolium server --mirror-fs ./mirror
+```
+Every saved HTTP record and finding is written to `./mirror/traffic/<host>/…` and `./mirror/findings/<host>/…` as it lands in the DB — the same layout as `--format fs`, except the indexes are append-only `index.jsonl` (one object per line — `tail`/`grep` it live) and per-host ids resume across restarts. Point your agent at `./mirror` to read ingested Burp/proxy traffic as files while it streams in.
 
 **High-concurrency server:**
 ```

@@ -25,9 +25,30 @@ vigolium server --proxy http://corporate-proxy:8080
 
 # Without authentication (development only)
 vigolium server -A
+
+# Mirror every ingested record + finding to a browsable filesystem tree
+vigolium server --mirror-fs ./mirror
 ```
 
 The server listens on `0.0.0.0:9002` by default.
+
+## Live Filesystem Mirror
+
+`vigolium server --mirror-fs <dir>` (config `server.mirror_fs_path`) mirrors every saved HTTP record and finding to a flat filesystem tree **as it is persisted**, in addition to the database. This lets an external tool or coding agent read ingested Burp/proxy traffic as plain files in real time:
+
+```bash
+vigolium server --mirror-fs ./mirror
+```
+
+Every record and finding lands under `./mirror/traffic/<host>/…` and `./mirror/findings/<host>/…` using the same layout as the [`fs` export format](/getting-started/output-and-reporting#filesystem-fs) — per-host `<id>.req`, `<id>.resp.headers`, `<id>.resp.body`, and finding `<id>.md` files cross-linked to the request that produced them.
+
+- The mirror's indexes are append-only `index.jsonl` (one JSON object per line — `tail -f`/`grep` it live), as opposed to the one-shot export's `index.json` array.
+- Per-host id numbering resumes from the existing tree across server restarts.
+- The writer runs on a background goroutine and never blocks the database save path, so mirroring adds no latency to ingestion.
+
+<Callout icon="circle-info" color="#3B82F6" iconType="regular">
+  The mirror is opt-in and server-only — CLI scans are unaffected. To produce the same tree as a one-shot export from a finished scan or the database, use `--format fs` (see [Output and Reporting](/getting-started/output-and-reporting#filesystem-fs)).
+</Callout>
 
 ## Authentication
 

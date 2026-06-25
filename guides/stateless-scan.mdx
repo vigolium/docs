@@ -147,6 +147,16 @@ vigolium scan --stateless -t https://example.com --format sqlite -o scan
 
 You can reopen the file later without a persistent project DB (see [Reading Results Back](#reading-results-back)).
 
+### Filesystem (fs)
+
+Write a flat, browsable tree instead of a single file — handy for piping a scan straight to a coding agent that prefers `ls`/`grep`/`jq` over a database:
+
+```bash
+vigolium scan --stateless -t https://example.com --format fs -o run
+```
+
+This produces `run-traffic/` and `run-findings/` with per-host raw `.req`/`.resp.*` files, cross-linked finding `.md` files, and a jq-friendly `index.json` in each. `--split-by-host` is a no-op (fs already splits by host), and `--omit-response` drops the response files. See [Output and Reporting](/getting-started/output-and-reporting#filesystem-fs) for the full layout.
+
 ### Multiple Formats
 
 Comma-separate formats to produce several outputs at once:

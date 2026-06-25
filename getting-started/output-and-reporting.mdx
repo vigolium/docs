@@ -15,7 +15,7 @@ icon: "file-export"
 
 ## Output Formats
 
-The `--format` flag controls the output format. Four formats are available:
+The `--format` flag controls the output format. Five formats are available, and they can be combined (e.g. `--format jsonl,html`):
 
 ### Console (default)
 
@@ -78,6 +78,35 @@ Dumps the run's standalone database to `<output>.sqlite` (via SQLite `VACUUM INT
 - Requires `-S/--stateless` and `-o/--output`. Stateless runs use a per-run temporary database, so "this scan's SQLite" is well-defined; a persisted run writes into the shared project DB, where it would be ambiguous (use `vigolium export` for that).
 - Combines with other formats: `--format sqlite,html -o scan` writes both `scan.sqlite` and `scan.html`.
 - Under `--split-by-host`, each per-host file is named `<base>-<host>.sqlite`.
+
+### Filesystem (fs)
+
+```bash
+vigolium scan --target https://example.com --format fs -o run
+```
+
+Writes a flat, browsable filesystem tree instead of a single file — so you (or a coding agent) can investigate a scan with plain `ls`/`grep`/`jq`, no database required. Two sibling directories are written off the `-o` base (defaulting to `vigolium` in the current directory when `-o` is omitted), so `-o run` yields `run-traffic/` and `run-findings/`:
+
+```
+run-traffic/
+  index.json                 # [{id,host,path,method,url,status,content_type,bytes,finding}, …]
+  <host>/0001.req            # "@target https://<host>" line + the raw request (replayable)
+  <host>/0001.resp.headers   # status line + response headers
+  <host>/0001.resp.body      # response body, gzip-decoded so it greps clean
+run-findings/
+  index.json                 # [{id,host,path,severity,confidence,module,title,url,traffic}, …]
+  <host>/0001.md             # the finding, cross-linked to ../../run-traffic/<host>/0001.req
+```
+
+- Per-host ids are zero-padded and assigned in `sent_at` order, so re-exports are reproducible.
+- Each `<id>.req` starts with an `@target <scheme>://<authority>` line followed by the raw request verbatim — strip line 1 and it replays directly.
+- `index.json` is the entry point: one `jq` over it maps every id to its url/status and to the file holding the bytes. On a traffic row, the `finding` field carries the top severity of any finding touching that request; each finding `.md` links straight to the `.req`/`.resp.*` that proves it.
+- Available on `vigolium export`, `vigolium db export` (honoring its filters), and `scan`/`scan-url`/`scan-request`/`run` — with or without `-S/--stateless`.
+- Honors `--omit-response` (drops the `.resp.*` files). `--split-by-host` is a no-op, since `fs` already splits by host.
+
+<Callout icon="circle-info" color="#3B82F6" iconType="regular">
+  The ingestion server can produce this same tree **live** with `vigolium server --mirror-fs <dir>` — see [Running the Server](/server-mode/running-the-server#live-filesystem-mirror).
+</Callout>
 
 ## Severity Scale
 
@@ -197,7 +226,14 @@ vigolium finding list
 
 # List findings for a specific project
 vigolium finding list --project my-project
+
+# Filter by minimum severity and by confidence (adds a colorized CONFIDENCE column)
+vigolium finding list --min-severity high
+vigolium finding list --confidence firm
+vigolium finding list --confidence certain,firm
 ```
+
+`--confidence` keeps only findings whose confidence matches one of the comma-separated levels (`certain`, `firm`, `tentative`) and renders a colorized CONFIDENCE column, complementing `--min-severity`.
 
 ### Listing Traffic
 
@@ -209,7 +245,7 @@ vigolium traffic list
 vigolium traffic list --project my-project
 ```
 
-Results are scoped to the active project. Use `--project` to specify a project, or set a default with `vigolium project use <name>`. See the [projects documentation](/others/projects) for details on multi-tenancy and project scoping.
+Results are scoped to the active project. Use `--project-name`/`--project-uuid` to target a specific project, or set a default for your shell with `eval $(vigolium project use <uuid>)`. See the [Projects & Multi-Tenancy](/others/projects) reference for details on multi-tenancy and project scoping.
 
 ### Reading a Standalone Export
 

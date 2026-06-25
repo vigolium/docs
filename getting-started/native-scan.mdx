@@ -143,7 +143,7 @@ vigolium scan --stateless -T targets.txt --split-by-host --format jsonl -o resul
 # -> results-example.com.jsonl, results-test.example.com.jsonl, ...
 ```
 
-## Scanning a huge list of targets in parallel
+## ⚡Scanning a huge list of targets in parallel
 
 When you point Vigolium at a large target list, use `-P/--parallel N` to scan several hosts at once. Each target runs in its own isolated child process — so there is no cross-contamination between workers — and each child keeps its own `--concurrency`, meaning real in-flight requests are roughly `N × --concurrency`.
 
@@ -168,6 +168,24 @@ vigolium scan -T list-of-targets.txt -P 4 \
 
 <Callout icon="circle-info" color="#3B82F6" iconType="regular">
   `--db-isolate` is SQLite-only and cannot be combined with `--stateless` (they are two different ways to avoid write contention). Pressing `Ctrl-C` during a `-P` batch is treated as an operator stop: un-started and cut-short targets are reported as "not scanned" rather than failures.
+</Callout>
+
+### Resuming an interrupted fan-out
+
+A stateless parallel fan-out (`-S -T --split-by-host -P`) writes a tiny line-cursor manifest, `<output>.progress.json`, tracking the targets that completed cleanly. If the batch is interrupted (Ctrl-C, a crash, a CI timeout), re-run it with `--resume` to skip the finished targets and scan only the remainder — Vigolium also prints a copy-pasteable resume command on Ctrl-C/failure:
+
+```bash
+# Original run
+vigolium scan -T targets.txt -P 4 --stateless --split-by-host --format jsonl -o results
+
+# Resume only the targets that didn't finish
+vigolium scan -T targets.txt -P 4 --stateless --split-by-host --format jsonl -o results --resume
+```
+
+Run `vigolium scan --resume` bare — with no other flags — and it auto-discovers the `*.progress.json` in the current directory and relaunches the saved run from it (pass `-o <prefix>` to disambiguate when several manifests exist).
+
+<Callout icon="circle-info" color="#3B82F6" iconType="regular">
+  `--resume` currently applies only to the parallel fan-out (`-S -T --split-by-host -P > 1`). Resuming a plain sequential scan re-runs it in full.
 </Callout>
 
 ## Stateless scans from other input sources

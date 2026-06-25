@@ -110,6 +110,7 @@
             "group": "Others",
             "icon": "bug",
             "pages": [
+              "others/projects",
               "others/audit-report",
               "others/cli-references",
               "others/api-references",

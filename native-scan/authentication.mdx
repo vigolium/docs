@@ -297,6 +297,69 @@ SessionConfig
 
 Only one of `headers`, `login`, or `login_request` can be set per session.
 
+## Managing Sessions with the `auth` Command
+
+The `--auth`/`--auth-file` flags load sessions for a single scan. The `vigolium auth` subcommand manages reusable, persisted sessions and provides helpers for validating configs and automating 2FA.
+
+| Command | Purpose |
+|---------|---------|
+| `vigolium auth list` | Print every session stored for the active project. |
+| `vigolium auth load` | Persist sessions from a file, stdin, or a raw login request into the database. |
+| `vigolium auth lint` | Validate a session config file for errors and warnings before you use it. |
+| `vigolium auth totp` | Generate an RFC 6238 TOTP code for scripting 2FA login flows. |
+
+### List stored sessions
+
+```bash
+vigolium auth list
+# Filter to a single host
+vigolium auth list --host app.example.com
+```
+
+Each row shows hostname, session name, role (primary/compare), position, a token preview, and extract rules. Sessions are scoped to the active project.
+
+### Load sessions into the database
+
+`auth load` persists sessions so subsequent scans pick them up automatically. It accepts a native config file, an agent-produced `session-config.json`, stdin, or even a raw HTTP login request (which it sends, then auto-discovers tokens from the JSON body, `Set-Cookie`, and auth headers):
+
+```bash
+# From a YAML/JSON session config
+vigolium auth load ./auth-config.yaml
+
+# From stdin
+cat auth-config.json | vigolium auth load -
+
+# From a raw login request — tokens auto-discovered from the response
+vigolium auth load ./login-request.txt --host app.example.com --name admin
+
+# Skip the validation login round-trip
+vigolium auth load ./auth-config.yaml --no-validate
+```
+
+By default, `load` executes each login flow once to verify the credentials work; pass `--no-validate` to skip. Agent format is auto-detected when the path contains `agent-sessions/` (or force it with `--agent-format`). The hostname is derived from the first login URL when `--host` is omitted.
+
+### Lint a session config
+
+Catch mistakes before a scan — missing/invalid fields, bad extract rules, unknown login or extract types, multiple primary sessions, or duplicate names:
+
+```bash
+vigolium auth lint ./auth-config.yaml
+# Or from stdin
+cat auth-config.json | vigolium auth lint --stdin
+```
+
+### Generate a TOTP code for 2FA
+
+For automating two-factor login flows, `auth totp` turns a base32 secret into the current code (JSON output, `{"code": "...", "expires_in": <seconds>}`):
+
+```bash
+vigolium auth totp --secret JBSWY3DPEHPK3PXP
+# {"code":"123456","expires_in":18}
+
+# Inject the code into a login body
+CODE=$(vigolium auth totp --secret "$TOTP_SECRET" | jq -r .code)
+```
+
 ## Environment Variables
 
 Session files (both YAML and JSON) support `${VAR}` syntax for secrets. This keeps credentials out of config files:

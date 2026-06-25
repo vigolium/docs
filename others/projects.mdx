@@ -1,0 +1,200 @@
+---
+title: "Projects & Multi-Tenancy"
+description: "Isolate scan data per engagement with projects. Every scan, finding, HTTP record, scope rule, and OAST interaction is tagged with a project UUID so multiple engagements can share one database without leaking across boundaries."
+icon: "folder-tree"
+---
+
+## Overview
+
+Vigolium supports project-based data isolation. Every scan record, finding, scope rule, source repo, and OAST interaction is tagged with a `project_uuid`, so multiple engagements can share the same database without data leaking across boundaries.
+
+| Concept | Meaning |
+|---------|---------|
+| **Project** | A named container for all scan data. Has a UUID, name, description, optional access-control lists, and an optional per-project config overlay. |
+| **Default project** | A built-in project (`00000000-0000-0000-0000-000000000001`) created during `vigolium init`. All data belongs to it unless you specify otherwise. |
+| **Project config** | An optional YAML overlay at `~/.vigolium/projects/<uuid>/config.yaml` that merges on top of the global config. |
+| **Access control** | `allowed_domains` (email-domain patterns like `@acme.com`) and `allowed_emails` (exact addresses) that gate who can access the project. See [Access Control](#access-control). |
+
+## Managing Projects from the CLI
+
+The `vigolium project` subcommand creates and manages projects.
+
+### Create a project
+
+```bash
+vigolium project create my-engagement
+# Created project my-engagement
+#   UUID: a1b2c3d4-...
+#   Config: ~/.vigolium/projects/a1b2c3d4-.../config.yaml
+
+# With a description
+vigolium project create client-app --description "Q1 2026 pentest for client-app"
+```
+
+### List projects
+
+```bash
+vigolium project list
+# or
+vigolium project ls
+```
+
+The active project is marked with `*`.
+
+### Set the active project
+
+```bash
+eval $(vigolium project use a1b2c3d4-...)
+# Active project: my-engagement (a1b2c3d4-...)
+```
+
+This exports the `VIGOLIUM_PROJECT_UUID` environment variable into your shell, so every subsequent command in that shell uses this project.
+
+### View the project config path
+
+```bash
+vigolium project config
+# or for a specific project
+vigolium project config a1b2c3d4-...
+```
+
+### Manage project access
+
+```bash
+# Add allowed domains and emails (auto-detected by format)
+vigolium project allow a1b2c3d4-... @acme.com @partner.io alice@external.com
+# ✓ Added 2 domain(s) and 1 email(s) to project my-engagement
+
+# @-prefixed values go to domains, the rest to emails
+vigolium project allow a1b2c3d4-... @newdomain.io bob@contractor.com
+
+# Remove entries from both lists
+vigolium project remove-access a1b2c3d4-... @partner.io alice@external.com
+```
+
+<Callout icon="lock" color="#f59e0b" iconType="regular">
+  Set `VIGOLIUM_PROJECT_READONLY=true` to disable all mutating project commands (`create`, `allow`, `remove-access`) from the CLI. Read-only commands (`list`, `use`, `config`) still work. Useful in production or shared environments where projects should only be managed through the REST API.
+</Callout>
+
+## Scoping Operations to a Project
+
+Several mechanisms select the active project, listed by precedence (highest first):
+
+| Method | Example |
+|--------|---------|
+| `--project-uuid` flag | `vigolium scan -t https://example.com --project-uuid a1b2c3d4-...` |
+| `--project-name` flag | `vigolium scan -t https://example.com --project-name my-engagement` |
+| `VIGOLIUM_PROJECT_UUID` env var | `export VIGOLIUM_PROJECT_UUID=a1b2c3d4-...` |
+| `VIGOLIUM_PROJECT` env var (legacy) | `export VIGOLIUM_PROJECT=a1b2c3d4-...` |
+| Default project | Used when no flag or env var is set |
+
+`--project-uuid` and `--project-name` are mutually exclusive (`--project-name` must match exactly one project).
+
+### CLI examples
+
+```bash
+# Scan within a project (by UUID or by name)
+vigolium scan -t https://example.com --project-uuid a1b2c3d4-...
+vigolium scan -t https://example.com --project-name my-engagement
+
+# Ingest into a project
+vigolium ingest --input urls.txt --project-uuid a1b2c3d4-...
+
+# Query and export project data
+vigolium finding list --project-name my-engagement
+vigolium db export --project-uuid a1b2c3d4-... -o findings.jsonl
+```
+
+### Server API
+
+When using the REST API, set the `X-Project-UUID` header to scope all operations to a project:
+
+```bash
+curl -X POST http://localhost:9002/api/ingest-http \
+  -H "Authorization: Bearer my-secret-key" \
+  -H "X-Project-UUID: a1b2c3d4-..." \
+  -H "Content-Type: application/json" \
+  -d '{"input_mode": "url", "content": "https://example.com"}'
+```
+
+If the header is omitted, the default project is used. All queries (findings, HTTP records, stats, scans) return data scoped to that project.
+
+## Config Merge Strategy
+
+Configuration is resolved in layers (later layers override earlier ones):
+
+```
+Built-in defaults
+  → ~/.vigolium/vigolium-configs.yaml          (global config)
+    → ~/.vigolium/projects/<uuid>/config.yaml  (project config overlay)
+      → --scanning-profile flag                (scanning profile)
+        → CLI flags                            (highest precedence)
+```
+
+The project config file uses the same partial-YAML format as scanning profiles — only the fields you specify are overridden:
+
+```yaml
+# ~/.vigolium/projects/a1b2c3d4-.../config.yaml
+scope:
+  hosts:
+    - "*.example.com"
+
+scanning_pace:
+  concurrency: 30
+  rate_limit: 50
+
+dynamic-assessment:
+  extensions:
+    enabled: true
+    variables:
+      auth_token: "Bearer project-specific-token"
+```
+
+See [Configuration](/getting-started/configuration) for the full set of config sections.
+
+## Access Control
+
+Projects can restrict access by email domain or exact email address using the `allowed_domains` and `allowed_emails` fields.
+
+### How it works
+
+When a request includes both `X-Project-UUID` and `X-User-Email` headers, the server checks access in this order:
+
+1. If `allowed_emails` is non-empty → the user's email must match exactly (case-insensitive).
+2. Otherwise, if `allowed_domains` is non-empty → the user's email domain (e.g. `@acme.com`) must match.
+3. If both lists are empty → the project is open to anyone.
+4. If `X-User-Email` is not sent → the check is skipped entirely.
+
+Denied requests receive a `403 Forbidden` response.
+
+### Managing via API
+
+```bash
+# Set access lists on create
+curl -X POST http://localhost:9002/api/projects \
+  -H "Content-Type: application/json" \
+  -d '{"name":"restricted","allowed_domains":["@acme.com"],"allowed_emails":["alice@ext.com"]}'
+
+# Update access lists
+curl -X PUT http://localhost:9002/api/projects/a1b2c3d4-... \
+  -H "Content-Type: application/json" \
+  -d '{"allowed_domains":["@acme.com","@partner.io"]}'
+
+# Clear restrictions (project becomes open)
+curl -X PUT http://localhost:9002/api/projects/a1b2c3d4-... \
+  -H "Content-Type: application/json" \
+  -d '{"allowed_domains":[],"allowed_emails":[]}'
+
+# Domain-to-project mapping (for frontend middleware)
+curl http://localhost:9002/api/projects/domain-map
+```
+
+See the [Projects API](/api-references/projects) for the full endpoint reference.
+
+## Database Isolation
+
+All major data tables carry a `project_uuid` column and are filtered by the active project across the CLI, server API, and internal pipeline:
+
+`scans` · `http_records` · `findings` · `scopes` · `source_repos` · `oast_interactions` · `scan_logs`
+
+Existing databases are migrated automatically — the `project_uuid` column is added with the default project UUID as its default value, so pre-project data stays accessible under the default project.
