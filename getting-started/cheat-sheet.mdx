@@ -1,0 +1,556 @@
+---
+title: "Vigolium Cheat Sheet"
+description: "A one-page, copy-paste reference for the workflows you reach for most: live traffic mirroring, replaying through Burp, passive/secret scanning of forwarded traffic, importing external data, parallel fan-out, resuming, spec-driven scans, and single-request scans."
+icon: "square-terminal"
+---
+
+A fast, copy-paste reference for Vigolium's most common real-world workflows. Each block is self-contained, adjust hosts, ports, and file paths to your environment. For the full explanation behind any command, follow the cross-links into the rest of the docs.
+
+<Callout icon="lightbulb" color="#00b368" iconType="regular">
+  Every command here works against the open-source binary. `vigolium <command> -h` prints the full flag list for any subcommand.
+</Callout>
+
+---
+
+## 1. Mirror ingested traffic + findings to a live filesystem tree
+
+Run the ingestion server with `--mirror-fs` to write every saved HTTP record and finding to a **flat, browsable directory tree** as it is persisted, in addition to the database. This pairs perfectly with the **Vigolium Burp extension**: as you browse, requests/responses and findings land on disk where your coding agent can read them with plain `ls` / `grep` / `jq`.
+
+```bash
+# Mirror ingested traffic + findings to a live filesystem tree.
+# Writes <dir>/traffic and <dir>/findings as records arrive.
+vigolium server --mirror-fs output-dir -A
+```
+
+What you get under `output-dir/`:
+
+| Path | Contents |
+|------|----------|
+| `traffic/<host>/<id>.req` | Raw request (leading `@target <scheme>://<authority>` line, then the request verbatim, replayable by stripping line 1) |
+| `traffic/<host>/<id>.resp.headers` | Status line + response headers |
+| `traffic/<host>/<id>.resp.body` | Response body (gzip-decoded so it greps clean) |
+| `traffic/<host>/index.jsonl` | Append-only, jq-friendly map of ids → method/url/status/content-type |
+| `findings/<host>/<id>.md` | Each finding, cross-linked to its `.req` file |
+
+<Callout icon="circle-info" color="#3B82F6" iconType="regular">
+  Mirroring never blocks the database save path (it runs on a background writer) and resumes per-host id numbering across server restarts. Config equivalent: `server.mirror_fs_path`. Add `-S`/`--scan-on-receive` to also scan the traffic as it arrives (see [section 3](#3-passive-secret-scan-on-forwarded-traffic)).
+</Callout>
+
+Read it back from an agent or shell:
+
+```bash
+# List every request Vigolium has ingested for a host
+ls output-dir/traffic/example.com/
+
+# Find all findings mentioning "token"
+grep -ril token output-dir/findings/
+
+# Pull the method/url/status of every record as JSON
+jq . output-dir/traffic/example.com/index.jsonl
+```
+
+---
+
+## 2. Replay ALL stored traffic through Burp Suite
+
+Re-send stored records through an intercepting proxy so you can inspect and manipulate them manually in Burp. Keep concurrency low (`-c`) so you don't overwhelm the proxy.
+
+```bash
+# Replay every stored record in your project DB through Burp
+vigolium replay --all --proxy http://127.0.0.1:8080 -c 5
+```
+
+Replay directly from a standalone export (project scoping off, nothing written to your project DB):
+
+```bash
+# BULK: replay every record from a standalone .sqlite export
+vigolium replay -S --db scan.sqlite --all --proxy http://127.0.0.1:8080 -c 5
+```
+
+<Callout icon="circle-info" color="#3B82F6" iconType="regular">
+  `--all` lifts the default `-n/--limit` cap (100). You can narrow the bulk set instead of `--all` with `--host`, `--method`, `--status`, `--path`, `--source`, `--search`, or `--body`. `-S/--stateless` reads records from a `.jsonl` export **or** a standalone `.sqlite` with project scoping off, it never writes to your project DB.
+</Callout>
+
+---
+
+## 3. Passive / secret scan on forwarded traffic
+
+When you forward traffic into Vigolium from another source (the Burp extension, a proxy, or the `vigolium ingest` client), start the **server in scan-on-receive mode**. Use `--passive-only` to run passive modules **only**, no active scan traffic is sent, and secret detection is included.
+
+```bash
+# Passive-only, continuously scan forwarded traffic as it arrives.
+# No active requests are sent; secret detection runs.
+vigolium server -S --passive-only -A
+
+# Same, but also mirror everything to disk for your agent to read
+vigolium server -S --passive-only --mirror-fs output-dir -A
+
+# Record + passively scan HTTP(S) through the transparent ingest proxy
+vigolium server -S --passive-only --ingest-proxy-port 9003 -A
+```
+
+Scan-on-receive modes at a glance:
+
+| Flag | Behavior |
+|------|----------|
+| `-S` / `--scan-on-receive` | Continuously scans new records with the **dynamic-assessment** phase (active + passive modules). |
+| `-S --passive-only` | Passive modules only, **no active traffic**. Includes secret detection, security headers, cookie flags, disclosure, etc. |
+| `-S --full-native-scan-on-receive` | Runs the **full native pipeline** (discovery + spidering + dynamic-assessment) on received records. |
+
+<Callout icon="circle-info" color="#3B82F6" iconType="regular">
+  Server mode always enables **every** passive module. `--passive-only` simply zeroes the active modules so the scanner analyzes forwarded request/response pairs without sending any new requests, ideal for scanning traffic you've captured elsewhere. Point the Burp extension (or `vigolium ingest`) at the server's ingestion endpoint and findings appear as traffic flows in. See [Server & Ingestion](/getting-started/server-and-ingestion).
+</Callout>
+
+---
+
+## 4. Import external scan data into the database
+
+Use `vigolium import` to pull existing data, **JSONL exports**, **audit output folders**, and **archives**, into your database. It auto-detects the input by inspecting the path.
+
+```bash
+# JSONL export (http_record + finding envelopes, e.g. from `vigolium export --format jsonl`)
+vigolium import data.jsonl
+
+# Audit output folder (contains audit-state.json + findings-draft/)
+vigolium import ./audit-output/
+
+# Merge an external vigolium scan DB into the default database
+vigolium import other-vigolium-scan.sqlite
+
+# Compressed archive of either of the above
+vigolium import bundle.tar.gz      # also .tgz, .zip
+
+# Remote object in cloud storage (downloaded, then imported)
+vigolium import gs://<project-uuid>/<key>
+
+# Import and emit a branded HTML report in one step
+vigolium import ./audit-output/ --format html -o report.html --report-title "My Report"
+```
+
+<Callout icon="circle-info" color="#3B82F6" iconType="regular">
+  Imported findings are scoped to the active project (`--project` / `VIGOLIUM_PROJECT`). `import` initializes the schema on a fresh `--db` path, so it's safe as the first command against a brand-new database. Supported JSONL types are `http_record` and `finding`; other envelope types are counted and skipped.
+</Callout>
+
+### Merging a standalone SQLite database
+
+`vigolium import` detects a SQLite result database by its magic header (works for `.sqlite`, `.sqlite3`, `.db`, or no extension) and performs a **lossless, idempotent SQLite→SQLite merge** of the scan-result tables (http_records, findings, scans, agentic_scans, oast_interactions, projects), deduping on natural keys:
+
+```bash
+# Merge an external scan DB into the default database
+vigolium import other-vigolium-scan.sqlite
+
+# Merge into a specific destination DB
+vigolium import other-vigolium-scan.sqlite --db team.sqlite
+```
+
+If you'd rather **read** a colleague's export without merging it into your own DB, open it in place with project scoping off:
+
+```bash
+vigolium finding -S --db scan.sqlite
+vigolium traffic -S --db scan.sqlite
+```
+
+<Callout icon="circle-info" color="#3B82F6" iconType="regular">
+  Merged rows keep their **original** `project_uuid`, so imported data stays scoped to whatever project it was scanned under. Importing the same database twice adds nothing the second time (dedup on natural keys). Requires a SQLite destination — a Postgres destination returns a clear error. To merge many **parallel** scans into one shared DB during scanning instead, use `--db-isolate` (see [section 5](#5-scan-a-large-list-of-targets-in-parallel)).
+</Callout>
+
+---
+
+## 5. Scan a large list of targets in parallel
+
+Point Vigolium at a large target list and use `-P/--parallel N` to scan several hosts at once. Each target runs in its own **isolated child process**, so there is no cross-contamination between workers, and each child keeps its own `--concurrency`, meaning real in-flight requests are roughly `N × --concurrency`.
+
+`-P` requires one of two output strategies so results never collide:
+
+- **`--stateless --split-by-host`** — each target runs against its own temporary database and writes a separate per-host output file (`base-<host>.<ext>`). Nothing is persisted. Best for stateless, fire-and-forget batches.
+- **`--db-isolate`** — each worker scans into a private temporary SQLite database, then merges its results into the shared `--db` (or the default DB) at the end. This lets many parallel scans share one database without write contention, and you export one unified report from the merged DB afterward.
+
+```bash
+# Stateless fan-out: per-host JSONL + HTML files, 3 targets at a time
+vigolium scan -T list-of-targets.txt -P 3 \
+  --stateless --split-by-host \
+  --format jsonl,html --output prefix-output \
+  --fuzz-wordlist ~/Tools/contents/fast.txt
+
+# Shared-DB fan-out: 4 targets at a time merged into one local.db, one unified output
+vigolium scan -T list-of-targets.txt -P 4 \
+  --db-isolate --db local.db \
+  --format jsonl,html --output report \
+  --fuzz-wordlist ~/Tools/contents/fast.txt
+```
+
+<Callout icon="circle-info" color="#3B82F6" iconType="regular">
+  `--db-isolate` is SQLite-only and cannot be combined with `--stateless` (they are two different ways to avoid write contention). Pressing `Ctrl-C` during a `-P` batch is treated as an operator stop: un-started and cut-short targets are reported as "not scanned" rather than failures.
+</Callout>
+
+---
+
+## 6. Resume a large parallel scan
+
+A stateless parallel fan-out (`-S -T --split-by-host -P`) writes a tiny line-cursor manifest, `<output>.progress.json`, tracking the targets that completed cleanly. If the batch is interrupted (Ctrl-C, a crash, a CI timeout), re-run it with `--resume` to skip the finished targets and scan only the remainder, Vigolium also prints a copy-pasteable resume command on Ctrl-C/failure:
+
+```bash
+# Original run
+vigolium scan -T targets.txt -P 4 --stateless --split-by-host --format jsonl -o results
+
+# Resume only the targets that didn't finish
+vigolium scan -T targets.txt -P 4 --stateless --split-by-host --format jsonl -o results --resume
+```
+
+Run `vigolium scan --resume` bare, with no other flags, and it auto-discovers the `*.progress.json` in the current directory and relaunches the saved run from it (pass `-o <prefix>` to disambiguate when several manifests exist).
+
+<Callout icon="circle-info" color="#3B82F6" iconType="regular">
+  `--resume` currently applies only to the parallel fan-out (`-S -T --split-by-host -P > 1`). Resuming a plain sequential scan re-runs it in full.
+</Callout>
+
+---
+
+## 7. Scan from an OpenAPI / Swagger / Postman / Burp / HAR input
+
+Feed a spec or capture with `-i <file>` and select the format with `-I <format>`. Auto-discovery/crawling is skipped, Vigolium scans exactly the endpoints defined in the input.
+
+```bash
+# OpenAPI / Swagger spec
+vigolium scan --stateless -i api.yaml -I openapi \
+  -t https://api.example.com --format jsonl -o results
+
+# Postman collection
+vigolium scan --stateless -i collection.json -I postman \
+  -t https://api.example.com --format jsonl -o results
+
+# Burp Suite XML export
+vigolium scan --stateless -i export.xml -I burpxml --format jsonl -o results
+
+# HAR capture
+vigolium scan --stateless -i traffic.har -I har --format jsonl -o results
+
+# Nuclei JSONL
+vigolium scan --stateless -i nuclei.jsonl -I nuclei --format jsonl -o results
+```
+
+<Callout icon="circle-info" color="#3B82F6" iconType="regular">
+  Format aliases: `openapi`/`swagger`, `postman`, `burpxml`/`burp`/`burp-xml`, `burpraw`/`raw`, `har`/`http-archive`, `nuclei`/`nuclei-output`. Run `vigolium scan --list-input-mode` for the full list. Use `-t/--target` to supply the base URL when a spec carries only paths.
+</Callout>
+
+---
+
+## 8. Scan a single request, no crawling or discovery
+
+`scan-request` runs scanner modules against exactly one raw HTTP request, keeping all its parameters, cookies, and headers, with no crawling or discovery.
+
+```bash
+# From a file containing a raw HTTP request
+vigolium scan-request -i request.txt
+
+# From stdin
+printf 'GET /api/users?id=1 HTTP/1.1\r\nHost: example.com\r\n\r\n' \
+  | vigolium scan-request
+
+# From a curl command (auto-detected)
+echo "curl -X POST -d 'user=admin' https://example.com/login" \
+  | vigolium scan-request
+```
+
+Override the host when the request file has only a path:
+
+```bash
+vigolium scan-request -i request.txt --target https://staging.example.com
+```
+
+### Piping from stdin
+
+Both `scan-url` and `scan-request` auto-detect the stdin format, plain URL, curl command, or raw HTTP request:
+
+```bash
+# Plain URL
+echo 'https://example.com/search?q=test' | vigolium scan-url
+
+# Curl command
+echo "curl -H 'Content-Type: application/json' -d '{\"id\":1}' https://example.com/api" \
+  | vigolium scan-url
+
+# Raw HTTP request (keeps the cookie + body verbatim)
+printf 'POST /api/login HTTP/1.1\r\nHost: example.com\r\nContent-Type: application/x-www-form-urlencoded\r\nCookie: session=abc123\r\n\r\nuser=admin&pass=secret' \
+  | vigolium scan-request
+
+# Scan whatever is on your clipboard (macOS)
+pbpaste | vigolium scan-url -j
+```
+
+---
+
+## 9. Run only specific phases (or skip some)
+
+Use `--only` to run a subset of phases, or `--skip` to exclude phases from an otherwise-full scan. Both accept comma-separated phase names and aliases.
+
+```bash
+# Phase isolation: run only one phase
+vigolium scan -t https://example.com --only discovery
+vigolium scan -t https://example.com --only known-issue-scan
+vigolium scan -t https://example.com --only dynamic-assessment
+
+# Skip specific phases (aliases like kis = known-issue-scan are accepted)
+vigolium scan -t https://example.com --skip discovery,spidering,kis
+```
+
+Canonical phase names and their accepted aliases:
+
+| Phase | Aliases |
+|-------|---------|
+| `discovery` | `deparos`, `discover` |
+| `spidering` | `spitolas` |
+| `known-issue-scan` | `cve`, `kis`, `known-issues` |
+| `dynamic-assessment` | `audit`, `dast`, `assessment` |
+| `extension` | `ext` |
+| `external-harvest`, `ingestion` | — |
+
+<Callout icon="circle-info" color="#3B82F6" iconType="regular">
+  `dynamic-assessment` is the canonical name for the module-based vulnerability-scanning phase (formerly `audit`). The same phase names work as the argument to `vigolium run <phase>`, e.g. `vigolium run cve`.
+</Callout>
+
+---
+
+## 10. Run a JavaScript extension only
+
+Load one or more custom JS extensions with `--ext` (repeatable) and restrict the run to the extension phase with `--only extension`, no built-in modules, just your script.
+
+```bash
+# Run only your extension against the target
+vigolium scan -t https://example.com --only extension --ext custom-check.js
+
+# Load several extensions
+vigolium scan -t https://example.com --only extension \
+  --ext custom-check.js --ext another-check.js
+```
+
+<Callout icon="circle-info" color="#3B82F6" iconType="regular">
+  `--ext` is a global flag, so it works on any scan command. Drop `--only extension` to run your extension **alongside** the built-in modules. See [Writing Extensions](/customization/writing-extensions) for the `vigolium.*` API.
+</Callout>
+
+---
+
+## 11. Content discovery only
+
+Enable the content-discovery/fuzzing phase with `--discover` and point it at a wordlist with `--fuzz-wordlist`. Add `--only discovery` to stop after discovery and skip vulnerability scanning entirely.
+
+```bash
+# Content discovery + fuzzing (then continue into the rest of the scan)
+vigolium scan -t https://example.com --discover --fuzz-wordlist ~/.vigolium/wordlists/fuzz.txt
+
+# Discovery only — enumerate paths and stop
+vigolium scan -t https://example.com --only discovery \
+  --discover --fuzz-wordlist ~/.vigolium/wordlists/fuzz.txt
+```
+
+<Callout icon="circle-info" color="#3B82F6" iconType="regular">
+  `--fuzz-wordlist` enables on-the-fly fuzzing during discovery. Combine with `--format fs` or `-o` to persist the discovered surface for later scans. See [Discovery phase](/native-scan/phases/discovery).
+</Callout>
+
+---
+
+## 12. Add custom HTTP headers
+
+Inject headers, such as auth tokens or cookies, with `-H/--header` (repeatable). Works on `scan`, `scan-url`, and `scan-request`.
+
+```bash
+# One or more custom headers on every request
+vigolium scan -t https://example.com \
+  -H 'Authorization: Bearer eyJhbGciOi...' \
+  -H 'X-Api-Key: secret' \
+  -H 'Cookie: session=abc123'
+```
+
+<Callout icon="circle-info" color="#3B82F6" iconType="regular">
+  For richer authenticated scans (login flows, token refresh, multi-step sessions), use an auth session file instead, see [Authentication](/native-scan/authentication) and the `vigolium auth` command.
+</Callout>
+
+---
+
+## 13. Control scan speed & duration
+
+Cap the wall-clock time with `--scanning-max-duration`, and tune throughput with `-c/--concurrency`, `-r/--rate-limit`, and `--max-per-host`.
+
+```bash
+# Override max scan duration
+vigolium scan -t https://example.com --scanning-max-duration 2h
+
+# Adjust concurrency and rate limit
+vigolium scan -T targets.txt -c 100 --rate-limit 200 --max-per-host 5
+```
+
+| Flag | Default | Effect |
+|------|---------|--------|
+| `--scanning-max-duration` | `0` (use config) | Hard cap on total scan wall-clock time (e.g. `30m`, `1h`, `2h`) |
+| `-c` / `--concurrency` | `50` | Number of concurrent scan workers |
+| `-r` / `--rate-limit` | `100` | Maximum HTTP requests per second (global) |
+| `--max-per-host` | `50` | Maximum concurrent requests to any single host |
+
+<Callout icon="circle-info" color="#3B82F6" iconType="regular">
+  Lower `--rate-limit` and `--max-per-host` to stay gentle on fragile targets; raise `-c` and `--rate-limit` to go faster against robust infrastructure. Under `-P/--parallel`, each child keeps its own `--concurrency`, so real in-flight requests are roughly `P × --concurrency`.
+</Callout>
+
+---
+
+## 14. Set a custom OAST domain
+
+Out-of-band callback detection (SSRF, blind RCE, OOB SQLi, etc.) uses an [interactsh](https://github.com/projectdiscovery/interactsh) server, `oast.pro` by default. Point Vigolium at your own server with the `oast.server_url` / `oast.token` config keys:
+
+```bash
+# Point Vigolium at your own interactsh / OAST server
+vigolium config set oast.server_url your-oast-domain.com
+vigolium config set oast.token your-oast-token
+```
+
+Or set it directly in `~/.vigolium/vigolium-configs.yaml`:
+
+```yaml
+oast:
+  enabled: true
+  server_url: your-oast-domain.com
+  token: your-oast-token
+```
+
+Config values support `${VAR}` / `${VAR:-default}` expansion, so you can keep the domain and token in environment variables instead of writing them into the file:
+
+```yaml
+oast:
+  server_url: ${VIGOLIUM_OAST_DOMAIN:-oast.pro}
+  token: ${VIGOLIUM_OAST_TOKEN}
+```
+
+<Callout icon="circle-info" color="#3B82F6" iconType="regular">
+  OAST is enabled by default (`oast.enabled: true`). The token is optional (only needed by servers that require auth). See the full field list, poll interval, grace period, and blind-XSS payload source, in [Configuration → `oast`](/getting-started/configuration#oast).
+</Callout>
+
+---
+
+## 15. Generate a static HTML report
+
+Add `--format html` with `-o/--output` to render a self-contained, ag-grid HTML report. You can produce it **during a scan**, or after the fact from data already stored or imported.
+
+```bash
+# During a scan (combine formats, e.g. jsonl,html)
+vigolium scan -t https://example.com --format html -o report.html
+
+# From data already in the database
+vigolium export --format html -o report.html --report-title "Acme Q3 Scan"
+
+# From an imported audit / JSONL / SQLite, in one step
+vigolium import ./audit-output/ --format html -o report.html
+```
+
+Brand and filter the report with the same flags across `export` / `import`:
+
+```bash
+vigolium export --format html -o report.html \
+  --report-title "Acme External Scan" \
+  --report-target https://acme.example.com \
+  --severity critical,high \
+  --search sqli
+```
+
+<Callout icon="circle-info" color="#3B82F6" iconType="regular">
+  HTML requires `-o/--output`. Other report formats: `report`, `pdf` (rendered via headless Chrome), and `markdown` (alias `md`). The output path accepts `gs://<project>/<key>` URLs and a `{ts}` timestamp placeholder. See [Output & Reporting → HTML](/getting-started/output-and-reporting#html).
+</Callout>
+
+---
+
+## 16. Notify (webhook) when a scan completes
+
+The `webhook` notify provider fires **one POST per scan** when it reaches a terminal state (completed or failed), regardless of severity, perfect for CI pipelines and dashboards.
+
+```bash
+# Fire a webhook POST when each scan finishes
+vigolium config set notify.enabled true
+vigolium config set notify.provider webhook
+vigolium config set notify.webhook.url https://hooks.example.com/vigolium
+```
+
+Or configure it in `~/.vigolium/vigolium-configs.yaml`:
+
+```yaml
+notify:
+  enabled: true
+  provider: webhook               # webhook | telegram | discord ("" = all configured)
+  webhook:
+    url: https://hooks.example.com/vigolium
+    authorization: "Bearer xxx"   # optional Authorization header
+    timeout_sec: 10
+  severities: [high, critical]    # gate the per-finding telegram/discord alerts
+```
+
+<Callout icon="circle-info" color="#3B82F6" iconType="regular">
+  `webhook` fires once per scan regardless of severity; `telegram` and `discord` instead fire **per finding**, gated by `notify.severities`. Telegram/Discord also honor env-var fallbacks (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `DISCORD_WEBHOOK_URL`), so you can keep tokens out of the config file. See [Configuration → `notify`](/getting-started/configuration#notify).
+</Callout>
+
+---
+
+## 17. Update Vigolium
+
+`vigolium update` re-runs the official installer to fetch the latest release binary, then refreshes the local nuclei-templates checkout used by the known-issue scan.
+
+```bash
+# Update the binary + nuclei templates to the latest release
+vigolium update
+
+# Only refresh nuclei templates (skip the binary)
+vigolium update --skip-binary
+
+# Only reinstall the binary (skip templates)
+vigolium update --skip-templates
+
+# Check the version you're running
+vigolium version
+```
+
+<Callout icon="circle-info" color="#3B82F6" iconType="regular">
+  `vigolium update` runs the same installer as `curl -fsSL https://vigolium.com/install.sh | bash`, installing to `~/.local/bin/vigolium` (checksum-verified). **Homebrew, npm, and Docker** installs upgrade through their own tooling instead: `brew upgrade vigolium`, `npm update -g @vigolium/vigolium`, or `docker pull j3ssie/vigolium:latest`. Vigolium also checks for a newer release on startup (at most once/day); silence it with `VIGOLIUM_DISABLE_UPDATE_CHECK=1`, or auto-apply and re-exec with `VIGOLIUM_AUTO_UPDATE=1`.
+</Callout>
+
+---
+
+## 18. Install the Vigolium Burp extension
+
+The Burp extension forwards traffic you browse/proxy in Burp Suite into a running Vigolium server, so it lands in the database (and, with `--mirror-fs`, on disk) for scanning and agent triage.
+
+<Steps>
+  <Step title="Download the extension JAR">
+    Grab the latest `.jar` from the releases page: [github.com/vigolium/burp-vigolium/releases](https://github.com/vigolium/burp-vigolium/releases/tag/0.1.0)
+  </Step>
+  <Step title="Load it into Burp Suite">
+    In Burp, go to **Extensions → Installed → Add**. Set **Extension type: Java**, then **Select file...** and choose the downloaded `.jar`. Click **Next** — a **Vigolium** tab appears.
+  </Step>
+  <Step title="Point it at your Vigolium server">
+    Start an ingestion server and enter its URL (and API key, if set) in the extension's Vigolium tab:
+
+    ```bash
+    # Start the ingestion server (add --mirror-fs to also write traffic to disk)
+    vigolium server --mirror-fs output-dir -A
+    ```
+  </Step>
+  <Step title="Browse — traffic flows into Vigolium">
+    Every request/response Burp sees is forwarded and persisted. Scan it passively as it arrives, or mirror it to files for your agent.
+  </Step>
+</Steps>
+
+<Callout icon="circle-info" color="#3B82F6" iconType="regular">
+  Pairs naturally with [section 1 (live filesystem mirror)](#1-mirror-ingested-traffic-findings-to-a-live-filesystem-tree) and [section 3 (passive/secret scan on forwarded traffic)](#3-passive-secret-scan-on-forwarded-traffic): run `vigolium server -S --passive-only --mirror-fs output-dir -A` and the extension feeds it while findings and readable request/response files appear in real time.
+</Callout>
+
+---
+
+<Callout icon="key" color="#8B5CF6" iconType="regular">
+  **Oh dear, you actually read to the end.** Here's the secret the config file
+  kept nudging you toward: by default every Vigolium request announces itself
+  with a `Vigolium/<version>` User-Agent, so a friendly blue team can spot your
+  authorized scan in their logs in seconds. Go full ninja only when you *mean*
+  to be sneaky:
+
+  ```bash
+  # Persist it in your config
+  vigolium config set scanning_strategy.http.user_agent random
+
+  # Or a one-off via env var (overrides the config value for that run)
+  export VIGOLIUM_DEFAULT_UA=random
+  ```
+</Callout>

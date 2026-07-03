@@ -130,7 +130,9 @@ The key architectural point: the **project UUID is the in-bucket prefix**, not t
 | `native-scans/<scan-uuid>/results.tar.gz` | `vigolium scan --upload-results` |
 | `agentic-scans/<run-uuid>/results.tar.gz` | `vigolium agent … --upload-results` |
 
-`gs://` URLs are first-class inputs/outputs: `vigolium import gs://…` downloads-then-imports (detecting vigolium-audit folders or JSONL inside `.tar.gz`/`.zip`), and any `export -o gs://…` writes locally then uploads on success. The `{ts}` and `{project-uuid}` placeholders expand in any `-o` path. The `bundle` export format round-trips a full snapshot (JSONL + HTML report + manifest + agent session dirs) that another machine can re-import.
+`vigolium import` auto-detects its input: a vigolium-audit folder, a JSONL export, a `.tar.gz`/`.zip` archive of either, or **another vigolium SQLite database** (detected by its magic header). A SQLite input is a lossless, idempotent SQLite→SQLite merge — records, findings, scans, agentic scans, and OAST interactions are deduped on their natural keys and each row keeps its original project, so re-importing the same database is a no-op. The destination is the `--db` target (or the default database).
+
+`gs://` URLs are first-class inputs/outputs: `vigolium import gs://…` downloads-then-imports, and any `export -o gs://…` writes locally then uploads on success. The `{ts}` and `{project-uuid}` placeholders expand in any `-o` path. The `bundle` export format round-trips a full snapshot (JSONL + HTML report + manifest + agent session dirs) that another machine can re-import.
 
 ---
 

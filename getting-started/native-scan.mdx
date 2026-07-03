@@ -286,26 +286,6 @@ See [CI/CD Integration](/guides/ci-cd-integration) for full pipeline examples.
 
 For stateless runs, `-o` is the **base** path, Vigolium appends the correct extension per format and materializes every requested format from the temporary database before tearing it down.
 
-## Cheat sheet
-
-```bash
-# Quick check on one endpoint
-vigolium scan-url https://example.com/api/users?id=1
-
-# One-shot full scan, JSON output, no persistence
-vigolium scan --stateless -t https://example.com --discover --format jsonl -o findings
-
-# Scan a clipboard curl command
-pbpaste | vigolium scan-url -j
-
-# API spec → HTML report, nothing left behind
-vigolium scan --stateless -i openapi.yaml -I openapi \
-  -t https://api.example.com --format html -o report
-
-# CI gate
-vigolium scan --stateless -t "$TARGET" --ci-output-format -o findings
-```
-
 ## Next steps
 
 - [Stateless Scanning Guide](/guides/stateless-scan), the extended recipe book.

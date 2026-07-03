@@ -12,6 +12,10 @@ The `--auth` / `--auth-file` flags were previously named `--session` / `--sessio
 
 Session config files can be written in **YAML or JSON**, the format is auto-detected by file extension (`.json`) or by content sniffing (leading `{` or `[`).
 
+<Note>
+Separate from configured sessions, the browser crawler can also try a short list of common **default credentials** (`admin:admin`, …) against a confirmed local login form during spidering, so the crawl reaches authenticated areas without an `--auth` session. It's off by default and auto-enabled at `balanced`/`deep` intensity, negative-control gated, and never a brute-force. See [Default-credential login attempts](/native-scan/phases/spidering#default-credential-login-attempts).
+</Note>
+
 ## Quick Start
 
 ```bash

@@ -32,6 +32,7 @@
             "pages": [
               "getting-started/overview",
               "getting-started/quickstart",
+              "getting-started/cheat-sheet",
               "getting-started/choosing-a-mode",
               "getting-started/native-scan",
               "getting-started/setup-agent",

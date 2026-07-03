@@ -151,7 +151,8 @@ Start the REST API and ingest proxy.
 vigolium server                                              # Default host/port from config
 vigolium server --host 0.0.0.0 --service-port 8443
 vigolium server --no-auth                                    # Local use only — disables bearer auth
-vigolium server -t https://example.com --scan-on-receive     # Auto-scan ingested traffic
+vigolium server -t https://example.com --scan-on-receive     # Auto-scan ingested traffic (-S is shorthand for --scan-on-receive)
+vigolium server -S --passive-only                            # Passive modules only — no active traffic; includes secret detection
 vigolium server --mirror-fs ./mirror                         # Live-mirror ingested traffic + findings to a filesystem tree
 
 # Transparent ingest proxy (records traffic flowing through it)
@@ -166,6 +167,8 @@ vigolium server --export-ca ./vigolium-ca.pem
 ```
 
 See [Transparent Proxy](/server-mode/proxy) for the full MITM workflow.
+
+`--passive-only` (with `--scan-on-receive`) restricts scanning to **passive modules only** — no active scan traffic is sent, and secret detection is included. It's the safest way to analyze forwarded Burp/proxy traffic in place. Combining it with `--full-native-scan-on-receive` still crawls (discovery + spidering send requests); for zero active traffic, use `--scan-on-receive` without the full-native flag.
 
 ## Database & Results
 
@@ -200,6 +203,75 @@ vigolium db clean --scan-uuid my-scan
 
 `finding`/`traffic` accept `-S/--stateless` + `--db <file>` to read a `--format jsonl` export or a standalone `.sqlite` directly, and `--markdown` to print the matched items as Markdown (under `-S`, add `--compact` to window long responses around the match).
 
+### Import
+
+Pull external scan data back into a database. The input type is auto-detected from the path.
+
+```bash
+# JSONL export (http_record + finding envelopes, e.g. from `vigolium export --format jsonl`)
+vigolium import full-export.jsonl
+
+# Audit output folder (contains audit-state.json + findings-draft/)
+vigolium import ./audit-output/
+
+# Merge another vigolium SQLite scan DB into your default database
+vigolium import other-vigolium-scan.sqlite
+
+# Merge into an explicit destination (--db is the target)
+vigolium import --db team.sqlite other-vigolium-scan.sqlite
+
+# Combine many standalone scan DBs into one (idempotent — re-runs are no-ops)
+for f in scans/*.sqlite; do vigolium import --db combined.sqlite "$f"; done
+
+# Compressed archive (.tar.gz / .tgz / .zip) or a cloud-storage object
+vigolium import ./scan-bundle.tar.gz
+vigolium import gs://<project-uuid>/imports/scan.tar.gz
+```
+
+A **SQLite database input** (detected by its magic header, any extension) is a lossless, idempotent SQLite→SQLite merge: HTTP records, findings, scans, agentic scans, and OAST interactions are deduped on their natural keys, and each row keeps its original project. Re-importing the same database adds nothing the second time. The destination is the `--db` target (or the configured default database when `--db` is omitted).
+
+## Replay
+
+Re-send stored traffic — with or without a mutation — to confirm a finding, fuzz a parameter, or push a whole corpus back through a proxy. The banner is suppressed so bulk output stays pipe-clean.
+
+```bash
+# Confirm a stored record with a SQLi payload (baseline vs. mutated diff)
+vigolium replay --record-uuid abc12345 -m 'name=id,payload=1 OR 1=1'
+
+# Replay a finding's stored evidence with an XSS payload
+vigolium replay --finding-id 42 -m 'name=q,payload=<svg/onload=alert(1)>'
+
+# Replay a curl command verbatim (auto-baseline by re-sending)
+vigolium replay -i "curl -X POST https://example.com/api/login -d 'u=admin'"
+
+# Multi-step auth via a persistent cookie jar
+vigolium replay --session-id login -i curl-login.sh
+vigolium replay --session-id login --record-uuid <action-uuid>
+
+# Confirm against a different environment than the baseline
+vigolium replay --record-uuid abc12345 --target https://staging.example.com \
+                 -m 'name=user,payload=admin' -H 'X-Forwarded-For: 127.0.0.1'
+```
+
+### Bulk replay
+
+Pass `--all` (or any of `--host` / `--method` / `--status` / `--path` / `--source` / `--search` / `--body`) to replay **every matching stored record** through the mutation/diff engine, streaming one JSONL object per record with per-record error isolation.
+
+```bash
+# Replay ALL stored traffic through Burp (JSONL out, 5 at a time)
+vigolium replay --all --proxy http://127.0.0.1:8080 -c 5
+
+# Replay every record from a standalone export (project scoping off)
+vigolium replay -S --db scan.sqlite --all --proxy http://127.0.0.1:8080 -c 5
+
+# Fuzz an 'id' param across every matching GET record
+vigolium replay --method GET --host api.example.com -m 'name=id,payload=1 OR 1=1'
+```
+
+- `--all` lifts the default `-n/--limit` cap (100); narrow the set with the filter flags instead. Without `-m/--mutate`, each record is re-sent verbatim.
+- Throttle with `-c/--concurrency`; cap the set with `-n/--limit`.
+- `-S/--stateless --db <file>` reads baselines from a standalone `.sqlite`/`.jsonl` export with project scoping off — it never writes to your project DB.
+
 ## Strategies & Phases
 
 Inspect scanning strategy presets and the phases that make up a scan.
@@ -230,6 +302,10 @@ Run and manage JavaScript extensions that hook into the scanner.
 vigolium ext ls
 vigolium ext docs
 vigolium ext preset
+vigolium ext example                       # Print every example extension (all supported formats)
+vigolium ext example --list                # Just the catalog index (keys + titles)
+vigolium ext example js-active-insertion   # Print a single example by its catalog key
+vigolium ext example --lang yaml           # Restrict to one language
 vigolium ext eval 'vigolium.log("hello")'
 vigolium ext eval --ext-file script.js
 ```

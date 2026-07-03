@@ -72,6 +72,23 @@ vigolium project allow a1b2c3d4-... @newdomain.io bob@contractor.com
 vigolium project remove-access a1b2c3d4-... @partner.io alice@external.com
 ```
 
+### Delete a project
+
+```bash
+# Delete a project and everything tied to it (prompts for confirmation)
+vigolium project delete a1b2c3d4-...
+# 'rm' and 'remove' are aliases
+vigolium project rm a1b2c3d4-...
+
+# Skip the confirmation prompt
+vigolium project delete a1b2c3d4-... -F
+
+# Delete the project's data but keep its config directory on disk
+vigolium project delete a1b2c3d4-... --keep-config -F
+```
+
+Deletion removes all scan data scoped to the project (scans, HTTP records, findings, scopes, OAST interactions). By default the project's config directory (`~/.vigolium/projects/<uuid>/`) is removed too; `--keep-config` leaves it in place.
+
 <Callout icon="lock" color="#f59e0b" iconType="regular">
   Set `VIGOLIUM_PROJECT_READONLY=true` to disable all mutating project commands (`create`, `allow`, `remove-access`) from the CLI. Read-only commands (`list`, `use`, `config`) still work. Useful in production or shared environments where projects should only be managed through the REST API.
 </Callout>

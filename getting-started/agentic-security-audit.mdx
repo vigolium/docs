@@ -243,6 +243,17 @@ The report is written to `vigolium-result/vigolium-audit-report.html` by default
 
 <Note>Without `-S`, findings persist to your database as usual; build a report afterward with `vigolium import <results-dir> --format html -o report.html` or `vigolium export`.</Note>
 
+### Bundle report + raw results, `--output-dir`
+
+`--output-dir <dir>` (stateless-only) collects a `-S` run's artifacts into **one folder**: the HTML report (as `<dir>/vigolium-audit-report.html`) **and** a copy of the raw `vigolium-results/` tree(s). One driver lands flat at `<dir>/vigolium-results/`; multiple drivers are namespaced under `<dir>/<driver>/vigolium-results/`. The source-tree copy is left in place (per `--keep-raw`).
+
+```bash
+# One self-contained folder: HTML report + a copy of the raw scanner output
+vigolium audit --source ~/src/your-app -S --output-dir audit-out-{ts}
+```
+
+A relative `-o`/`--output` nests under `<dir>`; an absolute path or `gs://` URL escapes it. Both `{ts}` and `{project-uuid}` expand in `<dir>`. Running `-S` without `--output-dir` warns that raw output stays under `<source>/vigolium-results/`; passing `--output-dir` without `-S` is ignored with a warning.
+
 ---
 
 ## In-pipeline audit (alongside autopilot / swarm)

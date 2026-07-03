@@ -72,6 +72,20 @@ The Form Handler detects and fills forms with smart value generation:
 - Pairwise fallback when filling all inputs at once fails
 - File upload support with type-aware file selection
 
+### Default-credential login attempts
+
+To reach areas hidden behind a login, the crawler can try a short list of common default credentials against a **confirmed local login form** so the browser session stays authenticated and the crawl continues into the now-unlocked area.
+
+This pass is **discovery-focused, not a brute-force**, and is heavily constrained:
+
+- It runs **only** against a form the crawler has confirmed is a *local* login (a single password field + an identity field + a submit, posting to an **in-scope** host — never an external IdP).
+- It tries a small, documented default list (`admin:admin`, `admin:123456`, …) plus any identity the crawl registered earlier. The identity field's type is respected (email inputs get email-style defaults).
+- It is **negative-control gated**: an improbable random pair must be rejected first, or the whole spray is abandoned (so a form that "accepts" anything can't produce a false "logged in").
+- It is **single-flighted per host** and capped (≤ 10 attempts, never a wordlist), so it cannot lock accounts.
+- **No finding is emitted** — the attempts are captured as ordinary traffic and any unlocked pages simply become more crawlable surface.
+
+The pass is **off by default** and the [native-scan runner](/native-scan/scanning-modes-overview) auto-enables it by **intensity**: `balanced` uses the minimal list, `deep` uses the full documented list. An ordinary crawl leaves it off, keeping active login attempts explicit.
+
 ### Exploration Strategies
 
 | Strategy | Description |

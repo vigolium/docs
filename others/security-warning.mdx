@@ -32,6 +32,10 @@ A reasonable baseline:
 
 Native (non-agent) scans do not have this property, they only issue HTTP traffic against the targets you ask them to scan. The sandbox guidance above applies specifically to `vigolium agent ...` subcommands.
 
+<Note>
+At `balanced` and `deep` intensity, native spidering will submit a short list of common **default credentials** (`admin:admin`, …) against confirmed in-scope login forms to reach authenticated areas. It's negative-control gated, single-flighted per host, and capped so it cannot brute-force or lock accounts, but it *is* an active login attempt — only run it against targets you're authorized to test. See [Default-credential login attempts](/native-scan/phases/spidering#default-credential-login-attempts).
+</Note>
+
 ---
 
 ## Prompt injection through agent mode
