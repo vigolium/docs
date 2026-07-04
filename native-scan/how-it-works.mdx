@@ -12,47 +12,47 @@ This document traces the complete lifecycle of an HTTP request through a Vigoliu
 CLI invocation
   │
   ▼
-┌─────────────────────┐
+┌──────────────────────┐
 │  CLI Entry & Config  │  cmd/vigolium/main.go → pkg/cli/scan.go
 │  Flag parsing, config│  Config loading, strategy/profile, DB init
 │  loading, DB init    │
-└────────┬────────────┘
+└────────┬─────────────┘
          │
          ▼
-┌─────────────────────┐
+┌──────────────────────┐
 │   Input Parsing      │  pkg/input/source/
 │   URL/file/stdin →   │  InputSource.Next() → WorkItem
 │   WorkItem stream    │
-└────────┬────────────┘
+└────────┬─────────────┘
          │
          ▼
-┌─────────────────────┐
+┌──────────────────────┐
 │  Runner Orchestration│  internal/runner/runner.go
 │  6-phase pipeline:   │  Heuristics → Harvest → Discovery →
 │  build infra, run    │  Spidering → KnownIssueScan →
 │  phases in order     │  Dynamic-Assessment
-└────────┬────────────┘
+└────────┬─────────────┘
          │
          ▼
-┌─────────────────────┐
+┌──────────────────────┐
 │     Executor         │  pkg/core/executor.go
 │  Worker pool feeds   │  feedItems() → worker() → processItem()
 │  items to modules    │
-└────────┬────────────┘
+└────────┬─────────────┘
          │
          ▼
-┌─────────────────────┐
+┌──────────────────────┐
 │  Module Dispatch     │  pkg/modules/
 │  Passive (sequential)│  ScanPerHost → ScanPerRequest
 │  Active (parallel)   │  ScanPerHost/Request/InsertionPoint
-└────────┬────────────┘
+└────────┬─────────────┘
          │
          ▼
-┌─────────────────────┐
+┌──────────────────────┐
 │   Result Emission    │  pkg/output/output.go
 │  Post-hooks → DB     │  assignModuleInfo → emitResult →
 │  save → output write │  SaveFinding → OnResult → Notify
-└─────────────────────┘
+└──────────────────────┘
 ```
 
 ## Stage 1: CLI Entry and Configuration
@@ -942,76 +942,76 @@ DeduplicateFindings(projectUUID)
 vigolium scan -t https://example.com
          │
          ▼
-    ┌────────────┐
+    ┌─────────────┐
     │  CLI Parse  │  pkg/cli/scan.go: runScanCmd()
     │  + Config   │  Load settings, resolve strategy/profile
     │  + DB Init  │  database.NewDB() → CreateSchema()
-    └─────┬──────┘
+    └─────┬───────┘
           │
           ▼
-    ┌────────────┐
+    ┌─────────────┐
     │   Runner    │  internal/runner/runner.go
     │  Build Infra│  HTTP client, scope matcher, rate limiter, hooks
-    └─────┬──────┘
+    └─────┬───────┘
           │
           ▼
-    ┌────────────────────────────────────────────────────────┐
-    │             RunNativeScan() — 6 Phases                 │
-    │                                                        │
-    │  [Heuristics] → [Harvest] → [Discovery/Ingest]         │
+    ┌──────────────────────────────────────────────────────────────┐
+    │             RunNativeScan() — 6 Phases                       │
+    │                                                              │
+    │  [Heuristics] → [Harvest] → [Discovery/Ingest]               │
     │       → [Spidering] → [KnownIssueScan] → [Dynamic-Assessment]│
-    │                                                        │
-    │  Phases 0-4: populate DB with HTTP records             │
-    │  Phase 4-5: DeduplicateFindings() after each           │
-    │  Phase 5: scan records with modules                    │
-    └───────────────────────┬────────────────────────────────┘
+    │                                                              │
+    │  Phases 0-4: populate DB with HTTP records                   │
+    │  Phase 4-5: DeduplicateFindings() after each                 │
+    │  Phase 5: scan records with modules                          │
+    └───────────────────────┬──────────────────────────────────────┘
                             │
                             ▼  (Phase 5 detail)
-    ┌───────────────────────────────────────────────────┐
+    ┌────────────────────────────────────────────────────┐
     │                    Executor                        │
-    │                                                   │
-    │  feedItems():                                     │
-    │    source.Next() → static filter → scope check    │
-    │    → host error check → send to worker channel    │
-    │                                                   │
-    │  worker() → processItem():                        │
-    │    1. Baseline HTTP fetch (or use DB response)    │
-    │    2. Traffic callback                            │
-    │    3. Pre-hooks (JS transform/filter)             │
-    │    4. Body size enforcement                       │
-    │    5. Scope check + DB save                       │
-    │    6. Eligibility pre-computation                 │
-    │    7. Passive modules (sequential)                │
-    │    8. Active modules (parallel, 3-way)            │
-    │       └── per insertion point: all modules        │
-    │                                                   │
-    │  Post-processing:                                 │
-    │    Flush passive modules (Flusher interface)      │
-    │    Flush OAST service (grace period)              │
-    └───────────────────────┬───────────────────────────┘
+    │                                                    │
+    │  feedItems():                                      │
+    │    source.Next() → static filter → scope check     │
+    │    → host error check → send to worker channel     │
+    │                                                    │
+    │  worker() → processItem():                         │
+    │    1. Baseline HTTP fetch (or use DB response)     │
+    │    2. Traffic callback                             │
+    │    3. Pre-hooks (JS transform/filter)              │
+    │    4. Body size enforcement                        │
+    │    5. Scope check + DB save                        │
+    │    6. Eligibility pre-computation                  │
+    │    7. Passive modules (sequential)                 │
+    │    8. Active modules (parallel, 3-way)             │
+    │       └── per insertion point: all modules         │
+    │                                                    │
+    │  Post-processing:                                  │
+    │    Flush passive modules (Flusher interface)       │
+    │    Flush OAST service (grace period)               │
+    └───────────────────────┬────────────────────────────┘
                             │
                             ▼
-    ┌───────────────────────────────────────────────────┐
+    ┌────────────────────────────────────────────────────┐
     │              Result Emission                       │
-    │                                                   │
+    │                                                    │
     │  Per-module finding cap (suppress after limit)     │
-    │  assignModuleInfo() → emitResult():               │
-    │    1. Post-hooks (JS transform/filter)            │
-    │    2. SaveFinding() to DB (dedup via finding_hash │
-    │       + evidence append on conflict)              │
-    │    3. OnResult → StandardWriter.Write()           │
-    │    4. Notifier.Send() → Telegram/Discord          │
-    └───────────────────────┬───────────────────────────┘
+    │  assignModuleInfo() → emitResult():                │
+    │    1. Post-hooks (JS transform/filter)             │
+    │    2. SaveFinding() to DB (dedup via finding_hash  │
+    │       + evidence append on conflict)               │
+    │    3. OnResult → StandardWriter.Write()            │
+    │    4. Notifier.Send() → Telegram/Discord           │
+    └───────────────────────┬────────────────────────────┘
                             │
                             ▼
-    ┌───────────────────────────────────────────────────┐
+    ┌────────────────────────────────────────────────────┐
     │                   Output                           │
-    │                                                   │
-    │  Console: colored severity + module + matched URL │
-    │  JSON:    JSONL via jsoniter                      │
-    │  HTML:    embedded ag-grid template               │
-    │  File:    append-only JSONL with mutex            │
-    └───────────────────────────────────────────────────┘
+    │                                                    │
+    │  Console: colored severity + module + matched URL  │
+    │  JSON:    JSONL via jsoniter                       │
+    │  HTML:    embedded ag-grid template                │
+    │  File:    append-only JSONL with mutex             │
+    └────────────────────────────────────────────────────┘
 ```
 
 ### Summary Table

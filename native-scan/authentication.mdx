@@ -16,6 +16,10 @@ Session config files can be written in **YAML or JSON**, the format is auto-dete
 Separate from configured sessions, the browser crawler can also try a short list of common **default credentials** (`admin:admin`, …) against a confirmed local login form during spidering, so the crawl reaches authenticated areas without an `--auth` session. It's off by default and auto-enabled at `balanced`/`deep` intensity, negative-control gated, and never a brute-force. See [Default-credential login attempts](/native-scan/phases/spidering#default-credential-login-attempts).
 </Note>
 
+<Note>
+When `--spider` runs, any session the browser establishes — cookies from a cleared WAF/bot challenge plus its User-Agent — is **carried forward** into the discovery and scanning phases (per host), so later probes reuse the cleared session. It's on by default; disable with `--no-carry-browser-session`, and your own `-H/--header` overrides always win. See [Session carry-forward](/native-scan/phases/spidering#session-carry-forward).
+</Note>
+
 ## Quick Start
 
 ```bash

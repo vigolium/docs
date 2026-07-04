@@ -23,11 +23,11 @@ Target URL
                    ▼
 ┌──────────────────────────────────────────────────────┐
 │  Priority Queue                                      │
-│  ┌────┬────┬────┬────┬─────┬──────┬──────┬────────┐ │
-│  │ P0 │ P1 │ P2 │ P4 │ P5  │ P7   │ P11  │ P12   │ │
-│  │Spdr│Obs │Obs │Obs │Short│ExtVar│Long  │Fuzz   │ │
-│  │ JS │Name│File│Dir │Word │Numric│Word  │       │ │
-│  └────┴────┴────┴────┴─────┴──────┴──────┴────────┘ │
+│  ┌────┬────┬────┬────┬─────┬──────┬──────┬────────┐  │
+│  │ P0 │ P1 │ P2 │ P4 │ P5  │ P7   │ P11  │ P12   │   │
+│  │Spdr│Obs │Obs │Obs │Short│ExtVar│Long  │Fuzz   │   │
+│  │ JS │Name│File│Dir │Word │Numric│Word  │       │   │
+│  └────┴────┴────┴────┴─────┴──────┴──────┴────────┘  │
 └──────────────────┬───────────────────────────────────┘
                    ▼
 ┌──────────────────────────────────────────────────────┐
@@ -41,17 +41,17 @@ Target URL
 │    Real discovery ──→ callbacks                      │
 └──────────────────┬───────────────────────────────────┘
                    ▼
-┌──────────────────────────────────────────────────────┐
-│  Discovery Callbacks                                 │
-│  OnDirectoryDiscovered():                            │
+┌───────────────────────────────────────────────────────┐
+│  Discovery Callbacks                                  │
+│  OnDirectoryDiscovered():                             │
 │    • Learn new fingerprints for directory             │
-│    • Create recursive tasks (wordlists + observed)   │
-│    • Extract breadcrumb directories                  │
-│  OnFileDiscovered():                                 │
-│    • Extract extension → trigger extension tasks     │
-│    • Numeric segment → fuzz ±10 variations           │
-│    • Queue extension variant probes (.bak, .old, …)  │
-└──────────────────┬───────────────────────────────────┘
+│    • Create recursive tasks (wordlists + observed)    │
+│    • Extract breadcrumb directories                   │
+│  OnFileDiscovered():                                  │
+│    • Extract extension → trigger extension tasks      │
+│    • Numeric segment → fuzz ±10 variations            │
+│    • Queue extension variant probes (.bak, .old, …)   │
+└──────────────────┬────────────────────────────────────┘
                    ▼
         ┌──── loop back to Priority Queue ────┐
         │  (new tasks from discoveries)       │

@@ -260,7 +260,7 @@ When a scan starts (via API or CLI), the runner logs a configuration summary to 
   ℹ Phases: ✓ ExternalHarvest (24m0s, x0.2) | ✓ Spidering (18m0s, x0.2) | ✓ Discovery
             ✓ KnownIssueScan (6h0m0s, x3.0) | ✓ Dynamic-Assessment (2h0m0s, x1.0)
   ℹ Speed: concurrency=50 | rate-limit=100 | max-per-host=30
-  ℹ Modules: 154 active, 97 passive
+  ℹ Modules: 193 active, 109 passive
 ```
 
 **Error responses:**
@@ -561,7 +561,7 @@ curl -s 'http://localhost:9002/api/scans/scan-abc123/logs?level=info&phase=disco
       "level": "info",
       "phase": "config",
       "message": "scan configuration snapshot",
-      "metadata": "{\"project_uuid\":\"my-project-uuid\",\"targets\":[\"https://example.com\"],\"strategy\":\"balanced\",\"concurrency\":50,\"rate_limit\":100,\"max_per_host\":30,\"active_modules\":154,\"passive_modules\":97,\"spidering_enabled\":true,\"discovery_enabled\":true,\"known_issue_scan_enabled\":false}",
+      "metadata": "{\"project_uuid\":\"my-project-uuid\",\"targets\":[\"https://example.com\"],\"strategy\":\"balanced\",\"concurrency\":50,\"rate_limit\":100,\"max_per_host\":30,\"active_modules\":193,\"passive_modules\":109,\"spidering_enabled\":true,\"discovery_enabled\":true,\"known_issue_scan_enabled\":false}",
       "created_at": "2026-02-16T15:00:00Z"
     },
     {
@@ -626,7 +626,7 @@ curl -s 'http://localhost:9002/api/scans/scan-abc123/logs?level=info&phase=disco
       "level": "info",
       "phase": "audit",
       "message": "phase started",
-      "metadata": "{\"active_modules\":154,\"passive_modules\":97}",
+      "metadata": "{\"active_modules\":193,\"passive_modules\":109}",
       "created_at": "2026-02-16T15:03:01Z"
     },
     {
@@ -720,7 +720,7 @@ curl -s 'http://localhost:9002/api/scans/scan-abc123/logs?level=info&phase=disco
       "level": "info",
       "phase": "config",
       "message": "scan configuration snapshot",
-      "metadata": "{\"project_uuid\":\"my-project-uuid\",\"targets\":[\"https://example.com\"],\"strategy\":\"balanced\",\"scanning_profile\":\"\",\"concurrency\":50,\"rate_limit\":100,\"max_per_host\":30,\"heuristics_check\":\"basic\",\"scope_origin_mode\":\"relaxed\",\"active_modules\":154,\"passive_modules\":97,\"spidering_enabled\":true,\"discovery_enabled\":true,\"known_issue_scan_enabled\":false,\"external_harvest\":false,\"skip_dynamic\":false}",
+      "metadata": "{\"project_uuid\":\"my-project-uuid\",\"targets\":[\"https://example.com\"],\"strategy\":\"balanced\",\"scanning_profile\":\"\",\"concurrency\":50,\"rate_limit\":100,\"max_per_host\":30,\"heuristics_check\":\"basic\",\"scope_origin_mode\":\"relaxed\",\"active_modules\":193,\"passive_modules\":109,\"spidering_enabled\":true,\"discovery_enabled\":true,\"known_issue_scan_enabled\":false,\"external_harvest\":false,\"skip_dynamic\":false}",
       "created_at": "2026-02-16T15:00:00Z"
     }
   ],

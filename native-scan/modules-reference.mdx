@@ -1,12 +1,12 @@
 ---
 title: "Scanner Modules Reference"
-description: "Reference for Vigolium's 262 scanner modules, 166 active and 96 passive, covering the OWASP Top 10 and beyond."
+description: "Reference for Vigolium's 302 scanner modules, 193 active and 109 passive, covering the OWASP Top 10 and beyond."
 icon: "cubes"
 ---
 
-Vigolium ships with **262 scanner modules**, 166 active and 96 passive, covering the OWASP Top 10 and beyond. Run `vigolium module ls` for the up-to-date enabled list (the registry can grow between releases without a docs refresh).
+Vigolium ships with **302 scanner modules**, 193 active and 109 passive, covering the OWASP Top 10 and beyond. Run `vigolium module ls` for the up-to-date enabled list (the registry can grow between releases without a docs refresh).
 
-Active modules send modified requests to detect vulnerabilities; passive modules analyze existing request/response pairs without generating traffic. Recent additions include the OS command-injection suite (results/OAST/time-based), the URL-parser-confusion and routing-based SSRF family, and a cache-poisoned-DoS probe, see `vigolium module ls --tag command-injection`, `--tag ssrf`, and `--tag cpdos` to view them.
+Active modules send modified requests to detect vulnerabilities; passive modules analyze existing request/response pairs without generating traffic. Recent additions include the GraphQL security suite, the Adobe Experience Manager (AEM) family, the SaaS data-exposure family (Salesforce / ServiceNow / Power Pages), the Model Context Protocol (MCP) suite, the expanded IIS family, and the `dependency-confusion` and `js-beautify` passives — see `vigolium module ls --tag graphql`, `--tag aem`, `--tag salesforce`, `--tag servicenow`, `--tag powerpages`, `--tag mcp`, and `--tag iis` to view them.
 
 ## Severity Scale
 
@@ -20,7 +20,7 @@ Active modules send modified requests to detect vulnerabilities; passive modules
 
 ---
 
-## Active Modules (166)
+## Active Modules (193)
 
 Active modules send modified requests to detect vulnerabilities via fuzzing, injection, and behavioral analysis. The list below is a curated highlight, run `vigolium module ls --type active` for the full list.
 
@@ -150,7 +150,7 @@ Active modules send modified requests to detect vulnerabilities via fuzzing, inj
 
 | Module ID | Name | Description | Severity | Confidence | Tags |
 |---|---|---|---|---|---|
-| `active-graphql-scan` | GraphQL Security Scanner | GraphQL introspection, SQL injection, and query batching abuse | Medium | Certain | `api`, `injection` |
+| `active-graphql-scan` | GraphQL Security Scanner | Runs only against a confirmed GraphQL endpoint: introspection & schema exercise, exposed IDE/console (GraphiQL/Playground/Altair), error- and boolean-based SQLi, field-level authorization (IDOR/BOLA), reflected XSS in errors, uncapped query batching, and DoS via deeply-nested/aliased/circular queries | Medium | Certain | `graphql`, `injection`, `idor`, `bola`, `xss`, `dos`, `batching`, `console` |
 | `active-file-upload-scan` | File Upload Scanner | File upload bypass (extension, null byte, magic bytes, SVG XXE, HTML XSS) | High | Certain | `injection` |
 | `active-default-credentials` | Default Credentials | Login endpoints tested with common credential pairs; CAPTCHA/lockout aware | High | Certain | `auth-bypass` |
 | `active-sensitive-file-discovery` | Sensitive File Discovery | ~25 marker-based sensitive files and ~1,350 generic paths (.env, .git, logs) | Medium | Firm | `info-disclosure` |
@@ -269,7 +269,9 @@ Active modules send modified requests to detect vulnerabilities via fuzzing, inj
 | `active-aspnet-sensitive-files` | ASP.NET Sensitive Files | Exposed config files, backups, sensitive directories | High | Firm | `aspnet` |
 | `active-aspnet-service-exposure` | ASP.NET Service Exposure | Exposed ASMX, WCF, OData, legacy service paths | Medium | Firm | `aspnet` |
 | `active-aspnet-viewstate-scan` | ASP.NET ViewState Scan | ViewState MAC disabled, event validation bypass | High | Firm | `aspnet` |
-| `active-iis-shortname-discovery` | IIS Short Filename Discovery | IIS 8.3 short filename enumeration via tilde oracle | Medium | Certain | `aspnet` |
+| `active-iis-shortname-discovery` | IIS Short Filename Discovery | IIS 8.3 short-filename enumeration via a tilde-based oracle, resolving names to feed content discovery | Medium | Certain | `iis`, `aspnet`, `info-disclosure`, `heavy` |
+| `active-iis-cookieless-source-disclosure` | IIS Cookieless Source/Config Disclosure | Downloads protected ASP.NET config/source via cookieless (`S(X)`) path-confusion | High | Firm | `iis`, `aspnet`, `info-disclosure`, `heavy` |
+| `active-iis-extension-confusion-bypass` | IIS Extension Confusion Bypass | NTFS `::$DATA` source disclosure and trailing-dot / `::$INDEX_ALLOCATION` access-control bypass | High | Firm | `iis`, `aspnet`, `access-control`, `info-disclosure`, `heavy` |
 
 #### Firebase
 
@@ -305,9 +307,59 @@ Active modules send modified requests to detect vulnerabilities via fuzzing, inj
 | `active-magento-misconfig` | Magento Misconfiguration | Exposed setup wizard, downloader, version files | High | Firm | `magento`, `php` |
 | `active-cms-installer-exposure` | CMS Installer Exposure | Exposed WordPress, Drupal, and Joomla install wizards | Critical | Firm | `wordpress`, `drupal`, `joomla` |
 
+#### Adobe Experience Manager (AEM)
+
+Every module gates on a confirmed AEM instance (`passive-aem-fingerprint`), is detection-only, and confirms across multiple rounds.
+
+| Module ID | Name | Description | Severity | Confidence | Tags |
+|---|---|---|---|---|---|
+| `active-aem-dispatcher-bypass` | AEM Dispatcher ACL Bypass | Differential confirmation: a protected servlet blocked on the direct path but reachable through a path-normalization trick | High | Certain | `aem`, `adobe`, `dispatcher`, `cms` |
+| `active-aem-sensitive-servlet` | AEM Sensitive Servlet Disclosure | Info disclosure via AEM servlets (QueryBuilder password-hash leak, GQL/DefaultGetServlet dumps, userinfo, loginstatus, truststore), incl. dispatcher-bypass reachability | High | Firm | `aem`, `adobe`, `info-disclosure`, `cms` |
+| `active-aem-console-exposure` | AEM Console & Admin Panel Exposure | Internet-reachable AEM developer/admin consoles (CRXDE Lite, CRX Package Manager, CRX Explorer, admin dashboards) and ACL bypasses to them | High | Firm | `aem`, `adobe`, `misconfiguration`, `cms` |
+| `active-aem-content-discovery` | AEM Repository Content Discovery | Routing-aware JCR enumeration via Sling selectors (`.1.json`) and QueryBuilder predicates, harvesting config secrets, user accounts, and writable nodes (`rep:password` → Critical) | High | Firm | `aem`, `adobe`, `info-disclosure`, `jcr`, `cms` |
+| `active-aem-default-credentials` | AEM Default Credentials | AEM default and demo-account credentials on the Granite login and Felix Web Console | High | Certain | `aem`, `adobe`, `default-credentials`, `cms` |
+| `active-aem-cloudsettings-injection` | AEM Cloud Settings Node Write / EL Injection | BulkImportConfigServlet pre-auth node write (CVE-2025-54246) and the EL injection it enables (CVE-2025-54247/54248), proven with a benign marker / `7*7` read-back | Critical | Firm | `aem`, `adobe`, `el-injection`, `rce`, `cms` |
+| `active-aem-xss` | AEM Reflected XSS | Reflected XSS in AEM-specific sinks (childlist selector, CRXDE setPreferences, DAM merge-metadata, WCM contentfinder) with headless popup confirmation | High | Firm | `aem`, `adobe`, `xss`, `cms` |
+| `active-aem-ssrf` | AEM SSRF-Capable Proxy Servlet Exposure | Reachable AEM proxy/fetch servlets known for SSRF (ContentInsight proxy, opensocial/shindig, SalesforceSecretServlet, accesstoken/verify) — surface detection, no OAST fired | Medium | Tentative | `aem`, `adobe`, `ssrf`, `cms` |
+| `active-aem-oob-injection` | AEM Blind SSRF / XXE (Out-of-Band) | Out-of-band probes for the AccessTokenServlet full-read SSRF (CVE-2025-54249) and CRX Package Manager blind XXE (CVE-2025-54251), confirmed by collaborator callback | High | Firm | `aem`, `adobe`, `ssrf`, `xxe`, `oob`, `cms` |
+| `active-aem-xxe` | AEM Adaptive Forms XXE | XML external-entity processing in Adaptive Forms `guideContainer` internalsubmit (CVE-2019-8086) via an exploit-free internal-entity expansion proof | High | Firm | `aem`, `adobe`, `xxe`, `cms` |
+| `active-aem-rce-surface` | AEM RCE-Capable Surface Exposure | Exposed AEM code-execution surfaces (Groovy Console, ACS Fiddle, Forms GetDocumentServlet, WebDAV PUT) — detection only, no exec/write payload sent | Critical | Firm | `aem`, `adobe`, `rce`, `cms` |
+
+#### SaaS Platforms (Salesforce / ServiceNow / Power Pages)
+
+Each family gates on a live per-vendor fingerprint, pairs a catch-all negative control with the positive, and confirms across multiple rounds.
+
+| Module ID | Name | Description | Severity | Confidence | Tags |
+|---|---|---|---|---|---|
+| `active-salesforce-aura-object-exposure` | Salesforce Aura Guest Object Enumeration | An Experience Cloud Guest user can invoke the Aura `getConfigData` action and enumerate accessible SObjects (incl. custom `__c`) — an over-permissive Guest profile | Medium | Firm | `salesforce`, `aura`, `lightning`, `info-disclosure` |
+| `active-salesforce-aura-record-exposure` | Salesforce Aura Guest Record Exposure | Unauthenticated read of SObject records (User, Contact, Case, Lead, custom `__c`) through the Aura `getItems` action | High | Certain | `salesforce`, `aura`, `lightning`, `idor`, `info-disclosure` |
+| `active-salesforce-aura-apex-execution` | Salesforce Aura Guest Apex Execution | An unauthenticated Guest user can invoke `@AuraEnabled` Apex via `ApexActionController.execute` — the pivot for guest-driven SSRF, DML, and exfiltration | High | Firm | `salesforce`, `aura`, `lightning`, `apex`, `ssrf` |
+| `active-salesforce-lightning-debug-mode` | Salesforce Lightning Debug Mode Enabled | A Lightning/Experience Cloud site served in an Aura debug mode (`PRODDEBUG`/`DEV`/`JSTESTDEBUG`) leaking un-minified code and backend stacktraces | Medium | Firm | `salesforce`, `aura`, `lightning`, `debug`, `info-disclosure` |
+| `active-servicenow-widget-data-exposure` | ServiceNow Public Widget Data Exposure | Unauthenticated read of arbitrary ServiceNow tables (`sys_user`, `incident`, `cmdb_ci`, attachments, OAuth) via the public Simple/Unordered List widgets | High | Certain | `servicenow`, `idor`, `info-disclosure`, `api` |
+| `active-servicenow-kb-widget-exposure` | ServiceNow Knowledge Base Widget Exposure | Unauthenticated read of KB article contents via the public KB Article Page widget (not covered by the 2023 ACL hardening — KB access is gated by User Criteria, not ACLs) | High | Certain | `servicenow`, `idor`, `info-disclosure`, `api` |
+| `active-powerpages-dataverse-exposure` | Power Pages Dataverse Web API Data Exposure | Unauthenticated read of Microsoft Dataverse tables (contacts, accounts, leads, cases, custom) via a Power Pages portal's `/_api/` Web API | High | Certain | `powerpages`, `dataverse`, `idor`, `info-disclosure`, `api` |
+
+#### Model Context Protocol (MCP)
+
+Audited against OWASP; every active probe gates on a reachable MCP endpoint (`passive-mcp-endpoint-detect`).
+
+| Module ID | Name | Description | Severity | Confidence | Tags |
+|---|---|---|---|---|---|
+| `active-mcp-server-probe` | MCP Server Probe | Probes for exposed MCP servers, enumerates tools, and attempts unauthenticated invocation | High | Firm | `mcp`, `api-security`, `misconfiguration` |
+| `active-mcp-tool-fuzz` | MCP Tool Argument Fuzzer | Fuzzes every enumerable MCP tool's arguments for OS command injection, LFI, SSRF (OAST), and prompt injection | High | Firm | `mcp`, `rce`, `lfi`, `ssrf`, `injection` |
+| `active-mcp-resource-fuzz` | MCP Resource URI Fuzzer | Probes `resources/read` with `file://`, cloud-metadata, path-traversal, and OAST SSRF payloads | High | Firm | `mcp`, `lfi`, `ssrf`, `path-traversal` |
+| `active-mcp-prompt-fuzz` | MCP Prompt Argument Fuzzer | Fuzzes `prompts/get` arguments for SSTI, command injection, and reflective prompt injection | High | Firm | `mcp`, `ssti`, `rce`, `prompt-injection` |
+| `active-mcp-completion-enum` | MCP Completion Enumeration | Uses `completion/complete` to leak valid resource URIs and prompt argument values | Medium | Firm | `mcp`, `info-disclosure`, `enumeration` |
+| `active-mcp-method-enum` | MCP JSON-RPC Method Enumeration | Wordlist enumeration of undocumented JSON-RPC methods on MCP servers | Medium | Firm | `mcp`, `enumeration`, `info-disclosure` |
+| `active-mcp-session-checks` | MCP Session Hardening Checks | Tests `Mcp-Session-Id` entropy, attacker-supplied SID acceptance (fixation), and post-handshake reuse | Medium | Firm | `mcp`, `session`, `auth-bypass` |
+| `active-mcp-batch-abuse` | MCP JSON-RPC Batch Abuse | Tests JSON-RPC batch handling: a smuggled `tools/call` inside an `initialize` batch | High | Firm | `mcp`, `auth-bypass` |
+| `active-mcp-origin-rebinding` | MCP Origin / DNS-Rebinding Check | Verifies an MCP server enforces Origin validation on streamable HTTP transports | High | Firm | `mcp`, `dns-rebinding`, `origin` |
+| `active-mcp-tool-definition-drift` | MCP Tool Definition Drift | Detects MCP servers serving mutating, non-deterministic tool definitions (rug-pull risk) | Medium | Tentative | `mcp`, `rug-pull`, `integrity` |
+| `active-mcp-dos-amplification` | MCP DoS Amplification | An unbounded oversized `ping` batch processed with no size or rate limit | Medium | Firm | `mcp`, `dos`, `rate-limit` |
+
 ---
 
-## Passive Modules (96)
+## Passive Modules (109)
 
 Passive modules analyze existing request/response pairs without sending new traffic.
 
@@ -346,6 +398,13 @@ Passive modules analyze existing request/response pairs without sending new traf
 | `passive-sourcemap-detect` | Sourcemap Exposure | Exposed JavaScript sourcemaps via SourceMappingURL references | Low | Firm | `info-disclosure` |
 | `passive-sensitive-url-params` | Sensitive URL Params | Passwords, tokens, API keys passed in URL query parameters | Medium | Firm | `info-disclosure` |
 | `passive-content-type-mismatch` | Content Type Mismatch | Content-Type/body mismatches enabling MIME confusion attacks | Low | Firm | `info-disclosure` |
+
+### Source & Supply-Chain Analysis
+
+| Module ID | Name | Description | Severity | Confidence | Tags |
+|---|---|---|---|---|---|
+| `passive-js-beautify` | JavaScript Beautifier | Unminifies and unpacks bundled first-party JS into readable, module-annotated source (embedded jsscan/webcrack, no `eval`); rewrites the stored JS record so downstream analysis reads clean source | Info | Certain | `javascript`, `beautify`, `deobfuscation`, `source-analysis` |
+| `passive-dependency-confusion` | Dependency Confusion Candidate | Flags scoped npm package names referenced in first-party JS that are left unclaimed (404) on the public registry | Suspect | Tentative | `dependency-confusion`, `supply-chain`, `source-analysis`, `npm` |
 
 ### Security Headers & Configuration
 
@@ -419,6 +478,10 @@ Passive modules analyze existing request/response pairs without sending new traf
 | `passive-drupal-fingerprint` | Drupal Fingerprint | Fingerprints Drupal CMS indicators | Info | Firm | `drupal`, `php`, `fingerprint` |
 | `passive-joomla-fingerprint` | Joomla Fingerprint | Fingerprints Joomla CMS indicators | Info | Firm | `joomla`, `php`, `fingerprint` |
 | `passive-wp-fingerprint` | WordPress Fingerprint | Fingerprints WordPress CMS indicators | Info | Firm | `wordpress`, `php`, `fingerprint` |
+| `passive-aem-fingerprint` | AEM Fingerprint | Identifies Adobe Experience Manager (Sling/CRX/Granite) from headers, cookies, and body markers, and gates the `aem-*` active family | Info | Certain | `aem`, `adobe`, `cms`, `fingerprint` |
+| `passive-salesforce-fingerprint` | Salesforce Experience Cloud Detection | Identifies Salesforce Experience Cloud / Lightning (Aura) sites and gates the `salesforce-*` active family | Info | Certain | `salesforce`, `aura`, `lightning`, `fingerprint` |
+| `passive-servicenow-fingerprint` | ServiceNow Detection | Identifies ServiceNow instances (`glide_*` cookies, `g_ck` / `window.NOW` markers) and gates the `servicenow-*` active family | Info | Certain | `servicenow`, `fingerprint` |
+| `passive-powerpages-fingerprint` | Microsoft Power Pages Detection | Identifies Microsoft Power Pages / Power Apps portals (Dataverse-backed) and gates the `powerpages-*` active family | Info | Certain | `powerpages`, `dataverse`, `microsoft`, `fingerprint` |
 
 ### API & Protocol Analysis
 
@@ -428,6 +491,9 @@ Passive modules analyze existing request/response pairs without sending new traf
 | `passive-graphql-introspection-detect` | GraphQL Introspection Detect | Detects enabled GraphQL introspection | Medium | Certain | `api`, `graphql` |
 | `passive-grpc-web-detect` | gRPC-Web Detect | Detects gRPC-Web traffic patterns | Info | Firm | `api` |
 | `passive-endpoint-classifier` | Endpoint Classifier | Classifies endpoint types (API, auth, admin, static) | Info | Tentative | `api` |
+| `passive-mcp-endpoint-detect` | MCP Endpoint Detect | Detects Model Context Protocol (MCP) server endpoints from HTTP responses (gates the `mcp-*` active family) | Medium | Firm | `mcp`, `api-security` |
+| `passive-mcp-description-injection` | MCP Tool/Prompt Description Injection | Prompt-injection imperatives, bidi/zero-width unicode, and base64 payloads inside MCP tool/prompt descriptions | High | Firm | `mcp`, `prompt-injection`, `supply-chain` |
+| `passive-mcp-dangerous-tool-exposure` | MCP Dangerous Tool Exposure | Inventories MCP tools whose names expose high-impact capabilities (code exec, file write/delete, outbound fetch, raw SQL, secret access) | Low | Firm | `mcp`, `excessive-permissions`, `api-security` |
 
 ### Security Headers & Policy
 

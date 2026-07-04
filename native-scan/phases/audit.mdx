@@ -14,13 +14,13 @@ The `dynamic-assessment` phase (formerly `audit`) is the scanning layer that sen
 HttpRequestResponse (from any source)
   │
   ▼
-┌──────────────────────────────────────────────────┐
-│  Executor (worker pool)                           │
-│  1. Fetch baseline response                       │
-│  2. Scope filtering + static file exclusion       │
+┌────────────────────────────────────────────────────┐
+│  Executor (worker pool)                            │
+│  1. Fetch baseline response                        │
+│  2. Scope filtering + static file exclusion        │
 │  3. Extract insertion points from request          │
 │  4. Dispatch to matching modules                   │
-└────────────────┬──────────────┬───────────────────┘
+└────────────────┬──────────────┬────────────────────┘
                  │              │
         ┌────────┘              └────────┐
         ▼                                ▼

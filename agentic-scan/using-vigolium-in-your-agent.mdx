@@ -979,7 +979,7 @@ vigolium traffic -S --db ./scan.sqlite --status 500 -n 20
 > Replay login-related requests and compare responses
 ```
 ```bash
-vigolium traffic replay login
+vigolium replay --search login
 ```
 
 **Replay and replace stored responses:**
@@ -987,7 +987,7 @@ vigolium traffic replay login
 > Replay requests to api.example.com and update stored responses
 ```
 ```bash
-vigolium traffic replay --host api.example.com --in-replace
+vigolium replay --host api.example.com --in-replace
 ```
 
 ---

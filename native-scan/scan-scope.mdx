@@ -26,7 +26,7 @@ Scopes are a bitmask. A module can declare multiple scopes (e.g., `ScanScopeRequ
                         Incoming HttpRequestResponse
                                     │
                                     ▼
-                    ┌───────────────────────────────┐
+                    ┌────────────────────────────────┐
                     │         Executor               │
                     │  (scope filtering + dispatch)  │
                     └───────┬───────┬───────┬────────┘
@@ -385,25 +385,25 @@ Content-Type: application/json
 
 ```
 ┌──────────────────┬──────────────────────────────────────────────────────────┐
-│ Scope            │ What happens                                            │
+│ Scope            │ What happens                                             │
 ├──────────────────┼──────────────────────────────────────────────────────────┤
-│ InsertionPoint   │ 5 insertion points found:                               │
-│                  │   1. ref=home           (URL_PARAM)                     │
-│                  │   2. lang=en            (COOKIE)                        │
-│                  │   3. username=admin     (JSON_PARAM)                    │
-│                  │   4. password=secret    (JSON_PARAM)                    │
-│                  │   5. Host=example.com   (HEADER)                        │
-│                  │ Each tested by all compatible modules (SQLi, SSTI, …)   │
+│ InsertionPoint   │ 5 insertion points found:                                │
+│                  │   1. ref=home           (URL_PARAM)                      │
+│                  │   2. lang=en            (COOKIE)                         │
+│                  │   3. username=admin     (JSON_PARAM)                     │
+│                  │   4. password=secret    (JSON_PARAM)                     │
+│                  │   5. Host=example.com   (HEADER)                         │
+│                  │ Each tested by all compatible modules (SQLi, SSTI, …)    │
 ├──────────────────┼──────────────────────────────────────────────────────────┤
-│ Request          │ Full request handed to each module. Tests:              │
-│                  │   - Method tampering (POST → PUT, DELETE)               │
-│                  │   - JWT in headers? Algorithm confusion                 │
-│                  │   - CSRF token present? Try removing it                 │
-│                  │   - Host header reflection                              │
+│ Request          │ Full request handed to each module. Tests:               │
+│                  │   - Method tampering (POST → PUT, DELETE)                │
+│                  │   - JWT in headers? Algorithm confusion                  │
+│                  │   - CSRF token present? Try removing it                  │
+│                  │   - Host header reflection                               │
 ├──────────────────┼──────────────────────────────────────────────────────────┤
-│ Host             │ First time seeing example.com?                          │
-│                  │   YES → sensitive file probe, CORS check, etc.          │
-│                  │   NO  → skipped entirely                                │
+│ Host             │ First time seeing example.com?                           │
+│                  │   YES → sensitive file probe, CORS check, etc.           │
+│                  │   NO  → skipped entirely                                 │
 └──────────────────┴──────────────────────────────────────────────────────────┘
 ```
 
@@ -416,21 +416,21 @@ Host: example.com
 
 ```
 ┌──────────────────┬──────────────────────────────────────────────────────────┐
-│ Scope            │ What happens                                            │
+│ Scope            │ What happens                                             │
 ├──────────────────┼──────────────────────────────────────────────────────────┤
-│ InsertionPoint   │ CreateAllInsertionPoints returns EMPTY list.            │
-│                  │ No query params, no body, no cookies.                   │
-│                  │ *** ALL insertion-point modules are SKIPPED ***         │
-│                  │ No SQLi, XSS, SSTI, or injection testing occurs.       │
+│ InsertionPoint   │ CreateAllInsertionPoints returns EMPTY list.             │
+│                  │ No query params, no body, no cookies.                    │
+│                  │ *** ALL insertion-point modules are SKIPPED ***          │
+│                  │ No SQLi, XSS, SSTI, or injection testing occurs.         │
 ├──────────────────┼──────────────────────────────────────────────────────────┤
-│ Request          │ Modules still run:                                      │
-│                  │   - forbidden_bypass: response is 403?                  │
-│                  │     Try /./admin, /admin..;/, PUT /admin                │
-│                  │   - host_header_injection: swap Host header             │
-│                  │   - path_normalization: /admin vs /Admin vs /ADMIN      │
-│                  │   - sensitive files, swagger discovery, etc.            │
+│ Request          │ Modules still run:                                       │
+│                  │   - forbidden_bypass: response is 403?                   │
+│                  │     Try /./admin, /admin..;/, PUT /admin                 │
+│                  │   - host_header_injection: swap Host header              │
+│                  │   - path_normalization: /admin vs /Admin vs /ADMIN       │
+│                  │   - sensitive files, swagger discovery, etc.             │
 ├──────────────────┼──────────────────────────────────────────────────────────┤
-│ Host             │ Same as above - runs once if host is new.              │
+│ Host             │ Same as above - runs once if host is new.                │
 └──────────────────┴──────────────────────────────────────────────────────────┘
 ```
 
@@ -443,17 +443,17 @@ Host: example.com
 
 ```
 ┌──────────────────┬──────────────────────────────────────────────────────────┐
-│ Scope            │ What happens                                            │
+│ Scope            │ What happens                                             │
 ├──────────────────┼──────────────────────────────────────────────────────────┤
-│ InsertionPoint   │ Empty insertion point list. Skipped.                    │
+│ InsertionPoint   │ Empty insertion point list. Skipped.                     │
 ├──────────────────┼──────────────────────────────────────────────────────────┤
-│ Request          │ Active: most modules skip via CanProcess() - the       │
-│                  │   default filters out .css/.js/.png/.jpg extensions.    │
-│                  │ Passive: still runs - e.g. secret_detect checks for    │
-│                  │   leaked API keys, sourcemap_detect looks for .map     │
-│                  │   references in JS bundles.                             │
+│ Request          │ Active: most modules skip via CanProcess() - the         │
+│                  │   default filters out .css/.js/.png/.jpg extensions.     │
+│                  │ Passive: still runs - e.g. secret_detect checks for      │
+│                  │   leaked API keys, sourcemap_detect looks for .map       │
+│                  │   references in JS bundles.                              │
 ├──────────────────┼──────────────────────────────────────────────────────────┤
-│ Host             │ Runs once if host is new.                              │
+│ Host             │ Runs once if host is new.                                │
 └──────────────────┴──────────────────────────────────────────────────────────┘
 ```
 
@@ -466,22 +466,22 @@ Host: example.com
 
 ```
 ┌──────────────────┬──────────────────────────────────────────────────────────┐
-│ Scope            │ What happens                                            │
+│ Scope            │ What happens                                             │
 ├──────────────────┼──────────────────────────────────────────────────────────┤
-│ InsertionPoint   │ Path segments extracted as insertion points:            │
-│                  │   1. "42"      (PATH_FOLDER)                           │
-│                  │   2. "profile" (PATH_FILENAME)                         │
-│                  │ Modules accepting path types will test these:           │
-│                  │   lfi_generic   → /api/users/../../etc/passwd/profile   │
-│                  │   ssti_detection → /api/users/{{7*7}}/profile           │
-│                  │   sqli_error    → /api/users/' OR 1=1--/profile         │
+│ InsertionPoint   │ Path segments extracted as insertion points:             │
+│                  │   1. "42"      (PATH_FOLDER)                             │
+│                  │   2. "profile" (PATH_FILENAME)                           │
+│                  │ Modules accepting path types will test these:            │
+│                  │   lfi_generic   → /api/users/../../etc/passwd/profile    │
+│                  │   ssti_detection → /api/users/{{7*7}}/profile            │
+│                  │   sqli_error    → /api/users/' OR 1=1--/profile          │
 ├──────────────────┼──────────────────────────────────────────────────────────┤
-│ Request          │ Runs normally:                                          │
-│                  │   - path_normalization: /api/users/42/../42/profile     │
-│                  │   - forbidden_bypass: if 403, try path tricks           │
-│                  │   - host_header_injection: test header reflection       │
+│ Request          │ Runs normally:                                           │
+│                  │   - path_normalization: /api/users/42/../42/profile      │
+│                  │   - forbidden_bypass: if 403, try path tricks            │
+│                  │   - host_header_injection: test header reflection        │
 ├──────────────────┼──────────────────────────────────────────────────────────┤
-│ Host             │ Runs once if host is new.                              │
+│ Host             │ Runs once if host is new.                                │
 └──────────────────┴──────────────────────────────────────────────────────────┘
 ```
 
@@ -497,22 +497,22 @@ Content-Type: application/json
 
 ```
 ┌──────────────────┬──────────────────────────────────────────────────────────┐
-│ Scope            │ What happens                                            │
+│ Scope            │ What happens                                             │
 ├──────────────────┼──────────────────────────────────────────────────────────┤
-│ InsertionPoint   │ JSON values extracted as insertion points:              │
-│                  │   1. query = "{ user(id: 1)…"  (JSON_PARAM)            │
-│                  │   2. token = "eyJhbGci..."      (JSON_PARAM)           │
-│                  │ With includeNested=true, the executor also detects     │
-│                  │   that "token" contains a Base64/JWT value and creates  │
-│                  │   nested insertion points inside it.                    │
+│ InsertionPoint   │ JSON values extracted as insertion points:               │
+│                  │   1. query = "{ user(id: 1)…"  (JSON_PARAM)              │
+│                  │   2. token = "eyJhbGci..."      (JSON_PARAM)             │
+│                  │ With includeNested=true, the executor also detects       │
+│                  │   that "token" contains a Base64/JWT value and creates   │
+│                  │   nested insertion points inside it.                     │
 ├──────────────────┼──────────────────────────────────────────────────────────┤
-│ Request          │   - jwt_vulnerability: detects JWT in body, tries      │
-│                  │     algorithm confusion and weak key attacks            │
-│                  │   - xxe_generic: if Content-Type were XML, test XXE    │
-│                  │   - prototype_pollution: inject __proto__ in JSON      │
+│ Request          │   - jwt_vulnerability: detects JWT in body, tries        │
+│                  │     algorithm confusion and weak key attacks             │
+│                  │   - xxe_generic: if Content-Type were XML, test XXE      │
+│                  │   - prototype_pollution: inject __proto__ in JSON        │
 ├──────────────────┼──────────────────────────────────────────────────────────┤
-│ Host             │ graphql_scan runs once: introspection query,           │
-│                  │   batching abuse, field suggestion enumeration          │
+│ Host             │ graphql_scan runs once: introspection query,             │
+│                  │   batching abuse, field suggestion enumeration           │
 └──────────────────┴──────────────────────────────────────────────────────────┘
 ```
 

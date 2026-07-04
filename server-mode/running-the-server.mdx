@@ -28,6 +28,9 @@ vigolium server -A
 
 # Mirror every ingested record + finding to a browsable filesystem tree
 vigolium server --mirror-fs ./mirror
+
+# Passively scan every ingested request as it arrives (no active traffic)
+vigolium server --scan-on-receive --passive-only
 ```
 
 The server listens on `0.0.0.0:9002` by default.
@@ -49,6 +52,21 @@ Every record and finding lands under `./mirror/traffic/<host>/…` and `./mirror
 <Callout icon="circle-info" color="#3B82F6" iconType="regular">
   The mirror is opt-in and server-only — CLI scans are unaffected. To produce the same tree as a one-shot export from a finished scan or the database, use `--format fs` (see [Output and Reporting](/getting-started/output-and-reporting#filesystem-fs)).
 </Callout>
+
+## Scan on Receive
+
+`-S/--scan-on-receive` runs the scanner against every ingested request as it is persisted, so forwarded Burp/proxy traffic is analyzed in place without a separate scan command:
+
+```bash
+# Full active + passive assessment on every ingested request
+vigolium server --scan-on-receive
+
+# Passive modules only — no active scan traffic is ever sent (secret detection still runs)
+vigolium server --scan-on-receive --passive-only
+```
+
+- `--passive-only` restricts scan-on-receive to **passive modules only** — the safest way to analyze forwarded traffic in place.
+- Combining `--passive-only` with `--full-native-scan-on-receive` still crawls (discovery + spidering send requests); for zero active traffic, use `--scan-on-receive` without the full-native flag.
 
 ## Authentication
 

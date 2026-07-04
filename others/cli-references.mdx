@@ -228,7 +228,7 @@ vigolium import ./scan-bundle.tar.gz
 vigolium import gs://<project-uuid>/imports/scan.tar.gz
 ```
 
-A **SQLite database input** (detected by its magic header, any extension) is a lossless, idempotent SQLite→SQLite merge: HTTP records, findings, scans, agentic scans, and OAST interactions are deduped on their natural keys, and each row keeps its original project. Re-importing the same database adds nothing the second time. The destination is the `--db` target (or the configured default database when `--db` is omitted).
+A **SQLite database input** (detected by its magic header, any extension) is a lossless, idempotent SQLite→SQLite merge: HTTP records, findings, scans, agentic scans, OAST interactions, and projects are deduped on their natural keys, and each row keeps its original project. Re-importing the same database adds nothing the second time. The destination is the `--db` target (or the configured default database when `--db` is omitted). Add `-j/--json` to print a per-table merge summary (rows inserted vs. skipped). This pairs with `scan -S --format sqlite`: fan out per-host `.sqlite` files, then merge them back into one queryable DB.
 
 ## Replay
 
@@ -269,7 +269,7 @@ vigolium replay --method GET --host api.example.com -m 'name=id,payload=1 OR 1=1
 ```
 
 - `--all` lifts the default `-n/--limit` cap (100); narrow the set with the filter flags instead. Without `-m/--mutate`, each record is re-sent verbatim.
-- Throttle with `-c/--concurrency`; cap the set with `-n/--limit`.
+- Throttle with `-c/--concurrency` (default 10); cap the set with `-n/--limit` (default 100, lifted by `--all`).
 - `-S/--stateless --db <file>` reads baselines from a standalone `.sqlite`/`.jsonl` export with project scoping off — it never writes to your project DB.
 
 ## Strategies & Phases
@@ -438,7 +438,15 @@ vigolium agent audit --source ./backend --no-preflight
 # Pull source from a cloud-storage archive, upload results when done
 vigolium agent audit --source gs://my-bucket/snapshots/repo.tar.gz
 vigolium agent audit --source ./backend --upload-results
+
+# Stateless one-shot: run into a throwaway DB and auto-render a self-contained HTML report
+vigolium agent audit --source ./backend -S
+
+# Bundle the HTML report + each ran driver's raw vigolium-results/ tree into one folder
+vigolium agent audit --driver both --source ./backend -S --output-dir ./audit-bundle
 ```
+
+`-S/--stateless` runs the whole audit into a throwaway temp DB (your main DB is untouched, mirroring `scan -S`) and, on completion, renders a self-contained HTML report from the run's findings to `vigolium-result/vigolium-audit-report.html` (override with `-o/--output`, which supports `gs://` and `{ts}`). `--output-dir <dir>` (stateless-only) additionally bundles that report **and** a copy of each ran driver's raw `vigolium-results/` tree into one folder — a single driver lands flat at `<dir>/vigolium-results/`, multiple are namespaced under `<dir>/<driver>/`. `-S` is rejected with `--interactive`. `--keep-raw` is **on by default** for the CLI (it retains the `<source>/vigolium-results/` copy); `--clean-raw` removes that source copy after the run.
 
 ### `log`: replay an agentic session
 

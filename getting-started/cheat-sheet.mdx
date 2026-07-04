@@ -1,6 +1,6 @@
 ---
 title: "Vigolium Cheat Sheet"
-description: "A one-page, copy-paste reference for the workflows you reach for most: live traffic mirroring, replaying through Burp, passive/secret scanning of forwarded traffic, importing external data, parallel fan-out, resuming, spec-driven scans, and single-request scans."
+description: "A one-page, copy-paste reference for the workflows you reach for most: live traffic mirroring, replaying through Burp, passive/secret scanning of forwarded traffic, importing external data, parallel fan-out, resuming, spec-driven scans, single-request scans, filtering to one vulnerability class or technology, triaging findings with a coding agent, reproducing an exploit, and inspecting or editing config."
 icon: "square-terminal"
 ---
 
@@ -141,13 +141,28 @@ vigolium import other-vigolium-scan.sqlite
 
 # Merge into a specific destination DB
 vigolium import other-vigolium-scan.sqlite --db team.sqlite
+
+# Merge several scans at once — pass them positionally…
+vigolium import --db combined.sqlite scan-a.sqlite scan-b.sqlite scan-c.sqlite
+
+# …or expand a glob with --glob-db (idempotent, so re-runs are no-ops)
+vigolium import --db combined.sqlite --glob-db 'scans/*.sqlite'
+
+# --glob-db also works for JSONL exports (use one format per run)
+vigolium import --glob-db '*.jsonl'
 ```
 
-If you'd rather **read** a colleague's export without merging it into your own DB, open it in place with project scoping off:
+If you'd rather **read** a colleague's export without merging it into your own DB, open it in place with project scoping off. Point `-S` at a single file with `--db`, or read across **many** files at once with `--glob-db` (they're merged into one throwaway in-memory DB, so `--glob-db` implies `-S`):
 
 ```bash
+# A single standalone export
 vigolium finding -S --db scan.sqlite
 vigolium traffic -S --db scan.sqlite
+
+# Across a whole directory of exports (.sqlite and/or .jsonl)
+vigolium finding --glob-db 'scans/*.sqlite'
+vigolium traffic --glob-db 'scans/*.sqlite'
+vigolium export --glob-db 'scans/*.sqlite' --format jsonl -o all.jsonl
 ```
 
 <Callout icon="circle-info" color="#3B82F6" iconType="regular">
@@ -279,7 +294,48 @@ pbpaste | vigolium scan-url -j
 
 ---
 
-## 9. Run only specific phases (or skip some)
+## 9. Target one vulnerability class or technology
+
+Every scan command (`scan`, `scan-url`, `scan-request`, `run`, `ingest`) accepts two module filters. Use `-m/--modules` to enable a subset by **fuzzy match on module ID/name**, or `--module-tag` to select by **tag** (repeatable, OR-combined). Both default to "all" when omitted; when you pass both, the results are **merged** (union).
+
+```bash
+# Only run the XSS modules against a single URL
+vigolium scan-url -t 'https://example.com/search?q=1' -m xss
+
+# Technology-scoped scans by tag — GraphQL, Adobe AEM, or IIS only
+vigolium scan -t https://example.com --module-tag graphql
+vigolium scan -t https://example.com --module-tag aem
+vigolium scan -t https://example.com --module-tag iis
+
+# Combine tags (OR): run every AEM or GraphQL module
+vigolium scan -t https://example.com --module-tag aem --module-tag graphql
+
+# Pin an exact module by its ID (repeatable)
+vigolium scan -t https://example.com -m graphql-scan
+vigolium scan-url -t 'https://example.com/p?id=1' -m xss-light-url-params -m sqli
+```
+
+Discover what's available before you filter:
+
+```bash
+# List modules whose id/name/description/tag matches a term
+vigolium module ls xss
+vigolium module ls aem
+
+# Dump every unique tag you can pass to --module-tag
+vigolium module ls --tags
+
+# Full descriptions + confirmation criteria for matched modules
+vigolium module ls graphql -v
+```
+
+<Callout icon="circle-info" color="#3B82F6" iconType="regular">
+  By default a module only fires when the target's detected tech stack matches it (so the GraphQL, AEM, and IIS modules stay dormant on unrelated hosts). If auto-detection misses the stack, add `--no-tech-filter` to run the selected modules regardless (this is auto-enabled by `--intensity=deep`). `-m` matches loosely (`-m xss` selects every XSS module); pass a full ID like `-m xss-light-url-params` to pin exactly one. See [Modules](/native-scan/modules-reference).
+</Callout>
+
+---
+
+## 10. Run only specific phases (or skip some)
 
 Use `--only` to run a subset of phases, or `--skip` to exclude phases from an otherwise-full scan. Both accept comma-separated phase names and aliases.
 
@@ -310,7 +366,7 @@ Canonical phase names and their accepted aliases:
 
 ---
 
-## 10. Run a JavaScript extension only
+## 11. Run a JavaScript extension only
 
 Load one or more custom JS extensions with `--ext` (repeatable) and restrict the run to the extension phase with `--only extension`, no built-in modules, just your script.
 
@@ -329,7 +385,7 @@ vigolium scan -t https://example.com --only extension \
 
 ---
 
-## 11. Content discovery only
+## 12. Content discovery only
 
 Enable the content-discovery/fuzzing phase with `--discover` and point it at a wordlist with `--fuzz-wordlist`. Add `--only discovery` to stop after discovery and skip vulnerability scanning entirely.
 
@@ -348,7 +404,7 @@ vigolium scan -t https://example.com --only discovery \
 
 ---
 
-## 12. Add custom HTTP headers
+## 13. Add custom HTTP headers
 
 Inject headers, such as auth tokens or cookies, with `-H/--header` (repeatable). Works on `scan`, `scan-url`, and `scan-request`.
 
@@ -366,7 +422,7 @@ vigolium scan -t https://example.com \
 
 ---
 
-## 13. Control scan speed & duration
+## 14. Control scan speed & duration
 
 Cap the wall-clock time with `--scanning-max-duration`, and tune throughput with `-c/--concurrency`, `-r/--rate-limit`, and `--max-per-host`.
 
@@ -391,7 +447,45 @@ vigolium scan -T targets.txt -c 100 --rate-limit 200 --max-per-host 5
 
 ---
 
-## 14. Set a custom OAST domain
+## 15. Inspect & change any config value
+
+Vigolium settings live in `~/.vigolium/vigolium-configs.yaml`. Read them with `vigolium config view` (alias for `config ls`) and write them with `vigolium config set <key> <value>` using dot-notation — no need to hand-edit the YAML.
+
+```bash
+# View everything, or filter by a substring / fuzzy key match
+vigolium config view
+vigolium config view notify
+vigolium config view database.sqlite
+
+# Filter with a glob pattern (matches the full key or any dot-segment)
+vigolium config view 'oast*'
+vigolium config view 'kno*'          # → known_issue_scan.*
+
+# Reveal redacted secrets (tokens, API keys) with --force / -F
+vigolium config view notify -F
+```
+
+Set values with dot-notation keys — the three forms below are equivalent, so you can copy a line straight out of `config view` output:
+
+```bash
+vigolium config set notify.enabled true
+vigolium config set database.driver postgres
+vigolium config set server.service_port 8080
+
+# List-valued keys take comma-separated values
+vigolium config set notify.severities high,critical
+
+# 'key = value' and 'key=value' also work (paste-friendly)
+vigolium config set 'oast.server_url = your-oast-domain.com'
+```
+
+<Callout icon="circle-info" color="#3B82F6" iconType="regular">
+  `config view` sorts keys and prints the active config file path at the bottom. Sensitive values show as `[redacted]` unless you pass `-F/--force`. `config set` validates the key and writes it back to the same file. Reset everything to clean defaults with `vigolium config clean`. See [Configuration](/getting-started/configuration) for the full key reference.
+</Callout>
+
+---
+
+## 16. Set a custom OAST domain
 
 Out-of-band callback detection (SSRF, blind RCE, OOB SQLi, etc.) uses an [interactsh](https://github.com/projectdiscovery/interactsh) server, `oast.pro` by default. Point Vigolium at your own server with the `oast.server_url` / `oast.token` config keys:
 
@@ -424,7 +518,7 @@ oast:
 
 ---
 
-## 15. Generate a static HTML report
+## 17. Generate a static HTML report
 
 Add `--format html` with `-o/--output` to render a self-contained, ag-grid HTML report. You can produce it **during a scan**, or after the fact from data already stored or imported.
 
@@ -437,6 +531,9 @@ vigolium export --format html -o report.html --report-title "Acme Q3 Scan"
 
 # From an imported audit / JSONL / SQLite, in one step
 vigolium import ./audit-output/ --format html -o report.html
+
+# One consolidated report across many standalone scan files (no import needed)
+vigolium export --glob-db 'scans/*.sqlite' --format html -o report.html
 ```
 
 Brand and filter the report with the same flags across `export` / `import`:
@@ -455,7 +552,7 @@ vigolium export --format html -o report.html \
 
 ---
 
-## 16. Notify (webhook) when a scan completes
+## 18. Notify (webhook) when a scan completes
 
 The `webhook` notify provider fires **one POST per scan** when it reaches a terminal state (completed or failed), regardless of severity, perfect for CI pipelines and dashboards.
 
@@ -485,7 +582,7 @@ notify:
 
 ---
 
-## 17. Update Vigolium
+## 19. Update Vigolium
 
 `vigolium update` re-runs the official installer to fetch the latest release binary, then refreshes the local nuclei-templates checkout used by the known-issue scan.
 
@@ -509,7 +606,7 @@ vigolium version
 
 ---
 
-## 18. Install the Vigolium Burp extension
+## 20. Install the Vigolium Burp extension
 
 The Burp extension forwards traffic you browse/proxy in Burp Suite into a running Vigolium server, so it lands in the database (and, with `--mirror-fs`, on disk) for scanning and agent triage.
 
@@ -535,6 +632,147 @@ The Burp extension forwards traffic you browse/proxy in Burp Suite into a runnin
 
 <Callout icon="circle-info" color="#3B82F6" iconType="regular">
   Pairs naturally with [section 1 (live filesystem mirror)](#1-mirror-ingested-traffic-findings-to-a-live-filesystem-tree) and [section 3 (passive/secret scan on forwarded traffic)](#3-passive-secret-scan-on-forwarded-traffic): run `vigolium server -S --passive-only --mirror-fs output-dir -A` and the extension feeds it while findings and readable request/response files appear in real time.
+</Callout>
+
+---
+
+## 21. Triage findings with a coding agent (Claude, Codex)
+
+Vigolium is built to be shelled out to by an LLM/coding agent. The `finding` and `traffic` read commands emit **compact, token-aware** output under `-j/--json` (headers kept, bodies bounded to ~1–2 KB with `body_size`/`body_sha256`/`body_truncated`, binary bodies stubbed, findings windowed to a `response_evidence` snippet), so an agent can survey dozens of findings without blowing its context window and pull full detail only for the ones worth confirming.
+
+Teach your agent to drive Vigolium by installing the **`vigolium-scanner` skill** ([github.com/vigolium/skills](https://github.com/vigolium/skills)):
+
+```bash
+# Install the skill for your agent (e.g. claude-code, codex)
+bunx skills add vigolium/skills --skill vigolium-scanner --agent <agent-name> --yes
+```
+
+A two-pass triage loop that keeps tokens in check:
+
+```bash
+# Pass 1 — cheap survey: rank many findings, only the fields you need.
+vigolium finding --min-severity high --json --compact \
+  --fields id,severity,module_id,url,matched_at
+
+# Pass 2a — deep-read one finding as a self-contained, parseable bundle
+# (finding + linked request/response embedded, bodies still bounded).
+vigolium finding --id 42 --json --with-records
+
+# Pass 2b — deep-read as Markdown (verbatim request/response in fenced http blocks,
+# plus the What/Exploit/Fix prose) — often the nicest format for an agent or a
+# human to judge a single finding. Window it with -S --compact so a big page
+# doesn't flood the context.
+vigolium finding -S --db ./scan.jsonl --id 42 --markdown --compact
+```
+
+Output-shaping flags on `finding` / `traffic` / `db ls`:
+
+| Flag | Effect |
+|------|--------|
+| `-j`/`--json` | machine-readable compact output (the entry point) |
+| `--compact` | metadata only, drop bodies — cheapest survey pass |
+| `--fields a,b,c` | project to just these top-level keys, cuts tokens hard |
+| `--with-records` | *(finding)* embed the linked HTTP records → self-contained triage bundle |
+| `--full-body` | complete decoded bodies (use when writing an exploit — see [section 22](#22-show-how-to-exploit-a-finding)) |
+| `--markdown` | render the finding with request/response in fenced `http` blocks |
+| `--min-severity high` | filter to the severities that matter |
+| `--agentic-scan <uuid>` | only findings from a given agent run (expands to the whole run tree) |
+
+<Callout icon="circle-info" color="#3B82F6" iconType="regular">
+  Under `--json`, bodies are **always** bounded regardless of `-S`. Under `--markdown`, the response is only windowed with `-S`/`--stateless` + `--compact` — against your live project DB, `--markdown` renders bodies whole. So for token-safe Markdown triage, read from a stateless export (`-S --db ./scan.jsonl --compact`). An agent run (`agent autopilot|swarm|audit`) under `--json` even prints a ready-made follow-up command in its summary: `vigolium finding --agentic-scan <uuid> --json --with-records`. Full guide: [Using Vigolium in your agent](/agentic-scan/using-vigolium-in-your-agent).
+</Callout>
+
+---
+
+## 22. Show how to exploit a finding
+
+Once a finding is confirmed, pull the exact request that triggered it, then re-fire it (mutating the payload) to build a reproducible proof-of-concept. Start by fetching the finding with full, decoded bodies so you have the complete request to work from:
+
+```bash
+# Self-contained bundle with COMPLETE bodies — everything needed to write an exploit.
+vigolium finding --id 42 --json --with-records --full-body
+
+# Or as a report-ready Markdown PoC (request/response in fenced http blocks).
+vigolium finding --id 42 --markdown > finding-42.md
+```
+
+Reproduce and iterate the payload by replaying the finding's linked record. `vigolium replay --finding-id` re-sends the request behind a finding, and `-m/--mutate` lets you change one insertion point at a time to prove exploitability:
+
+```bash
+# Re-fire the exact request that produced finding 42, human-readable summary.
+vigolium replay --finding-id 42 --pretty
+
+# Prove the injection: mutate one insertion point with your payload.
+vigolium replay --finding-id 42 --pretty \
+  -m "id=,type=query,payload=1 OR 1=1--"
+
+# Send the reproduction through Burp so you can inspect/step it manually.
+vigolium replay --finding-id 42 --proxy http://127.0.0.1:8080
+
+# Point the same request at a staging host, carrying an auth session.
+vigolium replay --finding-id 42 --pretty \
+  --target https://staging.example.com --auth-session my-session
+```
+
+If you mirrored traffic to disk ([section 1](#1-mirror-ingested-traffic-findings-to-a-live-filesystem-tree)) or used `--format fs`, each `<id>.req` file is **directly replayable**: its leading `@target <scheme>://<authority>` line names the destination, so strip line 1 to get raw HTTP you can hand to `curl`, an agent, or feed back into `vigolium replay --raw-request-file <file>` (pass the target from that first line with `-t`).
+
+<Callout icon="circle-info" color="#3B82F6" iconType="regular">
+  With the [`vigolium-scanner` skill](#21-triage-findings-with-a-coding-agent-claude-codex) installed, you can ask your agent in plain language — *"confirm finding 42 is exploitable and give me a PoC"* — and it will run the `finding` + `replay` commands above, mutate the payload, and compare responses for you. `-m/--mutate` accepts `name=…,type=…,payload=…` (or `name:type:payload`) and is repeatable; `--raw-request`/`-i` replace the whole request when you need full control. Only test targets you are authorized to assess.
+</Callout>
+
+---
+
+## 23. Run an exact set of modules (passive-only, JS beautify)
+
+[Section 9](#9-target-one-vulnerability-class-or-technology)'s `-m/--modules` is a **fuzzy** filter that only narrows the **active** modules (passive modules always stay "all"). When you want to run a **precise** set — including passive modules on their own — reach for `--module-id` (exact match against **both** the active and passive registries, repeatable) and `--passive-only`.
+
+```bash
+# Run EXACTLY these modules and nothing else (repeatable, or comma-separated)
+vigolium scan-url -S -t https://example.com --module-id js-beautify --module-id secret-detect
+vigolium scan-url -S -t https://example.com --module-id js-beautify,secret-detect
+
+# JavaScript beautify only — unminify/unpack a bundle into readable modules
+vigolium scan-url -S -t https://example.com/app.min.js --module-id js-beautify
+
+# Passive modules only — no active traffic is sent (secrets, headers, disclosure, ...)
+vigolium scan-url -S -t https://example.com --passive-only
+
+# Passive-only, narrowed to a specific passive module
+vigolium scan-url -S -t https://example.com --passive-only --module-id secret-detect
+```
+
+`-m` vs `--module-id`, side by side:
+
+| Flag | Matching | Registries it selects from | Repeatable |
+|------|----------|----------------------------|------------|
+| `-m` / `--modules` | fuzzy (substring on id/name) | **active** only (passive stays "all") | yes |
+| `--module-id` | **exact** module ID | **both** active **and** passive | yes |
+
+<Callout icon="circle-info" color="#3B82F6" iconType="regular">
+  `--module-id` requires an **exact** id — an unknown value warns (`does not match any known module`) rather than silently matching nothing, so reach for `-m` when you want loose matching. Find exact ids with `vigolium module ls <term>`. `--passive-only` and `--no-passive` are mutually exclusive (nothing would run). Available on `scan`, `scan-url`, and `scan-request`. For fuzzy `-m` / `--module-tag` filtering, see [section 9](#9-target-one-vulnerability-class-or-technology).
+</Callout>
+
+---
+
+## 24. Scan a URL and print findings to the console
+
+For a quick single-URL scan where you just want the results on screen, add `--print-finding`. After the scan it renders each finding to stdout as **Markdown** — description, matched evidence, and the raw request/response in fenced `http` blocks — exactly like `vigolium finding --markdown` ([section 21](#21-triage-findings-with-a-coding-agent-claude-codex)), with no follow-up command and nothing persisted. Pair it with `-S` (throwaway database) and `--silent` (drop the banner and progress noise) for clean output.
+
+```bash
+# Quick scan → findings printed inline as Markdown, nothing persisted
+vigolium scan-url -S -t https://example.com -m js-beautify -m secret-detect --silent --print-finding
+
+# Same, but pin the EXACT modules (--module-id also restricts passive; see section 23)
+vigolium scan-url -S -t https://example.com \
+  --module-id js-beautify --module-id secret-detect \
+  --silent --print-finding
+
+# Passive-only sweep of one URL, printed to the console
+vigolium scan-url -S -t https://example.com --passive-only --silent --print-finding
+```
+
+<Callout icon="circle-info" color="#3B82F6" iconType="regular">
+  `--print-finding` works on `scan`, `scan-url`, `scan-request`, and `run`. It prints **nothing** when the scan finds nothing, so `--silent --print-finding` yields either the findings or an empty screen — ideal for a fast triage loop. The Markdown is identical to `vigolium finding --markdown` ([section 21](#21-triage-findings-with-a-coding-agent-claude-codex)); to save it, redirect stdout (`... --print-finding > findings.md`). Enabling it routes the scan through the full runner so each finding's linked request/response is available to render, which is why it pairs naturally with `-S`.
 </Callout>
 
 ---

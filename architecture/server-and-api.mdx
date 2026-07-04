@@ -16,18 +16,18 @@ Vigolium runs as a long-lived service via `vigolium server`, a Fiber REST API th
 
 ```
                          vigolium server
-   ┌───────────────────────────────────────────────────────────┐
+   ┌─────────────────────────────────────────────────────────────┐
    │  Fiber HTTP server            :9002 (0.0.0.0 default)       │
    │    middleware: CORS → auth (Bearer) → project resolve       │
    │                                                             │
-   │  ┌─────────────┐  ┌──────────────┐  ┌───────────────────┐  │
-   │  │ Ingestion   │  │ Scan control │  │ Agent run API     │  │
-   │  │ handlers    │  │ handlers     │  │ handlers_agent.go │  │
-   │  └──────┬──────┘  └──────┬───────┘  └─────────┬─────────┘  │
-   │         └──────────┬─────┴────────────────────┘            │
+   │  ┌─────────────┐  ┌──────────────┐  ┌───────────────────┐   │
+   │  │ Ingestion   │  │ Scan control │  │ Agent run API     │   │
+   │  │ handlers    │  │ handlers     │  │ handlers_agent.go │   │
+   │  └──────┬──────┘  └──────┬───────┘  └─────────┬─────────┘   │
+   │         └──────────┬─────┴────────────────────┘             │
    │                    ▼                                        │
    │            shared Repository (SQLite / PostgreSQL)          │
-   └───────────────────────────────────────────────────────────┘
+   └─────────────────────────────────────────────────────────────┘
             ▲                                  ▲
             │ optional transparent proxy       │ vigolium ingest
             │ (--ingest-proxy-port :9003)      │ (remote client)

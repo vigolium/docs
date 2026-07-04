@@ -103,15 +103,16 @@ All scan-oriented modes support `--source` for source-aware analysis and store s
 
 ### Native Scan
 
-Deterministic, multi-phase vulnerability scanning via `vigolium scan`. Fast, modular, and repeatable, runs content discovery, browser spidering, SPA crawling, and active/passive `dynamic-assessment` phases with **251 scanner modules** (154 active, 97 passive).
+Deterministic, multi-phase vulnerability scanning via `vigolium scan`. Fast, modular, and repeatable, runs content discovery, browser spidering, SPA crawling, and active/passive `dynamic-assessment` phases with **302 scanner modules** (193 active, 109 passive).
 
 | Category | Coverage |
 |----------|----------|
 | **Injection** | XSS (reflected, DOM-based, SSR hydration), SQL injection (error-based, boolean/time-blind), NoSQL injection, SSTI/CSTI, CRLF injection, command injection, XXE/SAML, prototype pollution |
 | **Access Control** | CSRF, IDOR, authorization bypass, mass assignment, forbidden bypass, HTTP method tampering |
 | **File & Path** | LFI, path traversal, file upload flaws, directory listing, backup/sensitive file discovery, path normalization bypass |
-| **API & Protocol** | GraphQL introspection, SSRF (direct & blind), open redirect, HTTP request smuggling, JWT vulnerabilities, JSONP callback, WebSocket security, race conditions |
-| **Framework-Specific** | Spring Boot, Django, Laravel, Rails, Express, Next.js, Nuxt, Remix, ASP.NET/Blazor, Flask, FastAPI |
+| **API & Protocol** | GraphQL security suite (introspection, SQLi, IDOR/BOLA, DoS, batching), MCP server security (tool/resource/prompt fuzzing, session & origin checks), SSRF (direct & blind), open redirect, HTTP request smuggling, JWT vulnerabilities, JSONP callback, WebSocket security, race conditions |
+| **Framework-Specific** | Spring Boot, Django, Laravel, Rails, Express, Next.js, Nuxt, Remix, ASP.NET/Blazor, IIS, Flask, FastAPI |
+| **Enterprise & SaaS Platforms** | Adobe Experience Manager (dispatcher bypass, sensitive servlets, RCE-surface exposure, CVE probes), Salesforce Experience Cloud (Aura object/record exposure, guest Apex execution, Lightning debug mode), ServiceNow (widget & KB data exposure), Microsoft Power Pages (Dataverse Web API exposure) |
 | **CMS** | WordPress (XML-RPC, user enum, AJAX exposure), Drupal, Joomla, CMS installer exposure |
 | **Cloud & Infra** | Firebase (RTDB, storage, auth, functions), cloud storage listing/takeover, default credentials, web cache poisoning, CORS misconfiguration |
 | **Out-of-Band** | Blind vulnerabilities via OAST callbacks (blind SSRF, blind SSTI, OAST probes) |

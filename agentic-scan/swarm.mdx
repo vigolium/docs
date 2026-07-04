@@ -31,7 +31,7 @@ Swarm is the right mode when you want the AI to **drive the native scanner**, no
 Ten phases run in strict order. Each phase is either **native** (deterministic Go) or **AI** (LLM call via the olium engine). Most phases are conditional, they only fire when their inputs are present or the user opts in.
 
 ```
-┌────────────────────────────────────────────────────────────────────────────┐
+┌─────────────────────────────────────────────────────────────────────────────┐
 │                          swarm pipeline                                     │
 │                                                                             │
 │  [N] native-normalize ─────────────────────────────── always                │
@@ -51,7 +51,7 @@ Ten phases run in strict order. Each phase is either **native** (deterministic G
 │  [N] native-rescan ───────────────── per round, when triage requests it     │
 │         │                                                                   │
 │  [N] finalize     ────────────────── always                                 │
-└────────────────────────────────────────────────────────────────────────────┘
+└─────────────────────────────────────────────────────────────────────────────┘
 
 [A] = AI call    [N] = native Go
 ```
@@ -212,15 +212,15 @@ Triage is **off by default**. Pass `--triage` to enable.
 
 ```
    for round in 1..MaxIterations:
-       ┌──────────────────────────────────┐
+       ┌───────────────────────────────────┐
        │  query findings from DB           │  filter by severity / module
        │  (resume from last_finding_id)    │
-       └─────────────┬────────────────────┘
+       └─────────────┬─────────────────────┘
                      ▼
-       ┌──────────────────────────────────┐
+       ┌───────────────────────────────────┐
        │  triage agent (AI)                │  per finding:
        │                                   │   confirmed | false-positive | rescan
-       └─────────────┬────────────────────┘
+       └─────────────┬─────────────────────┘
                      ▼
             verdict == rescan?
               │              │

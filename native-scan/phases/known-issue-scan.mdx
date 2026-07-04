@@ -18,15 +18,15 @@ Many real-world breaches exploit publicly disclosed vulnerabilities (CVEs) that 
 Stored HTTP Records (from phases 0-4)
   │
   ▼
-┌─────────────────────────────────────────────────┐
+┌──────────────────────────────────────────────────┐
 │  Target Enrichment                               │
 │  • GetDistinctPaths() from database              │
 │  • Enrich targets with discovered paths          │
 │    (enrich_targets: true by default)             │
 │  • Or host-level only when disabled              │
-└────────────────────┬────────────────────────────┘
+└────────────────────┬─────────────────────────────┘
                      ▼
-┌─────────────────────────────────────────────────┐
+┌──────────────────────────────────────────────────┐
 │  Nuclei Template Engine                          │
 │  • CVE detection (known vulnerability checks)    │
 │  • Misconfiguration detection                    │
@@ -34,21 +34,21 @@ Stored HTTP Records (from phases 0-4)
 │  • Custom template support (templates_dir)       │
 │  • Tag-based filtering (include/exclude)         │
 │  • Severity filtering (critical → info)          │
-└────────────────────┬────────────────────────────┘
+└────────────────────┬─────────────────────────────┘
                      ▼
-┌─────────────────────────────────────────────────┐
+┌──────────────────────────────────────────────────┐
 │  Kingfisher Secret Detection                     │
 │  • Scans stored response bodies                  │
 │  • Detects API keys, tokens, credentials         │
 │  • Filters out secret_detect passive module      │
 │    to avoid duplicates in audit phase            │
-└────────────────────┬────────────────────────────┘
+└────────────────────┬─────────────────────────────┘
                      ▼
-┌─────────────────────────────────────────────────┐
+┌──────────────────────────────────────────────────┐
 │  Post-Phase Processing                           │
 │  DeduplicateFindings() groups findings with      │
 │  identical (module_id, severity, matched_at URL) │
-└─────────────────────────────────────────────────┘
+└──────────────────────────────────────────────────┘
 ```
 
 ## Configuration

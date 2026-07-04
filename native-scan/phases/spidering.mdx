@@ -24,15 +24,15 @@ RunSpider(config, recordSaver)
 └────────────────────┬────────────────────────────┘
                      │
                      ▼
-┌─────────────────────────────────────────────────┐
-│  Crawl Loop                                     │
-│  1. Pick next state (candidates + priority)     │
-│  2. Reset browser → navigate to index           │
-│  3. Replay shortest path to target state        │
-│  4. Fire unfired actions (click/hover/submit)   │
-│  5. Capture new DOM → compare → add state/edge  │
+┌──────────────────────────────────────────────────┐
+│  Crawl Loop                                      │
+│  1. Pick next state (candidates + priority)      │
+│  2. Reset browser → navigate to index            │
+│  3. Replay shortest path to target state         │
+│  4. Fire unfired actions (click/hover/submit)    │
+│  5. Capture new DOM → compare → add state/edge   │
 │  6. Repeat until termination condition met       │
-└────────────────────┬────────────────────────────┘
+└────────────────────┬─────────────────────────────┘
                      │
                      ▼
 ┌─────────────────────────────────────────────────┐
@@ -85,6 +85,14 @@ This pass is **discovery-focused, not a brute-force**, and is heavily constraine
 - **No finding is emitted** — the attempts are captured as ordinary traffic and any unlocked pages simply become more crawlable surface.
 
 The pass is **off by default** and the [native-scan runner](/native-scan/scanning-modes-overview) auto-enables it by **intensity**: `balanced` uses the minimal list, `deep` uses the full documented list. An ordinary crawl leaves it off, keeping active login attempts explicit.
+
+### Session carry-forward
+
+While crawling, the browser often clears an interstitial WAF/bot challenge (a JS or cookie challenge) or picks up session cookies. Those cleared cookies and the browser's User-Agent are **carried forward** into the subsequent discovery and active-scanning phases, so content discovery and module probes reuse the already-cleared session instead of tripping the challenge again.
+
+- On by default whenever `--spider` runs; scoped **per host** to the same host the browser visited. Disable with `--no-carry-browser-session`.
+- Respects your own `-H/--header` overrides — an explicitly supplied header always wins.
+- The User-Agent is pinned from the browser only when you haven't set a non-default UA yourself.
 
 ### Exploration Strategies
 

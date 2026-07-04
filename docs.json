@@ -32,7 +32,6 @@
             "pages": [
               "getting-started/overview",
               "getting-started/quickstart",
-              "getting-started/cheat-sheet",
               "getting-started/choosing-a-mode",
               "getting-started/native-scan",
               "getting-started/setup-agent",
@@ -40,7 +39,8 @@
               "getting-started/agentic-security-audit",
               "getting-started/web-ui",
               "getting-started/output-and-reporting",
-              "getting-started/configuration"
+              "getting-started/configuration",
+              "getting-started/cheat-sheet"
             ]
           },
           {
