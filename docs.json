@@ -116,6 +116,7 @@
               "others/cli-references",
               "others/api-references",
               "others/security-warning",
+              "others/changelog",
               "others/faq"
             ]
           }

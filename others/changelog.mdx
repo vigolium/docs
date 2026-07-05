@@ -1,0 +1,717 @@
+---
+title: "Changelog"
+description: "Release notes and version history for Vigolium"
+icon: "clock-rotate-left"
+---
+
+Every notable change to Vigolium, newest first. Each entry maps to a released
+version of the [`@vigolium/vigolium`](https://www.npmjs.com/package/@vigolium/vigolium)
+package.
+
+<Note>
+  This page mirrors [`CHANGELOG.md`](https://github.com/vigolium/vigolium/blob/main/CHANGELOG.md)
+  in the main repository, which is the source of truth. Run `vigolium version` to see
+  the build you have installed, and `vigolium update` to upgrade.
+</Note>
+
+
+<Update label="v0.2.0" description="2026-07-05">
+
+The first stable (non-beta) release, and a major expansion of detection coverage. Six new module families land — GraphQL security testing, Adobe Experience Manager (AEM), SaaS data-exposure (Salesforce / ServiceNow / Power Pages), Internet Information Services (IIS), an enlarged Model Context Protocol (MCP) suite, plus standalone dependency-confusion and JavaScript-beautification passives. Together they add 29 registered modules (22 active + 7 passive), bringing the registry to 193 active + 109 passive. Every new active family is tech-gated, fail-closed, and multi-round-confirmed to keep the false-positive floor low.
+
+### Added
+
+- **GraphQL security scanning (OWASP WSTG)** — the `graphql_scan` module gains a full phase suite backed by a new `pkg/graphqlx` library: operation-name expansion, introspection/console exposure, query batching, field-level authorization (IDOR), reflected-XSS-in-errors, boolean-based SQL injection, and denial-of-service (deeply-nested / aliased / circular queries). Every phase runs only against an endpoint confirmed to speak GraphQL (a `{ __typename }` probe returning a spec-shaped envelope, not merely the word "graphql") and confirms findings across multiple rounds.
+- **Adobe Experience Manager (AEM) module family** — 11 active + 1 passive `aem_*` modules over a shared, fail-closed `infra/aem` gate (`ConfirmAEM`): dispatcher-bypass (differential), sensitive-servlet and console exposure, QueryBuilder content discovery (surfacing `rep:password` as Critical), default credentials, CloudSettings injection, reflected XSS (headless-confirmed), SSRF, out-of-band injection, XXE (CVE-2019-8086 entity-expansion proof), and RCE, alongside a passive `aem-fingerprint`. Detection-only; every active probe is gated to a genuine AEM instance.
+- **SaaS data-exposure family (Salesforce / ServiceNow / Power Pages)** — 7 active + 3 passive modules over a shared `infra/saasprobe` gate: Salesforce Aura object/record exposure (`getConfigData` / `getItems`), Salesforce Aura guest **Apex execution** (`ApexActionController.execute` reachability, confirmed with a benign read-only managed-package method — the pivot for guest-driven SSRF/DML/exfiltration), Salesforce **Lightning debug-mode** exposure (a site served in `PRODDEBUG`/`DEV`/`JSTESTDEBUG` that leaks backend stacktraces to unauthenticated clients), ServiceNow widget and KB-article data exposure (`g_ck` + cookie, treating a `401` as *not* a finding), and Power Pages Dataverse `/_api` exposure, each paired with a per-vendor passive fingerprint. Every active probe gates on a live Aura gateway (fail-closed presence check), pairs a catch-all negative control with the positive, and confirms across multiple independent rounds.
+- **IIS module family** — `iis-shortname-discovery` gains true 8.3 short-name resolution (a Go port of the gen8dot3/checksum technique that feeds deparos content-discovery with embedded wordlists), joined by two new active modules: `iis-cookieless-source-disclosure` and `iis-extension-confusion-bypass` (`::$DATA` / trailing-dot). All IIS/ASPX-gated and multi-round-confirmed.
+- **MCP suite expansion** — two new active modules (`mcp-tool-definition-drift`, `mcp-dos-amplification`) and a new passive `mcp-dangerous-tool-exposure` extend the Model Context Protocol family audited against OWASP.
+- **`dependency-confusion` passive module** — extracts scoped npm import specifiers from first-party JS responses *only* and flags any package left unclaimed (404) on `registry.npmjs.org`. Suspect/Tentative severity, batched registry lookup via a flusher, with over-query guards (public-scope skiplist + statement-boundary regex) and fail-closed handling of any indeterminate lookup.
+- **`js-beautify` passive module** — unminifies and unpacks minified or bundled first-party scripts (React/Next/Vue SPA output) into readable source, driven by the embedded **jsscan** tool over `webcrack` (a static unpacker — no `eval`-based deobfuscation). jsscan runs as a bounded `bun` subprocess (capped at `GOMAXPROCS-2`, max 4, so a wide passive fan-out over many JS records never spawns a process per record) and returns a beautified document plus, for webpack/browserify bundles, a per-module split with recovered source paths — the jsscan `webpackExtractor` was extended in this release to reconstruct those module paths. For JavaScript responses the stored record body is rewritten in place with the beautified document (dropping `Content-Encoding`) and tagged `js-beautified` / `js-format:<format>`, so linkfinder, observed-word harvesting, and manual review all read clean source; inline `<script>` code in HTML pages is beautified into finding evidence only (`js-inline-beautified`), never rewriting the page body. A cheap Go-side pre-gate (min 500 bytes, webpack/Next/SystemJS markers or a minified average line length) avoids spawning a subprocess for tiny or already-readable scripts, results are deduped per host+path, and known third-party assets — CDN libraries and analytics/captcha/chat/payment/bot-management SDKs, matched by `jsvendor` on host, path, and content signature — are skipped unless the scan is actually targeting that vendor. Informational severity; the module cleanly no-ops when the embedded binary is unavailable.
+
+### Changed
+
+- **Version dropped its `-beta` prerelease label and jumped to a minor release** — v0.2.0 is the first stable release, reflecting the size of this coverage expansion.
+- **MCP false-positive hardening** across the existing family — method-enum negative control, batch singleton baseline, session-fixation gate, origin locality, server-probe `isError`/skip handling, and resource-fuzz OAST/metadata checks — plus expanded `mcp-description-injection` coverage.
+
+### Internal
+
+- New shared libraries: `pkg/graphqlx` (GraphQL detection, introspection, schema, and operation building) and the `infra/aem` / `infra/saasprobe` gate packages backing the AEM and SaaS families.
+- Tech-fingerprint tags added for the new gating (`aem`/`adobe`, `salesforce`/`lightning`/`aura`, `servicenow`, `powerpages`/`dataverse`) in `tech_tags.go`, published by the respective `*_fingerprint` passives.
+- The jsscan `webpackExtractor` (`platform/jsscan`) was extended to recover per-module source paths for `js-beautify`; supporting tweaks landed across the spider (`pkg/spitolas`), discovery (`pkg/deparos`), and the core executor/rate-limiter.
+
+</Update>
+
+<Update label="v0.1.47-beta" description="2026-07-04">
+
+A discovery-depth and data-portability release. The spider now fills forms with values derived from the target and the page itself (so register→login flows carry consistent identities), and — at balanced/deep intensity — sprays a short list of common credentials against *confirmed* local login forms to crawl authenticated. Separately, `vigolium import` learns to merge one vigolium `.sqlite` result database into another, `agent audit -S` can bundle its report with the raw scanner output, and `vigolium server` gains a passive-only scan-on-receive mode.
+
+### Added
+
+- **Spider response-aware form filling** — the crawler (`pkg/spitolas`) now derives form values from the target and the response instead of always using fixed placeholders: it recalls a value entered earlier in the same crawl (so a registered identity is reused at login), falls back to target-derived values (`vigolium-crawl@<domain>`, `<label>_crawl`), then to an on-page example (a field's `defaultValue` or a `datalist` option), and only then to the existing smart/fixed defaults. Passwords are never taken from the page (a strong fixed password is kept). Default-on and non-destructive — with no fill context the original behavior is preserved.
+- **Common-credential login spray on confirmed login forms** — at `balanced` intensity the spider tries a minimal list (`admin:admin`, `admin:123456`) and at `deep` the full documented short list (never a wordlist) against a login form, but *only* after confirming the form is a genuine local login (exactly one visible password + submit + in-scope action, not an external IdP) and that a bogus control pair is rejected first. On success the session cookies persist and the crawl continues authenticated. Off at `quick`/`lite` (lockout/authorization risk). Reported via `LoginCredsTried`/`LoginCredsSucceeded` on the spider result.
+- **`vigolium import` merges vigolium SQLite databases** — `import` now accepts another vigolium result database as its source (auto-detected by its SQLite magic header, so `.sqlite`/`.sqlite3`/`.db` or a bare name all work) and folds it into the destination `--db` (or the configured default). A lossless, idempotent SQLite→SQLite merge of HTTP records, findings, scans, agentic scans, and OAST interactions, deduped on natural keys — re-importing the same database is a no-op, and each row keeps its original `project_uuid`. The natural companion to `scan -S --format sqlite`: fan out per-host `.sqlite` files, then merge them back into one queryable DB. `-j` prints a per-table merge summary.
+- **`agent audit --output-dir <dir>`** (stateless-only) — bundles a `-S` run's HTML report (as `<dir>/vigolium-audit-report.html`) *and* a copy of each driver's raw `vigolium-results/` tree into one folder — one driver lands flat, several are namespaced under `<dir>/<driver>/`. A relative `-o` nests under the bundle; an absolute path or `gs://` URL escapes it; `{ts}`/`{project-uuid}` are expanded once so the report and raw copy share a directory. `-S` without `--output-dir` now nudges the operator that raw output stays under `<source>/vigolium-results/`.
+- **`vigolium server --passive-only`** — with `-S/--scan-on-receive`, restricts scanning to passive modules only (no active scan traffic; secret detection still runs) on every ingested request. Warns when combined with `--full-native-scan-on-receive`, which still crawls.
+
+### Changed
+
+- **Example blocks refreshed** — `replay`, `update`, `agent triage`, and `extensions example` now carry inline `--help` examples; the `import` examples document the new SQLite-merge source.
+
+### Internal
+
+- New `form.FillContext` (`pkg/spitolas/internal/form/fillcontext.go`, per-crawl identity memory) threads response-aware values through `getValueForInput`; `DetectedInput` gains `DefaultValue`/`DatalistOptions` harvested by the DOM-detection JS. The login spray lives in `crawler/login_creds.go` (single-flight per host, negative-control gated), driven by new `SpiderConfig.LoginCredentialAttempts`/`LoginCredentialFullList` fields that the runner sets via `loginCredsPolicy(intensity)` for the discovery and re-spider phases.
+- SQLite file detection is centralized in the new `pkg/database/detect.go` (`IsSQLiteFile`/`HasSQLiteHeader`, magic-header based); `dbimport.ImportPath` dispatches to a new `ImportSQLite` (over the existing `database.MergeSQLiteFile`) and surfaces a `MergeStats` on the import `Result`. `runner_modules.go` documents the module-slice sentinel convention (nil/empty → zero modules, `["all"]` → every module) that `--passive-only` and `--no-passive` rely on.
+- Test coverage added: `form/fillcontext_test.go`, `crawler/login_creds_test.go` (+ an `integration`-tagged end-to-end), `database/detect_test.go`, `dbimport/importer_test.go`, `agent_audit_stateless_test.go`, and a `--passive-only` server-options guard.
+
+</Update>
+
+<Update label="v0.1.46-beta" description="2026-07-03">
+
+A replay-ergonomics release. `vigolium replay` gains a bulk mode that re-sends every matching stored record through the mutation/diff engine — so an operator (or a coding agent driving vigolium) can fuzz one parameter across a whole host, or funnel all stored traffic through Burp, in a single command with streaming JSONL output.
+
+### Added
+
+- **`vigolium replay` bulk mode** — passing `--all` (or any of `--host`/`--method`/`--status`/`--path`/`--source`/`--search`/`--body`) replays *every* matching stored record instead of a single source, mirroring the `traffic --replay` filters but running each record through the full replay engine. Any `--mutate` is applied to each record that has that insertion point; without one, records are re-sent verbatim. Results stream as JSONL (one stable `replayOutput` per record) so a bad record surfaces an inline `error` without aborting the batch. Throttle with `-c/--concurrency` (default 10) and cap with `-n/--limit` (default 100; `--all` lifts it).
+- **`replay -S/--stateless --db <file>`** — replay can now read baselines from a standalone `.sqlite` or `.jsonl` export with project scoping off, matching the read semantics of `traffic`/`finding`. Every DB touchpoint in the command (record/finding lookup, `--auth-session` merge, bulk query) routes through the shared `openReadDB`/`effectiveProjectUUID` helpers.
+
+### Changed
+
+- **`replay` no longer prints the banner** — added to the banner-suppression list alongside `scan`/`run`/`traffic`, keeping JSONL output clean for piping.
+- **`traffic --replay` examples refreshed** — document stateless-export replay, method/host filtering, and `--all --with-browser`.
+
+### Internal
+
+- The single-source and bulk paths share one call shape via a new `replayRun` struct and its `one()` method; the HTTP client construction (cookie jar + `--proxy` routing), cookie-jar save, header-overlay parsing, and output-writer setup were extracted into reusable helpers (`newReplayClient`, `saveReplayJar`, `parseReplayHeaderFlags`, `openReplayOutputWriter`, `sourceFromDBRecord`). Bulk selection maps directly onto `database.QueryFilters` via `buildReplayBulkFilters`. New coverage in `replay_bulk_test.go`.
+
+</Update>
+
+<Update label="v0.1.45-beta" description="2026-07-02">
+
+A false-positive-hardening and severity-calibration release. A broad sweep stops markup-reflection, error-signature, IDOR, and differential detectors from self-triggering on echoed input, framework build artifacts, and ambiguous numeric parameters; a batch of low-signal passive detectors drops from Medium to Low/Info; and secret findings now carry a short credential-family label.
+
+### Added
+
+- **Secret findings are labelled by credential family** — `secret-detect` tags each finding with a short classification (`JWT`, `Google API key`, `reCAPTCHA site key`, `Google OAuth client ID`, or the Kingfisher rule name verbatim), rendered as a leading `[JWT]` bracket on the console line and carried in the jsonl/DB `meta.pattern` field. The console renderer picks up any module's `Metadata["pattern"]`, so it's a generic opt-in.
+
+### Fixed
+
+- **Markup-reflection oracles ignore JSON/XML-echoed payloads** — a new `modkit.IsNonHTMLReflectionContext` treats an HTML/template marker echoed inside a non-HTML response (the canonical FastAPI/Pydantic `422 application/json` validation-error echo) as a data value, not rendered markup. Applied to the reflection paths of `csti-detection`, `pdf-generation-injection`, and `ws-injection`; evaluated-result oracles (SSTI/OGNL/SQL errors) are left alone.
+- **Error-signature detectors bound their match span** — a loosely-anchored `X.*?Y` pattern could bridge two coincidental words across a large body (`Oracle.*?Driver` spanning 60 KB of a Salesforce Aura shell). The shared `modkit.MatchWithinSpan` / `MaxErrorSignatureSpan` (512 B) gate requires a compact span while still firing on a genuine short signature elsewhere. Applied to `sqli-error-based`, `insecure-deserialization`, and siblings.
+- **IDOR detectors no longer flag bare sequential integers** — `authzutil.ClassifyParam` drops the value signal for a plain sequential integer lacking both an identifier-shaped name and a resource-noun path context, so telemetry/pagination/status params (`page_number=5`, `responseStatus=200`) stop being misreported. Wired into `idor-guid` and `idor-params-detect`.
+- **Passive server-side detectors skip client build bundles** — `jsframework.IsClientBuildArtifact` skips immutable framework output (`/_next/static/`, `/_nuxt/`), where server-only constructs are compiled out, so a shared vendor chunk no longer yields one false positive per host. Applied across the Next.js/Nuxt/server-action detectors and `cache-data-leak`.
+- **Differential detectors confirm against non-determinism** — `http-method-tampering` and `race-interference` add determinism controls so a per-request token/nonce or SSR variance between legs isn't mistaken for a method-override or race divergence.
+- **Discovery extension-fuzz gating** — deparos trusts a start URL's `.aspx`/`.php`/`.jsp` suffix as a stack signal only when the URL was actually *served* as that extension (2xx/401/403, not a 3xx/404/5xx recon seed), plus a per-extension catch-all guard (two random `<nonce>.<ext>` probes) so an SPA/CDN that 200s any path isn't fingerprinted into a wrong-stack wordlist fuzz.
+- **Lower-signal passive findings recalibrated** — `oauth-facebook-detect` and `graphql-introspection-detect` → Info; `serialized-object-detect`, `jackson-deserialize-detect`, `sensitive-api-fields-detect`, `api-pagination-leak`, `auth-headers-detect` → Low; `jwt-claims-detect` now grades per-issue (hygiene → Low, `alg=none` → High); `postmessage-handler-detect`, `javascript-uri-sink`, `openredirect-params`, `input-reflection-detect`, and `unsafe-html-sink` gained value-shape/context gates.
+
+### Internal
+
+- New shared helpers `modkit.IsNonHTMLReflectionContext`, `modkit.MatchWithinSpan` + `modkit.MaxErrorSignatureSpan`, `jsframework.IsClientBuildArtifact`, the `authzutil.ClassifyParam` sequential-int gate, and `secret_detect.PatternLabel`; `format_screen.go` renders any finding's `Metadata["pattern"]` as a leading bracket. Regression tests added alongside each hardened module.
+
+</Update>
+
+<Update label="v0.1.44-beta" description="2026-07-01">
+
+A false-positive-hardening release. Path-probe exposure modules no longer confirm on their own last path segment reflected into a content route, several injection detectors no longer self-trigger on an endpoint that merely echoes the rejected payload back, and secret-detect treats copy-paste sample credentials on documentation pages as low-value.
+
+### Fixed
+
+- **Path-probe exposure modules ignore their own reflected slug** — a marker that is just the probe's last path segment (`filament` for `/filament`, `redoc` for `/<dir>/redoc`, `healthchecks-ui` for `/healthchecks-ui`) self-matched when a content/SEO route echoes the requested slug into the page (a `/topic/filament` route rendering "Filament Lenses" in the title/JSON-LD/canonical link). A new slug-reflection control probes a nonexistent sibling carrying a distinctive canary and drops the finding only when the route reflects that canary into a 200 response. Applied to **`laravel-admin-exposure`** (bare `filament`/`Filament` tokens dropped in favor of structural anchors like `filament-panels`, `/filament/assets/`, `fi-sidebar`), **`swagger-exposure`**, and **`aspnet-health-exposure`**.
+- **`struts-ognl-injection` confirms the addHeader variant via a real response header** — the `struts2-ct-ognl` payload sets `X-Struts-Test` via OGNL, but a gateway that rejects the request (415/400) commonly echoes the injected `Content-Type` verbatim into the error body and into other header values (e.g. gRPC's `Grpc-Message`), forging both `X-Struts-Test` and the baked marker with no OGNL ever running. Detection now keys on `X-Struts-Test` being a genuinely parsed **response header**, and confirmation re-injects a fresh random marker and requires it back as a real header each round.
+- **Injection detectors strip the reflected payload before matching** — a new `modkit.StripReflected` removes the injected payload from the response before signature matching, so an endpoint that merely rejects and quotes the input back (a 400 "invalid input: `<payload>`") can't self-trigger. Fixes **`insecure-deserialization`** (PHP's `O:8:"stdClass":0:{}` wire form matched the `O:\d+:"..."` error pattern) and **`xxe-generic`** (the internal-entity probe carried its own success marker as the entity value); **`nosqli-error-based`** now uses the shared helper, and the `struts-ognl-injection` arithmetic variant strips the payload as defense in depth.
+- **`secret-detect` downgrades documentation-page demo credentials** — a secret-shaped string served as rendered page content from a docs/reference/manual/CLI/tutorial route (Supabase's `supabase-demo` anon/service_role JWTs, local-dev `postgresql://postgres:postgres@…` URLs, placeholder connection strings) is almost always an illustrative sample, so it drops to **Low/Tentative**. Gated on both the route and an HTML/RSC (`text/x-component`) content type, so a JWT in a `/docs/_next/static/...` bundle or a live token in a docs-path JSON API still keeps full severity. A validated live secret always outranks this to Critical. Wired into both the passive flush and the known-issue-scan path.
+
+### Internal
+
+- New shared path-decomposition and slug-reflection helpers in `modkit/pathprobe.go`: `splitProbePath`, `PathSegmentReflected`, `SlugReflectionFP`, and a slug-reflection control folded into `MatchAndConfirmSibling` (grouped callers pass only the anchor; flat-marker callers pass every matched marker). `modkit.StripReflected` is the request-body analogue of `StripReflectedProbePath`. `secret-detect` gains `IsDocDemoSecretContext` (plus the `docRouteSegments` set and content-type gate) and threads the response `Content-Type` through its batch entries.
+
+</Update>
+
+<Update label="v0.1.43-beta" description="2026-06-30">
+
+A scope-isolation fix release. The known-issue-scan phase, dynamic-assessment, and the scan-completion summary now restrict themselves to the exact origins (scheme + host + port) actually being scanned, so records left in a shared project by prior scans of other origins no longer leak into a run's targets or counts.
+
+### Fixed
+
+- **`known-issue-scan` no longer scans origins outside the current scope** — the Nuclei and Kingfisher secret-scan legs previously pulled *every* record in the project DB, so targets/response bodies from earlier scans of unrelated origins (e.g. leftover `localhost` records in the default project) were silently scanned alongside the current target. Both legs are now restricted to the same in-scope origins `dynamic-assessment` uses; with no CLI targets/scope it falls back to a project-wide pass, matching `dynamic-assessment` semantics.
+- **Record scoping now matches scheme + host + port, not just hostname** — `dynamic-assessment`, `known-issue-scan`, spidering, discovery, and the targeted re-spider select DB records by the CLI target's full origin, so a different port on the same host left by a *prior* scan (e.g. `localhost:8080` while targeting `localhost:3000`) is no longer pulled in. Default ports are normalized (https→443, http→80) so `https://example.com` matches its stored records.
+- **In-scan discoveries are always scanned, regardless of port** — a host found during the *current* scan (a subdomain on the target's scheme/port, or a different-port service from the `--intensity deep` port sweep or a followed cross-port link) is scanned even when its origin differs from the CLI target's. Provenance is keyed on the scan's start time (records carry no `scan_uuid`), so this scan's discoveries are kept while prior scans' leftovers stay out.
+- **The "Native scan completed" summary counts only the scanned origins** — record and finding totals were previously a raw count of the *entire* database (no project filter, no host filter), inflating the summary with leftovers from prior runs. The record count is now scoped to the current project and in-scope origins; the finding count is scoped to the project and in-scope hostnames (the findings table carries no scheme/port column).
+
+### Internal
+
+- New `Repository.InScopeHosts` resolves the in-scope origins from CLI targets + scope config + DB state (single source of truth for the runner phases and the summary): an origin is in scope when its hostname passes the scope matcher AND either its (scheme, port) matches a target OR it was discovered during the current scan (records created at/after the scan start). The DB input sources gain `WithHostScopes`, and `GetDistinctPaths`/`GetRecordsWithResponseBody`/`GetReSpiderCandidates`/`CountRecordsAfterCursor` take an optional variadic `HostTarget` origin filter that is a no-op when empty.
+
+</Update>
+
+<Update label="v0.1.42-beta" description="2026-06-28">
+
+A performance and false-positive-hardening release. The CLI gains an opt-in update check, the evaluated-math and reflected-value detectors now confirm a match tracks fresh inputs instead of a fixed substring, and a broad hot-path sweep cuts allocations and blocking work across deduplication, the database, discovery, and HTML analysis.
+
+### Added
+
+- **Startup update check (`vigolium update`)** — Vigolium now checks the npm registry at most once every 24 hours (cached in `~/.vigolium/update-check.json`, 1.5s timeout, fetched in the background) and prints a one-line upgrade notice after the run when a newer `@vigolium/vigolium` is available. The notice is suppressed for `--json`, CI, non-TTY/piped output, and the `version`/`update`/`init` commands. Set `VIGOLIUM_AUTO_UPDATE=1` to silently install the new version and re-exec the original command; set `VIGOLIUM_DISABLE_UPDATE_CHECK=1` to turn the whole thing off.
+
+### Fixed
+
+- **`reflected-ssti` and `struts-ognl-injection` confirm the evaluated result tracks fresh operands** — both detectors previously matched a single hard-coded product (`1970×2024` for SSTI; a fixed constant for OGNL) appearing anywhere in the body, which collides with incidental numbers (product ids, file sizes, timestamps). Each now re-injects the winning payload with two rounds of fresh random operands and requires the newly *computed* product to appear each time. This also repairs `struts-ognl-injection`, whose hard-coded result string (`1614244871`) didn't equal the operands it claimed (`41273×39127 = 1614888671`), so genuine detections were being silently dropped — the marker is now computed, not hardcoded.
+- **`web-cache-poisoning` confirms generic header values actually reflect** — short, common probe values such as `X-Forwarded-Port: 1337` or a scheme override matched on a single coincidental substring (an asset hash, a story id). The detector now re-injects two fresh, distinct values (a random high port, a canarized scheme token) and requires each to reflect the same way before flagging.
+
+### Performance
+
+- **Lower-contention deduplication** — `DiskSet` lookups take a read lock and escalate to a write lock only for genuinely new keys, and request hashing no longer materializes per-insertion-point body copies when body hashing is off (the default), unblocking the 60+ modules that share one dedup set.
+- **Off-hot-path database writes** — DNS resolution for saved records moved to a bounded background pool (no more ~5s blocking timeouts on the write path; IP is now best-effort metadata), record dedup collapsed from a per-record `SELECT` on each worker to one batched lookup in the flush goroutine, and a new covering index makes the scan-status severity aggregation index-only.
+- **Cheaper per-request and per-module work** — `IsMediaPath`/media-class results are memoized on the request, `GetMethod`/`GetPath` scan only the request line, the tech registry serves read queries via lock-free `Peek`, the discovery enabled-module set is memoized, and the anomaly HTML extractor shares one lazily-built DOM index across its ~18 attribute checksums instead of re-walking the tree each time. Hot-path regexes and string formatting were hoisted/precompiled throughout.
+
+</Update>
+
+<Update label="v0.1.41-beta" description="2026-06-27">
+
+A finding-deduplication and false-positive-hardening release. Out-of-band (OAST) callbacks now collapse to one finding per planted payload, the secret detector ignores build-tool content-hash maps and folds repeats of a single rule, and the path-traversal / forbidden-bypass family confirms the target isn't already reachable by a plain request.
+
+### Fixed
+
+- **OAST callbacks collapse to one finding per planted payload** — a single out-of-band payload normally triggers a burst of callbacks (DNS `A` + `AAAA`, several recursive resolvers hitting the authoritative server, then the HTTP-fetch leg), and each previously became its own finding sharing one callback host. Findings are now keyed by the callback nonce and coalesced by protocol strength: duplicate or weaker callbacks fold into the existing finding, while a strictly stronger callback (the HTTP fetch confirming an earlier DNS lead) upgrades it in place. The command-injection modules also mint a **unique OAST host per breakout variant** instead of sharing one host across all payloads, so a callback pinpoints the exact shell payload that fired.
+- **`command-injection-oast` and blind-SSRF downgrade proxy-reflected host headers** — a unique OAST host placed in `X-Forwarded-Host`, `X-Forwarded-Server`, `X-Host`, `X-Original-Host`, `X-Original-URL`, or `X-Rewrite-URL` is routinely reflected by a reverse proxy into a redirect `Location` / upstream URL that the proxy (or a redirect-following client) then fetches — an outbound request with no shell or server-side SSRF involved. A shared `isProxyReflectedHostHeader` set now downgrades both the DNS and HTTP callbacks on these headers to informational, replacing the single hard-coded `X-Forwarded-Host` check; genuine parameter-based SSRF and client-IP headers (`X-Forwarded-For`, `Referer`, `Origin`, …) stay high.
+- **`secret-detect` ignores build-tool content-hash manifests** — a new structural `IsChunkHashManifestMatch` guard recognises when a fixed-width / high-entropy rule clipped its "secret" out of a webpack/Vite/rspack chunk-hash map (a minified bundle ships dozens to hundreds of identical-shape lowercase-hex hashes). A response that genuinely leaks one short hex credential carries at most a handful of unrelated hashes, never a map of them, so the match is dropped. Wired into both the passive flush and the known-issue-scan path via the shared `IsNonSecretMatch` chain.
+- **`secret-detect` folds repeats of one rule while keeping distinct secrets apart** — a new **by-rule** grouping mode collapses findings on `(module, rule_name, severity[, host])`, so one Kingfisher rule (e.g. "Looker Client ID") matching every hash in a bundle's content-hash map becomes a single finding (all values unioned on), while a genuinely different secret — an AWS key, a Slack token — keeps its own row. Distinct from the by-module mode, which would wrongly merge unrelated secrets under one finding.
+- **Path-traversal and forbidden-bypass detectors confirm the target isn't reachable cleanly** — a "clean-canonical control" now verifies that the file/route a bypass appears to reach isn't already served by a plain, un-mangled request (a public file at the web root, an app catch-all shell, or a resource that simply became public since the crawl-time `401`/`403` baseline). Added to **`path-normalization`** static traversal, **`nginx-off-by-slash`**, **`php-path-info-misconfig`**, **`cdn-object-traversal-listing`**, **`forbidden-bypass`**, and **`nextjs-middleware-bypass`**.
+
+</Update>
+
+<Update label="v0.1.40-beta" description="2026-06-26">
+
+A false-positive-hardening release. Several detectors that fired on a name or substring match now require structural proof, and the secret detector gains per-URL deduplication, two new reflection/source-code guards, and an inline matched value in the finding body.
+
+### Fixed
+
+- **`secret-detect` no longer reports public OAuth client IDs as leaked secrets** — a Google OAuth client ID (`NNNN-xxxx.apps.googleusercontent.com`) is the public half of an OAuth client, embedded in every sign-in button by design, so it now drops to **Info/Tentative**. The paired client *secret* is a separate match and keeps full severity.
+- **`secret-detect` drops JavaScript source artifacts matched out of unicode escapes** — a new structural `IsJSEscapeArtifactMatch` guard recognises when a fixed-length / high-entropy token rule clipped its match out of a `\uXXXX` / `\xXX` escape in a minified bundle (e.g. Angular's `ɵ`-prefixed exports), which is source code, not a credential. The check is body-located and conservative, so a genuine secret in the same bundle is still reported.
+- **`secret-detect` downgrades values reflected from the request** — a matched value that appears verbatim in the request URL or raw bytes (the dominant case: a Cloudflare Access application id in a `/cdn-cgi/access/verify-code/<app-id>` SSO URL echoed into the login page) is client-supplied input the server merely echoed, not a newly leaked server-held secret, so it drops to **Low/Tentative**.
+- **`secret-detect` collapses the same secret re-observed on one URL** — the same `(host, url, rule, snippet)` leak is now emitted once across the discovery / spidering / re-spider / dynamic-assessment passes (and across records in the known-issue-scan batch), so near-identical request/response copies no longer pile up as redundant Additional Evidence. Distinct secrets on a single URL (e.g. a `client_id`, `client_secret`, and `access_token` in one response) are no longer merged by the URL-keyed finding dedup — secret-detect is excluded from that pass and deduped by value instead. Every secret finding's description now ends with the matched value inline.
+- **`csrf-verify` only fires on a cross-site-forgeable request** — token enforcement is now checked only when the request is actually CSRF-able: a simple/form content type, no header-based auth (`Authorization`), and an ambient `Cookie`. A `*token*`-named field in a JSON/XML body (a CORS non-simple request that can't be auto-submitted cross-origin) is application data, not an anti-CSRF token — closing the false positive on a Cloudflare RUM beacon's JSON `siteToken`. The token-name pattern is also anchored (`\btoken\b`) so camelCase app fields like `accessToken`/`deviceToken` no longer match.
+- **`wp-user-enum` requires a per-author leak, not a generic redirect** — adds a baseline control (an author id far beyond any real account), an edge-block guard (`IsBlockedResponse` for WAF/SSO/maintenance pages), a uniformity guard (multiple `?author=N` ids collapsing to one slug is a catch-all, not enumeration), and rejection of author-id echoes (`/author/1` → `/author/1.html`), WordPress' own routes, and error/status-shaped slugs.
+- **`drupal-user-enum` rejects self-canonicalised UID echoes** — a redirect whose captured segment is just the requested id echoed back, bare or with an appended extension/selectors (e.g. AEM canonicalising `/user/1` → `/user/1.html`), is no longer mined as a leaked username.
+- **`cors-headers-detect` only flags credentialed CORS on true cross-origin reflection** — credentials enabled alongside a specific origin is now reported only when the response echoes the request's `Origin` *and* that origin is cross-origin to the target host. A fixed allow-list entry or a site reflecting its own origin (e.g. a Cloudflare RUM telemetry beacon) is the normal, safe pattern and is no longer flagged.
+
+</Update>
+
+<Update label="v0.1.39-beta" description="2026-06-24">
+
+Adds a no-database `fs` export format and a live filesystem mirror for the ingestion server, so a coding agent can investigate a scan or watch ingested traffic with `ls`/`grep`/`jq`. Also tightens the spider's `max-duration` so it can no longer run past its deadline.
+
+### Added
+
+- **`--format fs` — a flat, browsable filesystem export** — writes `<base>-traffic/` + `<base>-findings/` trees (per-host raw `.req`/`.resp.*` files, finding `.md` files cross-linked to their request, and a jq-friendly `index.json`) so a scan can be triaged with no DB. Available on `export`, `db export`, and the `scan`/`scan-url`/`scan-request`/`run` family; honors `--omit-response`.
+- **`vigolium server --mirror-fs <dir>`** (config `server.mirror_fs_path`) — mirrors every saved HTTP record and finding to a live `<dir>/traffic` + `<dir>/findings` filesystem tree as they are persisted, in addition to the database, so an external agent can read ingested Burp/proxy traffic as files in real time. Wired through new optional `Repository.OnRecordSaved`/`OnFindingSaved` callbacks that never block the DB save path; per-host id numbering resumes across restarts.
+
+### Fixed
+
+- **The spider now honors `max-duration` during in-flight browser operations** — the crawl deadline is bound onto rod's per-operation CDP timeouts (navigation, `WaitStable`, clicks, element lookups, form fills) rather than only being polled between actions, so an individual blocking browser op can no longer push the crawl far past its budget. Browser-level teardown is also bounded so a wedged browser can't hang shutdown.
+- **Spidering gains an overall phase budget ceiling** — each target still gets its full `max-duration`, but the whole phase is capped at `max-duration × min(targets, 8)`, so a large merged target list (CLI targets plus many in-scope DB hosts) can no longer stretch spidering out to `len(targets) × max-duration`.
+- **Further false-positive hardening** in the `path-normalization` traversal detector and the `cdn-object-traversal-listing`, `auth-headers-detect`, and `server-action-auth` modules.
+
+</Update>
+
+<Update label="v0.1.38-beta" description="2026-06-22">
+
+A false-positive-hardening release for the host-injection, blind-OAST, file-read, and header-leak detectors, plus a scan-resume convenience. Detectors that fired on a substring match now require structural proof, and a DNS-only command-injection callback on a forwarding header is no longer reported as a confirmed shell.
+
+### Added
+
+- **Bare `vigolium scan --resume`** — run with no other flags to auto-discover the `*.progress.json` manifest in the working directory, rebuild the original `-S -T --split-by-host -P` command from it, and relaunch — no need to re-type the full flag set. Pass `-o <prefix>` to disambiguate when several manifests exist.
+
+### Fixed
+
+- **Host-injection detectors require authority position, not a substring** — a new shared `modkit.HostReflectedAsAuthority` gate confirms the client-supplied host actually becomes the *authority* of a generated URL, rather than appearing as an incidental substring. This closes a CDN/OAuth false positive where `X-Forwarded-Host`/`Host` is reflected into a `redirect_uri=`/`continue=` query parameter of a 3xx whose authority stays the trusted IdP (nothing to poison), which a bare `strings.Contains` flagged High/Firm. Wired into **`proxy-header-trust`**, **`host-header-injection`**, **`express-trust-proxy-misconfig`**, **`web-cache-poisoning`**, and **`oauth-misconfiguration`**.
+- **`command-injection-oast` grades confidence by callback proof** — a DNS-only callback proves a value was *resolved*, not that a shell ran. An HTTP-fetch callback (curl/wget) stays **Critical/Certain**; a DNS-only callback on a genuine parameter is **High/Firm**; a DNS-only callback on a client-IP / forwarding header (`X-Forwarded-For`, `X-Real-IP`, `True-Client-IP`) is downgraded to **Low/Tentative**, since edge infrastructure resolves those header values for geo-IP/logging with no shell running. Findings also reconstruct the real planting request (the actual `;nslookup <host>` payload) via a new OAST `RecordPayload` hook.
+- **LFI / file-read modules confirm by file shape, not bare words** — a new shared `pkg/modules/shared/filesig` package requires the leaked file's real structural shape (a genuine `passwd` line, a bracketed `win.ini` section, an anchored nginx directive) with baseline subtraction, replacing bare-word markers (`server`, `location`, `root:`) that also appear in English, CSP directives, and JSON. Closes a Cloudflare 403 block-page reported as LFI. Wired into **`lfi-path-traversal`** (with a block/status gate), **`mcp-resource-fuzz`**, and **`mcp-tool-fuzz`**.
+- **`sensitive-header-leak` downgrades redirect / auth-challenge artifacts** — a token-shaped value in a `Location`/`Www-Authenticate`/`Refresh`/`Proxy-Authenticate` header, or any sensitive value on a 3xx response, is now **Info/Tentative** rather than Medium/Firm — these are login-flow navigation artifacts, not deliberate secret leaks. A hit in a genuine custom header (e.g. `X-Api-Key`) keeps full severity.
+
+</Update>
+
+<Update label="v0.1.37-beta" description="2026-06-19">
+
+Adds resumable parallel scans: a stateless `-S -T --split-by-host -P` fan-out stopped with Ctrl-C can now be picked up where it left off.
+
+### Added
+
+- **`--resume` for the stateless parallel fan-out** — `vigolium scan -S -T <file> --split-by-host -P <n>` now writes a tiny line-cursor progress manifest (`<output>.progress.json`) tracking how far the contiguous run of cleanly-completed targets reached. Re-running the same command with `--resume` skips that prefix and scans only the remainder, while the final roll-up still reflects the whole batch (previously-completed hosts are folded in from the manifest). On Ctrl-C — or a failure — the summary prints a copy-pasteable resume command. The manifest stores only a cursor plus aggregate counts, never the target list, so it stays small for huge target files; out-of-order completions under `-P` are buffered so at most a handful of in-flight targets are ever re-scanned. The progress file is also surfaced on the scan banner's `Output:` line. Scoped to the stateless fan-out — the `--db-isolate` parallel path and the single-target/sequential split path are unaffected (the latter warns that `--resume` is fan-out-only).
+
+</Update>
+
+<Update label="v0.1.36-beta" description="2026-06-18">
+
+A hotfix release for a schema-migration ordering bug that could break an upgraded database.
+
+### Fixed
+
+- **`CreateSchema` no longer aborts on a pre-existing database missing a migration-added column** — v0.1.35 added `http_records.response_norm_hash` together with an index on it (`idx_records_norm_hash`), but on a database created by an older binary the index-creation loop ran *before* the column-add migration. `CREATE INDEX` then referenced a column that did not exist yet, errored, and aborted schema init entirely — leaving the server's repository `nil` and breaking a swathe of endpoints. The index loop now runs after all `addColumnIfNotExists` migrations, so an upgraded database heals itself (adding both the column and its index) instead of failing to open. Added `schema_migration_test.go` covering the legacy-DB heal path and `CreateSchema` idempotency.
+
+</Update>
+
+<Update label="v0.1.35-beta" description="2026-06-17">
+
+A performance and false-positive-hardening release. The native-scan hot path and ingest write path shed redundant allocations and DB work, and the discovery engine's server-side extension-confirmation gate gains two catch-all guards so an SPA/catch-all gateway that bounces or echoes every guessed path can no longer confirm (and then wordlist-fuzz) a phantom stack. The workbench HTTP-records page gains a source filter and a curl export.
+
+### Added
+
+- **Workbench: source filter + curl export on the HTTP records page** — a source dropdown filter and an always-visible clear-filters button let you scope the records list by ingestion source, and a new curl export helper copies any record as a ready-to-run `curl` command. Detail-panel updates and regenerated static UI assets ship alongside.
+
+### Performance
+
+- **Fewer allocations and less DB work across the scan pipeline** — the executor now uses struct-keyed per-host claim LRUs and reuses the baseline-request hash for finding↔record links, the request builder gains a single-allocation body + `Content-Length` fast path, `modkit` reconfirm gets an allocation-free tokenizer, host rate-limit acquisition is context-aware, and many active scanners wrap the raw request directly instead of re-parsing it. On the database side, ingest writes are slimmed (metadata-only FTS index, a covering dedup index, projected scan-record column reads, batched remarks updates) and a new `DB.Optimize` refreshes query-planner stats on checkpoint/close.
+
+### Fixed
+
+- **Extension confirmation no longer trusts a path-preserving redirect** — a redirect that merely bounces a request back to the same path it asked for (`/x.php` → `/x.php` for an HTTP→HTTPS upgrade, an auth/cookie round-trip, or host/trailing-slash normalization) fires at the gateway before any handler runs, so it is no proof the server executes that extension. Because each such `Location` is per-path-distinct it also slips past the wildcard soft-404 filter, which on a catch-all/SPA gateway would otherwise let every guessed stack extension confirm — and get wordlist-fuzzed — at once. The new `redirectPreservesPath` guard withholds the extension confirmation in that case; names and paths are still harvested.
+- **Extension confirmation refuses a second, incompatible server stack** — a single application serves exactly one server-side stack family (PHP xor classic/modern ASP.NET xor Java/JSP/Struts xor ColdFusion xor CGI). The confirmation gate (`reserveExtension` + `serverStackFamily`) now checks the family under one lock: once one family is confirmed, a second incompatible one is a signal the host is answering for extensions it does not run — a catch-all/SPA gateway echoing every guessed path — so it is refused rather than fuzzed. The first family confirmed still fuzzes normally.
+
+</Update>
+
+<Update label="v0.1.34-beta" description="2026-06-16">
+
+A false-positive-hardening release for the differential and behavioral injection detectors. A new shared surface gate keeps the boolean-oracle modules off cache/CDN-fronted and large dynamic-HTML pages, every boolean-blind SQLi probe is now WAF/CDN-block aware, and curated payloads are re-confirmed with randomized operands to defeat the classic WAF `1=1`-tautology false positive. NoSQLi and default-credentials gain control/reproduction gates of their own. Also adds a repeatable `-T/--target-file` flag and a `finding --confidence` filter.
+
+### Added
+
+- **`-T/--target-file` is now repeatable** — pass it multiple times (`-T hosts-a.txt -T hosts-b.txt`) to merge several URL-list files into one run; lines from all files are read in order and concatenated. Plumbed through `scan`, `ingest`, the ingestor client, the high-level runner, and the shared input-source builder, so an ingest from preloaded stdin/`-i` still folds in any `-T` files instead of dropping them, and an `-T`-only run no longer blocks waiting on a TTY. (Internally `Options.TargetsFilePath string` → `TargetsFilePaths []string`.)
+- **`finding --confidence <certain,firm,tentative>`** — filter findings by confidence label (comma-separated), mirroring `--severity`. The `CONFIDENCE` column now also shows by default in the `finding` table and is colorized (certain→purple, firm→yellow, tentative→gray) in line with the other summary lines.
+
+### Changed
+
+- **`client-prototype-pollution` recalibrated to Medium/Tentative and gated on a reachable URL source** — the module is a static-analysis heuristic (it only verifies the URL is reachable, never that a prototype was polluted at runtime), so its blanket High/Firm verdict was overstated. Severity now tracks the evidence: a bare source pattern is **Medium**, an actual high-impact gadget (innerHTML/eval/document.write reading attacker-controllable keys) raises realistic impact to **High**, and confidence stays **Tentative** throughout. Generic "sink-only" shapes (deep-merge / recursive bracket-assignment) that a safe object clone shares with a vulnerable URL-param parser are now reported only when an attacker-controllable URL source (`location.search`/`hash`/`href`, `URLSearchParams`, …) sits within proximity of the sink, dropping benign library code (analytics serializers, script loaders, framework helpers) that merely shares the shape. Patterns that embed their own URL source still fire on the pattern alone (FN-safe).
+
+### Fixed
+
+- **Differential-oracle modules now skip unreliable surfaces** — a new shared `modkit.DifferentialSurfaceUnreliable` gate (header/size only, sends no traffic) flags a response as an untrustworthy boolean-differential surface when a cache/CDN layer fronts the origin (an `X-Cache`/`Age` cache state — a HIT can answer one probe while an origin renders the next) or when the body is a large (≥100 KiB) rendered `text/html` content page whose per-request dynamic content (ads, recommendations, rotating blocks) dwarfs any real true/false difference. The size gate is `text/html`-scoped, so JSON / auth endpoints — the real injection-oracle surface — are never affected, and a missing baseline fails open. Wired into **`sqli-boolean-blind`**, **`ldap-injection`** (the boolean pass only; the error-token pass still runs), **`ssti-detection`**, **`smart-behavior-detection`** (also a meaningful speedup — it is the slowest active module), and **`nosqli-operator-injection`**.
+- **`sqli-boolean-blind` no longer fires on WAF/CDN tautology signatures** — two long-standing false-positive classes are closed. (1) Every probe is now WAF/CDN-block aware: a blocked TRUE or FALSE branch is the *edge* reacting to a payload signature (the literal `1=1`, the `/**/`-comment evasion form), not the application's SQL logic, and it kills the pair (or the whole insertion point on a blocked baseline) — the single most common boolean-blind false positive. (2) Curated / bypass / WAF-evasion payload pairs are re-confirmed with **randomized operands** (`confirmRandomized`): the matched comparison is rebuilt with fresh random numbers while the surrounding boundary, token separator, comment terminator, URL-encoding, and evasion mutation are preserved, so a differential bound to boolean truth reproduces while one bound to the literal `1=1` token vanishes and is rejected. This defeats the textbook `Accept-Language: '/**/OR/**/1=1--` finding where a WAF's standalone `1=1`-tautology signature blocks the TRUE branch and passes the FALSE one. Header insertion points are held to the higher bar (rejected outright when operands can't be re-derived, never falling back to repeat-only confirmation), and content-negotiation request headers (`Accept`, `Accept-Language`, `Accept-Encoding`, `Accept-Charset`) — whose response legitimately varies and almost never reaches a SQL backend — are excluded from testing.
+- **`nosqli-operator-injection` boolean path hardened against scheduling and inert-surface noise** — three additions cut phantom differentials: (1) a benign, operator-free **control** value is sampled on the same interleaved cadence as the true/false probes, and if it isn't self-consistent the endpoint's per-request variance is correlated with the request schedule (round-robin upstreams, alternating cache HIT/MISS), so any true/false divergence is a scheduling artifact rather than a query boolean; (2) a surviving differential must **reproduce with a second set of always-true/always-false constants** (`9==9`/`9==8`, `4==4`/`4==5`) before it is reported, so a one-off transient (a cache miss, a momentary content variant) can't satisfy it; and (3) URL-path-segment and header insertion points are **inert-prechecked** — a benign value that returns the same page as the baseline marks a cosmetic catch-all segment or a header the app never consumes, where a boolean differential is noise. Plus the shared surface gate above.
+- **`default-credentials` confirms a login before reporting it** — the failed-login baseline is now drawn from **two** independent invalid-credential probes that must agree, proving the login surface is stable enough to trust a differential (a page with a rotating CSRF token or dynamic chrome no longer manufactures a phantom success, and a single anomalous baseline can't poison every comparison). A candidate success must then **reproduce on re-send and be materially distinct from a fresh random-invalid negative control**, so plain login-page variance isn't mistaken for authentication. WAF/CDN blocks are recognized and skipped (neither a success nor a lockout), and a success indicator that *also* appears in the failed-login body (e.g. "dashboard" on `dashboard.example.com`) is treated as page chrome rather than evidence of a login.
+- **`import` reads JSONL lines of any size** — the importer switched from `bufio.Scanner` to a growing `bufio.Reader`, so an exported `http_record` carrying a multi-megabyte request/response body on a single line no longer overflows the scanner's fixed token cap ("token too long") and aborts the import.
+- **Parallel per-target stats render under `--format sqlite`** — the `-S -T --split-by-host` parallel rollup recovered each child's record/finding counts only from a JSONL export; it now falls back to the child's standalone `.sqlite` export (opened read-only, query-only, no WAL sidecar next to the operator's artifact), so the per-target stats segment and the final Totals line still show when the operator requested `--format sqlite,html` without `jsonl`.
+
+</Update>
+
+<Update label="v0.1.33-beta" description="2026-06-16">
+
+A performance and memory-footprint release: unbounded caches across the long-lived server become bounded LRUs, SQLite WALs are kept compact, and the native-scan hot path sheds redundant allocations. Adds a standalone `--format sqlite` export, stateless reads of `.jsonl`/`.sqlite` files, and Markdown rendering for findings and traffic.
+
+### Added
+
+- **`--format sqlite`** — dumps the run's standalone DB to `<output>.sqlite` via `VACUUM INTO`; requires `-S/--stateless` + `-o`, combines with other formats, and names per-host files under `--split-by-host`. Aliases: `sqlite3`, `db`.
+- **`finding`/`traffic -S/--stateless`** — read a `--db` source (a `--format jsonl` export or standalone `.sqlite`) directly with project scoping off; nothing is written to your project DB.
+- **`finding`/`traffic -m/--markdown`** — render matched findings/records as Markdown (request/response in fenced `http` blocks) to stdout; under `-S`, `--compact` windows the response around the match.
+
+### Performance
+
+- **Unbounded maps → bounded LRUs across the long-lived server** — the per-host run-once claims, storage-host set, OAST nonce tracker, per-host Tech/WAF/ContentClass registries, the ParameterFinding dedup registry, and the transcript-sequence counter were all process-lifetime leaks in a scan-on-receive server. Each is now a capped LRU; eviction only forgets a cached hint or run-once claim, so at worst a stale entry is re-derived/re-fired once.
+- **SQLite WAL kept compact** — a background TRUNCATE checkpointer (every 5m) plus per-connection `wal_autocheckpoint`/`mmap_size`/`temp_store` tuning and an on-open checkpoint stop the ingest DB's WAL ballooning over a multi-day run; reader pool raised 4 → 8.
+- **Disk-backed dedup set bounded** — `DiskSet` caps its keyspace (default 1M keys, batched eviction) so a process-lifetime dedup manager can't grow LevelDB without limit. FN-safe: an evicted fingerprint is re-processed once and re-deduped at the DB layer.
+- **Native-scan hot path allocations cut** — single-allocation insertion-point splice (was N reallocs/fuzz), baseline response composed into one pooled buffer, body hashed only when stubbed/truncated, and `--with-records` batch-loads linked records in one query (no N+1).
+- **Bounded memory on big scans/audits** — the re-spider phase pages candidates body-free instead of holding 5000 bodies at once; the coverage probe and code-audit query metadata-only (skip `raw_request`/`raw_response` BLOBs) when they need only method/URL.
+- **Fewer doomed goroutines/writes** — module dispatch fast-exits an already-cancelled context; `DBInputSource` coalesces a run of acks into one cursor UPDATE; the disk-queue Ack deletes the record instead of rewriting it; the server sheds the heavy `Result`/`SwarmResult` blobs from the status map once persisted.
+
+### Fixed
+
+- **`rails-info-exposure` / `rails-sensitive-files` blank-body catch-all FPs** — a blank `200` on `/up` or `/tmp/local_secret.txt` (a catch-all/CDN placeholder) slipped past the soft-404 fingerprint and was reported as a health check / leaked secret. The markerless paths now reject an empty body, and the local-secret case requires an anchored hex token.
+- **Host rate-limiter no longer evicts an in-flight host** — forced-cap eviction could pick a host with acquired-but-not-released slots, orphaning its semaphore accounting; it now evicts the least-recently-used *idle* entry (or briefly exceeds the soft cap if all are busy).
+- **Disk-queue segment data race** — `tryDequeue`/`Ack` ranged over `q.segments[:]`, aliasing the backing array mutated concurrently by segment create/cleanup; they now copy the slice under the lock.
+- **Combined audit keeps running after client disconnect** — a dropped SSE stream during a `driver=auto/both` run left the multi-hour subprocess running against nobody; the SSE pump now cancels the run on first write error.
+
+</Update>
+
+<Update label="v0.1.32-beta" description="2026-06-15">
+
+### Changed
+
+- **`balanced` intensity now runs the `intrusive` tier** — `balanced` resolves to the `intrusive` ceiling instead of `heavy`, so the default scan runs the full module battery (including `internal-header-probe`). The aggressiveness-tier gate now only trims modules on a `quick`/`lite` pass; `balanced` and `deep` share the same tier ceiling (`deep` still differs via its other deep-only behaviors). `internal/runner/module_tiers.go`.
+
+</Update>
+
+<Update label="v0.1.31-beta" description="2026-06-13">
+
+A reachability-and-recon release: an alternate-port sweep that finds web services running off the standard ports, TLS-certificate recon that mines self-signed and private-CA certs for subdomains and internal names, and default-credential checks that try documented vendor defaults against confirmed third-party consoles. It also makes the native scan intensity-aware — modules now run up to an aggressiveness tier set by `--intensity`, passive analyzers skip responses of the wrong body shape, and value-only-different GET URLs collapse to a few representative samples.
+
+### Added
+
+- **Discovery mines the JS that earlier phases already collected** — the discovery crawl previously only ran jsscan/linkfinder on JavaScript it fetched itself, so a framework bundle the browser spider captured (e.g. a Salesforce Aura/Lightning app bundle) sat in storage unparsed and its embedded routes were never requested. Discovery now, at init, walks the stored responses and feeds every captured JS body through the same jsscan + linkfinder extraction (reusing the already-stored body — nothing is re-fetched), so endpoints that appear only as strings inside a bundle become observed paths and extracted requests. This recovers routes that only ever exist in JS — notably a Salesforce captcha iframe (`/apex/APP_Login_NewCaptcha?source=…`) whose iframe mounts only after the login form is interacted with, but whose route is a literal `src` string in the Aura bundle the spider already grabbed; the query param is preserved so the endpoint is fetched with its reflected parameter. New `extractRoutesFromStoredJS` in `pkg/deparos/discovery`.
+- **Alternate-port sweep** — a new `port-sweep` native phase (backed by `pkg/portsweep`) probes each original CLI target host for web services running off the standard ports. For every target host it TCP-connects a curated list of common alternate HTTP(S) ports (`3000`, `5000`, `8000`, `8008`, `8080`–`8083`, `8088`, `8888`, `9000`, `8443`, `9443`) concurrently, HTTP-confirms the open ones, and appends any confirmed web service to the target set *before* the ingestion/scan phases consume it, so a console on `:8443` or a dev server on `:3000` flows through the normal pipeline instead of being missed. A honeypot guard discards a host whose ports are nearly all open with near-identical responses (an all-ports-open tarpit; open/probed ratio ≥ `0.7`). Bounded by a 512-host cap (excess hosts announced, never silently dropped) and per-host/outer-host concurrency limits. Off by default and auto-enabled at `--intensity deep` or under `--follow-subdomains`; the port list is overridable per-run with `--port-sweep-ports` and configurable under `scanning_strategy.port_sweep` (`ports`, `concurrency`, `dial_timeout_ms`, `http_timeout_ms`, `honeypot_ratio`).
+- **TLS certificate recon (`tls-cert-recon`)** — a new active per-host module completes a single TLS handshake per host and reads the leaf certificate for recon value without sending any application traffic. Certificates from recognized public CAs and CDNs (Let's Encrypt, DigiCert, Cloudflare, …) are ordinary and skipped; what remains — self-signed certificates and ones from a private or internal CA — is flagged (INFO/Certain) as a likely forgotten staging/admin/appliance host. From those certs it harvests Subject Alternative Names: sibling subdomains under the target's registrable domain (widening the surface) and internal-only names such as RFC1918/loopback IPs and `.local`/`.internal`/`.corp` hostnames (leaking internal naming and network layout).
+- **Default-credential checks on confirmed dashboards** — once `dashboard-exposure` actively confirms a third-party console is present, it now submits that product's vendor-documented default credentials against the confirmed context path and escalates a working pair to a **Critical/Certain** default-credentials finding. Only documented default pairs are tried (never a brute-force wordlist, so it can't trigger account lockout), and every attempt is **negative-control gated** — a random credential pair must be rejected by the success matcher first, so a login form that "succeeds" on anything can't produce a false positive. The check runs once per `(host, product)`, draws from the shared per-host probe budget, and is driven by a new nuclei-template-derived `dashboardsig.LoginProbe` (per-product login path, request body, credential pairs, and success matcher). Shipped for 8 products: Grafana, GitLab, SonarQube, RabbitMQ, MinIO, Open WebUI, Apache Superset, and Node-RED. The module gains a `default-login` tag.
+
+### Changed
+
+- **`vigolium update` no longer prompts for confirmation** — the interactive "type 'yes' to confirm" gate (and its `-F/--force` bypass) was removed, so `update` proceeds directly to fetching the binary and nuclei templates.
+- **Per-asset findings collapse to one finding per host** — the default finding-grouping `by_module` set (formerly just `sourcemap-detect`) now covers the source-analysis and per-response hygiene modules that fire once per JS bundle or page, so a single domain reports one finding apiece instead of one per asset. Added: `unsafe-html-sink`, `dom-xss-taint`, `dom-xss-detect`, `javascript-uri-sink`, `insecure-token-storage`, `cookie-security-detect`, and the framework/build/SSR audit family (`build-misconfig-detect`, `client-auth-guard`, `cache-data-leak`, `nextjs-config-audit`, `nextjs-dynamic-param-audit`, `nuxt-config-audit`, `nextauth-config-audit`, `server-action-{auth,bind-audit,input-audit}`, `server-only-boundary-audit`, `ssr-data-exposure`, `ssr-hydration-xss`, `remix-loader-exposure`). Grouping stays **per-host** (a finding on `a.example.com` never merges with one on `b.example.com`) and **per-severity**, and the merged survivor keeps every affected URL under `matched_at` (capped by `max_urls`, default 50). Secret-bearing modules such as `env-secret-exposure` are deliberately excluded — each distinct leaked value is signal, so they remain value-grouped (identical secrets collapse, different ones stay separate). Applies to both the stored/reported findings and the live console rollup; override via `known_issue_scan.group_by_value.by_module`.
+- **`--intensity` now gates modules by an aggressiveness tier** — a module can declare a single tier tag in its `Tags()` advertising how expensive/aggressive it is (`light` recon/fingerprinting, `moderate` standard active testing, `heavy` blind/timing probes, `intrusive` rare high-side-effect checks), and the resolved intensity sets a ceiling on what runs: `quick` runs up to **moderate** (drops the heavy blind/timing probes and the intrusive checks for a fast pass), `balanced` runs up to **heavy** (the default — the full active battery minus intrusive, matching legacy coverage), and `deep` runs **everything**. A module with no tier tag (`TierAlwaysOn`) is ranked strictly below every tier and so is never excluded — core detectors like stored / DOM-confirm XSS run at every intensity. The gate is applied symmetrically to active and passive modules, and the deferred module IDs are logged (never silently dropped). New `pkg/modules/tier_tags.go` (`ModuleTierRank`) plus the runner-side ceiling in `internal/runner/module_tiers.go`.
+- **Passive content-class gating** — a passive module that structurally requires a particular response body shape is now skipped on a record whose response is a confirmed *different* structured class, so an analyzer that could produce nothing on that body isn't run against it. Currently only the UI-redress modules opt in (`clickjacking` / `ui-redress` require an HTML document), via a tiny conservative tag→class map plus an explicit `ContentClassAware` interface. The gate **fails open** on unknown/`text` bodies, on content-agnostic modules, and when the tech filter is disabled (`--no-tech-filter`, or `deep`); the per-host root-page classification from heuristics seeds the registry and is consulted only when a record's own `Content-Type` is indeterminate. Passive-only by design — skipping a passive analyzer that can't parse the shape it was given can't hide a finding, whereas active modules often probe a host independently of the triggering record's body and so are intentionally left ungated. New `pkg/modules/content_class_tags.go`.
+- **Param-shape GET coalescing in dynamic assessment** — the risk-prioritized dynamic-assessment input source now collapses redundant fan-out over URLs that differ only in query values (e.g. `/search?q=1..N`): GET records sharing a `(host, path, query-param-name-set)` shape are reduced to at most a few value-distinct representatives (default **3**, `dynamic_assessment.max_param_shape_samples`). It walks the already-risk-prioritized snapshot so the highest-value records claim the per-shape sample slots first. Only query-param-bearing GETs coalesce — other methods, body-bearing requests, and param-less GETs are always kept, so a request whose full shape isn't visible from the URL alone (e.g. a POST body) is never dropped. Records stay in the database; only this scan's iteration list is pruned, and the scan cursor still advances past coalesced-away records so they aren't re-scanned in a later feedback round. `0`/unset uses the built-in default of 3; a negative value disables coalescing. New `pkg/database/param_shape.go`.
+
+### Fixed
+
+- **Spidering now drives the login flow it used to abandon on SPA portals** — an unauthenticated visit to a heavy enterprise SPA (Salesforce Lightning, Angular portals, …) routinely bounces to a landing page whose "Log on" button kicks off an OAuth/SAML/SSO navigation chain (`… /oauth2/authorize → /idp/login → SAML → vendor login`). The browser crawler captured a half-rendered shell and never entered the flow, so its entire URL set — the OAuth authorize hop, the SAML redirect, the vendor login page and its own data XHRs — was missed. Three additive priming steps fix it, mirroring the existing service-worker / iframe priming: (1) **SPA bootstrap settle** waits for the landing's sequential bootstrap XHRs (config → region → i18n → feature-flags → content) to go network-idle *before* the state is snapshotted and clickables are extracted (bounded by `SPASettleTimeout`, default 12s), so the real UI — including the login CTA and the deep data calls — has actually rendered; (2) **consent-overlay dismissal** clicks cookie-consent "accept" controls (OneTrust et al., piercing shadow DOM) so the overlay neither blocks the render nor masks the CTA; (2b) **auto-scroll** drives the landing through its full height (window + the largest scrollable container, dispatching scroll events with a pause per step) so content and assets that load only as sections enter the viewport — IntersectionObserver-gated sections, infinite-scroll data fetches, deferred hero/bundled-media images — are actually requested and captured (`AutoScroll`, default on); (3) **login-CTA priming** finds the best login call-to-action and drives it once per crawl. Detection is shadow-DOM-piercing and tag-agnostic — it scores not just `<a>`/`<button>` but any genuinely clickable element (web-component apps render the real "Log on" as a `<div>`/custom element with a JS click handler), by visible label / auth-endpoint href / login-ish attributes, excluding logout controls and **non-interactive `aria-hidden`/disabled loading-skeleton placeholders** (a SPA shows one before the real button hydrates). It clicks the top candidates in turn — a real CDP click for true buttons, a synthetic (bubbling) click for web-component divs — until one actually changes the URL (it waits for the navigation rather than racing ahead and cancelling it), then lets the destination login page run its own XHRs (Aura `/aura`, `/c/*.app`, the captcha iframe) and returns to the landing so the normal crawl resumes. Bounded so a landing whose button never becomes interactive can't drain the crawl budget. All steps are on by default (`DismissConsent`, `LoginCTAPriming`, `SPASettleTimeout`, `AutoScroll`). The runner surfaces a `drove login CTA into the auth flow` line only when a click actually enters the flow. Two further pieces make this hold up on real enterprise portals: (4) **the spider now presents as a normal browser** — it strips `HeadlessChrome` from the User-Agent (keeping the real Chrome version) and pins `Accept-Language: en-US` (+ `--lang=en-US`); many SPAs gate their locale routing and content loading on a real UA + language and otherwise render only a blank shell that never routes to its localized landing (e.g. `/us/en-us/about`), so the content and login button never appear; and (5) **the login-CTA drive runs before form-filling**, because a cookie-consent preference form (OneTrust et al.) can carry dozens of controls that the form filler spends the per-element timeout on apiece, which would otherwise exhaust the spider budget before the login flow is ever driven. Detection also waits specifically while a login control is still hydrating (so a slow SSO-bounce landing is given time) but returns immediately on pages with no login affordance. With these, a start URL that bounces through an SSO portal to a localized content landing and back into a Salesforce-Lightning login now captures the whole chain end-to-end (portal data XHRs, `oauth2/authorize`, `idp/login`, the SAML `idp/endpoint/HttpRedirect`, `aura`, `c/*.app`). (Remaining gap: a captcha iframe that a vendor login mounts only after the form is interacted with isn't harvested by passive crawling.)
+- **Redirect hops are now captured, not overwritten** — the browser network capture reused a single in-flight entry per CDP request id, so each `3xx` hop in a redirect chain was silently replaced by its target and lost. The intermediate URLs an SSO chain is *made of* — an OAuth `/oauth2/authorize`, a SAML `/idp/endpoint/HttpRedirect?SAMLRequest=…` that only ever appears as a redirect — therefore never reached the records table even when the browser requested them. `onRequestWillBeSent` now finalizes and emits the previous hop (with its redirect-response status/headers) before recording the redirect target, so every step of a redirect/auth chain is captured.
+- **NoSQLi false positives cut hard; both modules normalized to High/Tentative** — `nosqli-error-based` flagged a minified pdf.js worker (served `application/javascript`) as a Critical MongoDB injection: a generic operator/expression token baked into the bundle matched a Mongo pattern, and an empty captured baseline disabled the present-without-payload guard. Several confirmation layers were added: (1) static assets / code bundles are skipped outright — by both captured content-type and URL path (`IsStaticAssetContentType`/`IsStaticAssetPath`, the latter extended with `.mjs`/`.cjs`), re-checked on the live fuzzed response; (2) the generic English/JS-ish patterns (`$expr`, `unrecognized expression`, `unknown operator`, `FailedToParse`) are now "weak" and believed only when an independent database/error-context marker sits **near** the match (windowed corroboration), while strong driver/class signatures still fire on their own; (3) a response-shape gate requires the body to actually look like an emitted error — a 5xx status, a JSON error envelope, or a stack trace — so a driver name in a normal 200 page is dropped; and the injected payload is stripped from the body before matching so a reflected operator can't self-satisfy a pattern. The sibling `nosqli-operator-injection` gained the same static-asset gate. Confidence is dialed down across the board to reflect that NoSQLi detections are behavioral/heuristic inferences: `nosqli-error-based` drops from Critical/Certain to **High/Tentative**, and the operator-injection auth-bypass and boolean-diff paths drop from High/Firm to **High/Tentative** (its weaker size-change and time-based paths remain Suspect/Tentative). Every finding now reads as a high-impact lead to verify rather than a definitive injection.
+- **By-module finding grouping query** — the `GroupFindingsByValue` dedup pass built its `module_id IN (…)` clause with `bun.In` (which double-wraps the placeholder list into `IN ((?, ?))`) instead of `bun.List`, so the by-module grouping mode (e.g. `sourcemap-detect` collapse) could fail to match. Corrected to `bun.List`.
+- **Laravel admin-exposure false positives on catch-all login shells** — `laravel-admin-exposure` flagged a Salesforce/Visualforce login page (served identically for every probed path, with a per-request ViewState token defeating the soft-404 hash/length fingerprint) as exposed Nova/Filament panels, because each probe matched on a single weak generic token (`login`, `email`, `admin`, `data`) inside an OR-list. The module now confirms structurally with `modkit.MatchAllGroups`: every probe requires a framework/endpoint-specific **anchor** (e.g. `laravel-nova`, `filament-panels`, `swagger-ui`, `"openapi"`+`"paths"`, `__schema`+`queryType`) plus corroboration, so a bare generic word can no longer fire. Bare-word `/admin` and `/backoffice` detection now requires a named admin package (Backpack/Voyager) rather than the word "admin"/"dashboard". The sub-directory catch-all guard re-checks the same marker groups against a nonexistent sibling path.
+- **Same hardening applied across the path-probe exposure family** — auditing the sibling modules for the identical weak-single-OR-token pattern, the grouped-marker (`MatchAllGroups`) + group-aware catch-all guard was applied to: **fastapi-docs-exposure** (`/openapi.json` now requires the `"openapi"`/`"swagger"` version key, not a bare `"info"`/`"paths"`), **php-composer-exposure** and the Composer probes in **joomla-misconfig** (anchor on Composer-specific keys like `"_readme"`/`"content-hash"`/`"require"` instead of bare `"name"`/`"version"`), **joomla-misconfig** `com_ajax` (requires the full `{success,message,data}` envelope, configuration.php backups anchor on `JConfig`/`$secret`, manifests on `files_joomla`), **firebase-misconfig** (every config-file probe anchors on a Firebase-specific token — `.runtimeconfig.json` no longer matches a bare `{`, service-account files require `private_key` + a second key field), **java-appserver-console** (drops the generic `Oracle`/`Management Console`/`Web Console`/`Administration Console` words, anchoring on the product name), **tomcat-manager-exposure** (drops bare `Deploy`/`JVM`/`HTTP`, anchoring on the manager title + a corroborating action), and **sensitive-file-discovery** (`.vscode/settings.json` requires a VS Code setting-key prefix, not `{`/`}`). Directory-listing markers (`Index of`/`Parent Directory`) and already-framework-specific modules (django-admin, php-debug, symfony profiler) were left unchanged — `Index of` genuinely indicates a real listing, and those markers don't fire on catch-all shells.
+- **`additional_evidence` capped at 5** — the per-finding evidence ceiling (request/response pairs folded in from duplicate findings, and pairs a module collects itself) dropped from 10 to 5, and the cap is now also enforced at the result-event→finding converter, so a noisy module that fires across many sibling paths of one host no longer balloons the stored payload (or the `http_records` rows it pulls in).
+
+</Update>
+
+<Update label="v0.1.30-beta" description="2026-06-12">
+
+A finding-fidelity and coverage release: context-path-aware exposure probing, secret findings that carry their evidence, probe-finding collapse to keep the traffic table clean, recovery of JS bundles and service-worker-precached assets that no link points at, passive recon harvesting with opt-in subdomain follow, third-party-dashboard detection, and targeted false-positive fixes.
+
+### Added
+
+- **Context-path-aware exposure probing** — new `modkit` path helpers (`CandidateBasePaths` / `CandidateBasePathsIncludingStatic`, `UnclaimedBasePaths`, `BasePathClaimKey`, plus `DecoyFileBaseline` / `FetchPath` / `SiblingServesAnyMarker`) walk the web root *plus* each observed path prefix, so a known endpoint mounted under a context path (`/api/actuator/env`, `/myapp/...`) is probed, not just the root. Adopted across ~26 exposure modules (Spring family, Swagger, FastAPI, GraphQL, Firebase, Tomcat, WordPress, Drupal/Joomla/Magento/Symfony, ASP.NET, Django/Laravel/Rails, …), replacing each module's hand-rolled checksum/path-walk loop; fan-out is capped (`MaxBasePathDepth`) and per-`(host, base)` dedup keeps traffic bounded.
+- **Secret findings carry their evidence** — passive secret detection and the known-issue-scan Kingfisher pass now attach the originating request and the matched response (head + windowed body around the leak) to each finding, via shared `secret_detect` helpers, backed by a new `HttpResponse.Head()`.
+- **Probe-finding collapse** — new `modkit.CollapseFindings` folds many findings that confirm one issue into a single finding (one `http_records` row), the rest riding along as capped inline `AdditionalEvidence`. `input-behavior-probe` now collapses its per-endpoint header/path/char/debug probes this way (ranking a `403→200` bypass above a tag-only change) instead of writing one row per probe.
+- **SPA-gated JS-bundle name sweep** — on monolith / server-rendered apps, discovery now probes a curated list of common, never-content-hashed base names (`main`, `app`, `config`, `settings`, `admin`, `api`, `auth`, …), each tried as both `.js` (bundles) and `.json` (sibling config/data), across the web root, the start directory, and the app's observed JS directories. These files frequently aren't linked from the HTML, so they were never harvested; confirmed hits — validated against the soft-404 baseline with a per-directory wildcard/catch-all guard — flow into the JS-fetch pipeline (jsscan + link extraction, recorded as `http_records`) so their endpoints and secrets reach later phases. The sweep is skipped when the start page fingerprints as a JS-shell SPA (Next.js/React/Angular/Vue/Svelte): those bundles are content-hashed (`main.a1b2c3.js`) and so unguessable, and the real ones are already linked and harvested. Bounded by hard request caps and default-on, configurable under `discovery.extensions.js_bundle_sweep` / `js_bundle_names`.
+- **SPA / PWA asset-manifest recovery** — modern frameworks code-split the app into hashed JS chunks (`100.<hash>.js`) whose names are assembled at runtime from a webpack chunk-id→hash map and appear nowhere as literal strings, so neither link extraction nor a short headless visit finds them — a real browser only fetches them because the framework, or a service worker pre-caching the build, reads a manifest the page never links. Both ends of the pipeline now close that gap. In **discovery**, the engine derives the well-known service-worker and manifest URLs (`/ngsw.json`, `/ngsw-worker.js`, `/sw.js`, `/manifest.webmanifest`, …), fetches them through the JS-fetch pipeline, and parses each framework's asset manifest so every cached chunk is fetched, recorded, and scanned — Angular `ngsw.json`, React CRA `asset-manifest.json`, Nuxt build manifests, and the generic Workbox precache list embedded in a PWA service worker (mirroring the existing Next.js route-manifest harvest, but for *asset* manifests). In the **browser spider**, a bounded in-page priming step does what the worker would — locates the registered worker and manifest, reads the full asset list, and fetches each same-origin asset so the browser's network capture records them as spidering traffic. Both sides are same-origin-only and capped (the crawler at `ServiceWorkerMaxAssets`, default 600); priming is on by default (`ServiceWorkerPriming`).
+- **Passive recon harvesting (subdomains + third-party backends)** — two new INFO-severity passive modules, backed by a shared `pkg/reconsig` signature package, read HTML/JS/JSON response bodies for recon value without sending traffic. `subdomain-harvest` collects every hostname sharing the page's registrable domain (eTLD+1) — sibling origins, API hosts, and environment URLs that SPAs and minified bundles routinely embed — and flags ones whose name suggests a non-production environment (`dev`, `staging`, `test`, `qa`). `baas-endpoint-fingerprint` matches a 22-provider catalog of backend-as-a-service / identity / serverless / managed-data backends (Okta, Auth0, Cognito, Supabase, Convex, Lambda function URLs, Cloud Run, Hasura, Algolia, Contentful, Sentry, …), recording the provider, category, and tenant/instance identifier; Firebase and object-storage references are deliberately left to their dedicated modules.
+- **`--follow-subdomains` scope expansion** — opt-in flag that lets `subdomain-harvest` feed the in-scope subdomains it discovers back into the running scan, so a sibling host referenced only in a JS bundle gets crawled and scanned instead of being noted and dropped. It adds **exact discovered hosts** to a new runtime allow-set (`ScopeMatcher.AllowHost`, surfaced to modules via `modkit.ScopeExpander`) rather than wildcarding the apex, so the scope stays tight — `app.example.com` referencing `staging.example.com` pulls in that one host, not all of `*.example.com`. Off by default and automatically enabled at `--intensity deep`.
+- **Third-party dashboard / console detection** — a new module pair, backed by a shared `infra/dashboardsig` catalog of ~60 off-the-shelf products across 10 categories (observability, data, CI/CD, orchestration, automation, messaging, collaboration, infra, analytics, AI — Grafana, Kibana, Elasticsearch, Airflow, GitLab, Jenkins, HashiCorp Vault, OpenAI-compatible LLM APIs, database consoles, …), inventories and probes self-hosted admin surfaces. Passive `dashboard-fingerprint` (INFO) recognises a product from a catalogued response signature — a unique header, body markers, or a distinctive cookie plus a name reference — recording which off-the-shelf software is reachable so product-specific checks and CVE matching can follow. Active `dashboard-exposure` confirms the product against its own health/version/config endpoints and grades the result in tiers: a reachable console is reported as attack surface (Medium), while an endpoint that discloses internal data — version, full config, model list, cluster status — *without authentication* escalates to a High info leak (the leaked value, e.g. the version, captured as evidence). Probing is intensity-scaled: at normal intensity only each product's single best (`Primary`) endpoint is probed, and `--intensity deep` (plus passive tech hints) unlocks the full per-product confirmer set.
+
+### Changed
+
+- **Quieter stateless headers** — `-S`/`--stateless` scans no longer print the Scan ID or Project UUID; both live in a throwaway database and can't be queried later, so they were just noise.
+- **`--skip` accepts phase aliases** — e.g. `--skip discovery,spidering,kis`; usage examples updated to show it.
+- **`--only discovery` syncs the discovery toggle** — keeps `DiscoverEnabled` in step with the skip (mirroring the `--only` path) so the config panel and downstream gates don't still report discovery as active.
+- **Tighter extension-confirmation source gating** — the "observed" confirmation that gates server-side extension fuzzing now counts only URLs the application genuinely references (start URL, links from HTML attributes / meta-refresh / HTTP headers / robots.txt, sitemap entries, files actually fetched and confirmed). Path-like strings scavenged from JS/HTML body text no longer count — they aren't proof the server serves that extension — and on a JS-shell SPA the observed source is suppressed entirely, since the index shell answers every path. Cuts spurious extension sweeps triggered by body-text noise.
+- **Per-module finding grouping (sourcemap noise collapse)** — finding grouping gained a `by_module` mode: for the modules it lists, findings collapse to a single finding per `(module, severity[, host])` regardless of the per-URL extracted value, folding every URL into `MatchedAt`. This handles modules that fire once per asset where the value is noise rather than a shared identity — `sourcemap-detect`, which reports a distinct `.map` filename for every JS/CSS bundle, so a site with dozens of bundles previously produced dozens of near-identical findings. Default-on for `sourcemap-detect` (per-host); severity stays in the key so a Low "sourcemap advertised" never merges with a High "full source exposed". Applies both to the stored findings (the `GroupFindingsByValue` dedup pass) and the live console output, configurable under `known_issue_scan.group_by_value.by_module`.
+- **Proxy path-normalization bypass probing on exposure modules** — a shared `modkit` path-bypass helper appends `/..;/`-family prefixes (the Servlet matrix-parameter `..;/`, encoded `..%3b/` / `..%2f` / double-encoded `..%252f`, chained up to `MaxPathBypassClimb` deep) ahead of a blocked endpoint so a request a fronting proxy refuses by literal prefix is forwarded and re-reaches the endpoint once the Java/Servlet backend strips the path parameter and collapses the climb. Wired into several path-gated modules (`spring-actuator-misconfig`, `tomcat-manager-exposure`, `forbidden-bypass`, `xss-light`) and gated on a proxy-block status (401/403/405) so it only runs where there's actually a block to bypass.
+- **Header-less Rails recognition for the Active Storage / Action Mailbox probes** — a new `infra/railssig` body-signal set (CSRF/Turbo/Action Cable meta tags, the default Rails 404/500/exception pages, `ActionController::` references) lets these probes confirm a Ruby on Rails app even when it strips `X-Runtime`/`Server` headers, with the probe path echo-stripped first so a reflected `ActiveStorage`/`ActionMailbox` target can't self-match.
+- **Decoded preview on base64 findings** — `base64-data-detect` now decodes each matched blob (handling both standard and URL-safe alphabets, so JWTs decode cleanly) and, when it decodes to displayable text, attaches a truncated `(decoded)` preview line to the finding evidence and description, so the leak is readable without a manual round-trip.
+- **Seed-parent directory fuzzing** — the standard discovery profile now fuzzes each ancestor directory of the seed URL (`/api/v1/auth/x` → `/`, `/api/`, `/api/v1/`, `/api/v1/auth/`) with the short file+dir lists and observed words (`discovery.expand_seed_parents`), while `enrich_targets: false` keeps scope to the seed's own path structure plus live crawl breadcrumbs instead of re-seeding from paths earlier phases wrote to the database.
+- Rebuilt the static HTML report bundle.
+
+### Fixed
+
+- **`input-behavior-probe` empty-body / redirect false positives** — a tag-structure delta now counts only when both the baseline and fuzzed responses serve 2xx content *and* the fuzz body carries real HTML (≥3 tags), so a 404/302 empty-body or non-HTML response no longer registers a bogus maximal tag distance; the reproduce round applies the same guard.
+- **Reflected/redirect secrets downgraded** — a secret that appears only on a 3xx redirect or reflected into a response header value (e.g. an OAuth identifier echoed into a `Location` URL on the way to SSO) now drops to Low instead of High/Critical.
+- **`sensitive-file-discovery` decoy baseline + unified confirmation** — adds a per-candidate decoy-file baseline (same directory and extension) to catch extension-scoped catch-alls, probes sensitive files under every candidate base path including static/CDN directories where a misconfigured front serves an exposed `.env`/`.git`/backup, and routes all confirmation rounds through one `confirms` predicate (`.env` gated on a real `KEY=VALUE` line so prose mentioning "SECRET" can't forge a Critical).
+- **IDOR/BOLA neighbor-id false positives on public content** — `idor-detection` and `idor-guid` now require the *original* request to carry a credential (Authorization, Cookie, a well-known API-token header, or a credential query parameter) before a "neighbor id returns different-but-valid content" differential is reported as a High/Firm authorization bypass, via a new shared `authzutil` helper. With no credential there is no per-user boundary to cross, so the same differential on public, navigable content — `GET /blog/3/` vs `/blog/4/`, a docs site, a product catalog — is downgraded to a Medium/Tentative lead rather than dropped; a baseline page that itself links the neighbor id is treated as public and likewise discounted.
+- **`nextjs-image-ssrf` confirmation hardening** — the Next.js image-optimizer SSRF check now confirms a reached internal target through the shared `infra` SSRF internal-target set and the stricter `FreshMetadataMarkers`/`ConfirmFreshMetadata` defenses, so a generic token the app itself echoes (e.g. `compute`) can no longer confirm on its own — only a self-evidencing metadata marker that's present in the optimizer response and absent from the baseline does.
+
+</Update>
+
+<Update label="v0.1.29-beta" description="2026-06-12">
+
+A coverage-expansion and finding-quality release: a targeted re-spider phase that browser-crawls the SPA routes discovery finds after spidering already ran, Next.js route-manifest harvesting (Pages Router, SSG, and App Router route recovery), a ground-up rewrite of every module's finding description plus classification tags on native findings, and a consolidated `traffic --replay` that can drive a real browser through Burp.
+
+### Added
+
+- **Targeted re-spider of discovery-found SPA routes** — a new `targeted-respider` native phase (after discovery dedup, before dynamic assessment) closes a structural gap in the pipeline: the one-shot browser spider runs *before* discovery, so a rich route that discovery surfaces later — `/ui/`, `/console/`, an admin panel found in a JS bundle — never got its client-rendered pages crawled, and its XHR/fetch API calls never entered the scan. The phase re-reads discovery's already-stored response bodies straight from the database (zero extra HTTP for candidate selection), keeps only pages that look client-rendered/SPA or meaningfully interactive, screens out login/SSO walls so the browser budget isn't burned on auth bounces, and dedups candidates per (host, app-shell) so one crawl covers an entire SPA router instead of re-crawling the same shell per route. Survivors get short, budgeted browser crawls whose records land in `http_records` under a distinct `targeted-respider` source tag and flow into dynamic assessment like any other traffic. Default on with deliberately tight caps, all configurable under `discovery.respider.*`: max 3 seeds per host / 10 total, 45s + 25 states + depth 3 per seed, and a 5-minute wall-clock cap on the whole step; the phase only rides along when spidering, ingestion, and an assessment phase are all enabled, so headless/stateless modes are unaffected.
+- **Next.js route-manifest harvesting** — discovery now recognizes Next.js pages, derives the `buildId` (from a referenced manifest URL in the markup, falling back to the `__NEXT_DATA__` JSON blob), and fetches two manifests that enumerate the app's routes but are typically absent from the rendered HTML: `_buildManifest.js` — the full Pages Router route table, including dynamic routes like `/blog/[slug]` — and `_ssgManifest.js` — the concrete pre-rendered paths, which the client router loads at runtime and which fill in real values for those dynamic segments. Every harvested route flows through link extraction into observed paths (with trusted-source priority) and `http_records`, so dynamic assessment scans pages no link on the site points at. App Router routes, which appear in *neither* manifest, are recovered separately by decoding page/route-handler chunk paths (`app/<segments>/page-<hash>.js`) back into their addressable routes.
+- **Shared login/SSO URL signatures (`pkg/spitolas/loginsig`)** — the spider's login-detection tables (auth-fronting host prefixes like `sso.`/`adfs.`, known IdP hosts like Okta/Auth0/`login.microsoftonline.com`, and OAuth/SAML path markers) moved out of the crawler internals into a reusable package, so the re-spider candidate screen and any future phase share one source of truth instead of growing divergent copies.
+
+### Changed
+
+- **Finding descriptions and tags overhauled across all 263 modules** — every module's description was rewritten from internal implementation notes (detection-logic walkthroughs, CLI flag requirements, reference-link lists) into a concise, operator-facing **What it means / How it's exploited / Fix** block: what the finding actually establishes, how an attacker leverages it, and the concrete remediation. Net effect on the tree: ~4,100 lines of boilerplate replaced by ~2,300 lines of substance. The executor now *composes* the stored description instead of letting one source overwrite the other — the module's per-finding context line (the specific header/param/endpoint it flagged) leads, followed by the static explanation block — so reports keep both the instance specifics and the explanation. Module classification tags (`xss`, `spring`, `injection`, `light`, …) now also propagate onto every native finding, which previously carried no tags at all (only known-issue-scan findings did); tags are copied, not aliased, so editing one finding's tags can't corrupt its siblings. This is the new convention for all future modules.
+- **`traffic replay` is now `traffic --replay`** — the standalone `vigolium traffic replay` subcommand was removed and folded into the `traffic` command as a `--replay` mode, so the full filter surface (`--host`, `--method`, `--status`, fuzzy search, header/body search, …) applies identically to listing and replaying. New knobs: `-c/--concurrency` (default 10) replays the matched records concurrently — and lets you throttle down to avoid overwhelming an intercepting proxy like Burp; `--with-browser` replays each URL through a real browser routed via `--proxy`, so the proxy captures genuine browser traffic — real TLS fingerprint, JS execution, subresource and XHR loads — with the stored `Authorization`/`Cookie`/`User-Agent` headers forwarded so the navigation runs under the captured session, redirects/page titles/fired JS dialogs reported per record, and Chrome's implicit proxy bypass for loopback targets removed so even `localhost` traffic reaches the proxy (non-GET records are noted as replayed as GET navigations, since that's what a browser can do); and `-a/--all` lifts the `-n/--limit` cap (default 100) so `--replay --all` re-sends every stored record. `--in-replace` and `--timeout` carry over, and concurrent replays buffer their output so each original-vs-replay comparison block prints atomically rather than interleaved.
+- **Live finding lines match the console format** — the stderr finding echo used when results are deferred to files (`--format jsonl,html`) previously had its own ad-hoc layout; it now renders the exact `[type] [module] [severity] METHOD URL [value]` shape of the console result writer (including the type/phase de-duplication and the grouped extracted-value suffix), so a finding reads identically whether it streams to the terminal via stdout or the stderr echo.
+
+### Fixed
+
+- **`bfla-detection` no longer flags empty-200 endpoints** — an endpoint whose "privileged" baseline is an empty (or whitespace-only) body carries no privileged content to compare, so every sub-test degenerated into matching nothing against nothing: fronting CDNs, XSRF/login bounces, and JSP `.jspa` action handlers that answer *any* request with an empty 200 were reported as unauthenticated-access or method-switch bypasses. The real-world trigger was an Atlassian `/secure/ConfigureReport.jspa` returning `Content-Length: 0` for both GET and POST — which also defeated the existing random-path method baseline, since the random path 404s while the action handler empty-200s, making the responses look "different enough" to pass the guard. The module now bails up front when the baseline body is empty and skips switched-method candidates whose bodies are empty, on the principle that an empty body is no-signal for both baseline and candidate. Covered by new regression tests alongside the existing positive cases.
+
+</Update>
+
+<Update label="v0.1.28-beta" description="2026-06-11">
+
+A detection-expansion and noise-reduction release: object-storage traversal and cloud-URL harvesting, value-based finding grouping that collapses one leaked secret seen on many URLs into a single finding, tech-fingerprint-gated extension fuzzing, a faster native-scan hot path, and continued module false-positive hardening.
+
+### Added
+
+- **Value-based finding grouping** — a secret that leaks on N different URLs now collapses to a single finding (and a single console line) keyed on the extracted value, instead of one finding per URL. Applied both live (the console `findingGrouper` suppresses repeats to file-only and prints a grouped summary with per-host rollups) and in the database dedup pass (`GroupFindingsByValue`, folded into `deduplicateFindings`, covering known-issue-scan secret templates and passive secret detection). Controlled by a new `known_issue_scan.group_by_value` config (`Enabled`/`PerHost`/`Tags`/`MaxURLs`; per-host grouping on by default), with an identical non-empty value required as the guardrail.
+- **Tech-fingerprint-gated extension fuzzing** — discovery now wordlist-fuzzes server-side extensions (`.php`, `.aspx`, `.jsp`, `.action`, `.cgi`, `.jspx`, `.ashx`, `.asmx`, …) only after *confirming* the app actually serves them — via an observed URL, a technology-fingerprint match, or an active soft-404 probe — instead of always sweeping every extension. New `deparos/config` tech-signature table plus an `extension_confirm` pipeline; the previously always-on custom-list sweep is now gated behind a default-on confirmation step (with a console `ext-fuzz` notice when it engages).
+- **Object-storage traversal & cloud-URL harvesting** — a new active `cdn-object-traversal-listing` module appends `..;`-family trailing payloads to object-storage fetches to turn a single-object read into a full bucket listing, and a new passive `cloud_storage_url_harvest` module collects S3/GCS/Azure Blob/OSS/TOS storage URLs from response bodies. Both are backed by a new `storagesig` package that fingerprints object-storage backends and listing responses behaviorally (storage response headers, `/obj/<bucket>/<object>` path shape, listing-XML bodies). Object-storage assets are now carved out of the static-file filter across the executor, CLI/JS/server ingest, and proxy paths and recorded metadata-only via HEAD/ranged-GET (new `WorkItem.StaticMeta`) instead of being dropped, so these modules can see them.
+- **Concurrent triage batches** — `TriageLoopConfig.BatchConcurrency` runs disjoint triage batches concurrently within a round (default 3, mirroring master-agent batch concurrency), wired through `SwarmRunner.runTriageLoop`.
+
+### Changed
+
+- **Module false-positive hardening** — expanded FP defenses and test coverage across `nosqli-*`, `sqli-time-blind`, `path-normalization`, `xml-saml-security`, `bfla-detection`, `proxy-header-trust`, and other active/passive modules.
+- **Trusted identity-header spoofing in `forbidden-bypass`** — the 403-bypass module now also replays the request with spoofed trusted identity/routing headers, catching gateways that authorize on a forwarded identity header an external client can set.
+- **Faster native-scan hot path** — three independent optimizations to the deterministic pipeline: `ParameterInsertionPoint` caches the `Content-Length` byte offsets at construction so body/form/XML fuzzing patches the length in place instead of re-parsing every header per payload (~4.4× faster, 15→6 allocs/op); the per-host rate limiter's `Acquire` is now lock-free in steady state (drops the per-`Acquire` shard write-lock + `heap.Fix`), which matters most when a scan hammers a single host; and module workers enqueue findings through a new batched `FindingWriter`/`SaveFindingsBatch` instead of blocking on a synchronous per-finding save (coalesced into one transaction, retried per-finding, flushed on full/close so nothing is dropped — the linked HTTP record is still persisted synchronously first).
+- **Autopilot prep overlapped with the background audit** — auth preparation and pre-flight discovery now run concurrently with the background vigolium-audit pass and are joined before the frozen context bundle is assembled, taking their latency off the critical path.
+- **Richer report output & audit-platform refactor** — enriched HTML/console report output, plus an internal refactor of the embedded vigolium-audit harness (shared CLI-process adapter, retry/cost engine helpers, content loader).
+
+### Fixed
+
+- **`--external-harvest` now works on demand** — on `vigolium scan` the scanning-strategy baseline unconditionally overwrote the external-harvest phase toggle, so passing `--external-harvest` under the default `balanced` strategy had no effect. The flag is now a true per-phase override: when explicitly set it wins over the strategy (e.g. `--intensity balanced --external-harvest` enables harvesting while keeping balanced depth), and when unset the strategy's value still applies.
+
+</Update>
+
+<Update label="v0.1.27-beta" description="2026-06-10">
+
+A detection-expansion and false-positive-reduction release: two new modules (clickjacking detection and internal-header fuzzing), out-of-band findings that carry the request that triggered them, a stateless audit mode with an auto HTML report, and catch-all/reflection hardening across several modules.
+
+### Added
+
+- **Clickjacking (UI-redress) passive module** — a new `clickjacking-detect` module that flags a page only when it is both framable *and* worth hijacking, instead of every missing `X-Frame-Options`. It computes the framing verdict like a browser (enforced CSP `frame-ancestors` overrides `X-Frame-Options`; report-only, `ALLOW-FROM`, invalid/conflicting headers, and wildcard sources are treated as ineffective), requires sensitive/interactive content (credential form, authenticated session, or state-changing form), and downgrades when a `SameSite=Strict`/`Lax` session cookie would make the cross-site frame unauthenticated.
+- **Internal header probe (active module)** — a new `internal-header-probe` module that mines a CORS preflight's `Access-Control-Allow-Headers`/`Access-Control-Expose-Headers` for gateway-injected custom headers (identity, routing, trust, feature-flag), re-sends the request with each set to a battery of probe values, and reports those whose response body reproducibly changes — reflection stripped, measured against a per-endpoint noise floor, with a per-host circuit breaker. Adds an OAST spray per header for blind SSRF. Severity Suspect/Tentative: a body change proves the backend reads the header, not that it is exploitable.
+- **Out-of-band findings carry their originating request** — an OAST callback finding now embeds the request/response that planted the payload, the callback URL, the raw collaborator callback as evidence, and trace anchors, so it answers "which request caused this callback?" on its own. A new `GetRecordByRequestHash` lookup recovers the origin even for late callbacks, and the finding is saved even when the record can't be resolved.
+- **Stateless audit with auto HTML report** — `-S`/`--stateless` on `vigolium agent audit` runs the whole audit into a throwaway temp DB (main DB untouched, mirroring `vigolium scan -S`) and auto-renders a self-contained HTML report via the `vigolium import --format html` generator. Defaults to `vigolium-result/vigolium-audit-report.html`; `-o`/`--output` overrides it (supports `gs://` and `{ts}`).
+- **`vigolium audit` top-level alias** — a shortcut for `vigolium agent audit` with the same flags (mirroring `vigolium olium`).
+
+### Changed
+
+- **Audit `--keep-raw` now on by default (CLI)** — retains the `<source>/vigolium-results/` copy for review/re-import; new `--clean-raw` removes it after the run. Mutually exclusive, audit-leg only.
+- **Catch-all false-positive hardening** — `bfla-detection` and `forbidden-bypass` now drop findings when a random unprivileged path returns the same response, catching empty-200 / reflected-shell edge gateways the existing wildcard guards missed.
+- **ASP.NET false-positive hardening** — `crossdomain.xml` / `clientaccesspolicy.xml` are flagged only when actually wildcard-permissive (not merely present), and the OIDC discovery document (`/.well-known/openid-configuration`) is no longer double-reported; all downgraded Medium→Low (these are Flash/Silverlight/OIDC standards, not ASP.NET-specific).
+- **Severity recalibration** — PDF-generation-injection's plain HTML-marker reflection drops High/Firm→Medium/Tentative (the JS/SSRF/file-read variants stay High/Firm), and `web-cache-poisoning` drops Firm→Tentative.
+
+### Fixed
+
+- **Console output no longer clipped to a file or pipe** — width-based truncation now applies only to an interactive TTY (new `terminal.IsTerminal()`). Redirected output — including the `-P`/`--parallel` per-target `.console.log` — previously clipped URLs and payloads mid-token; file/pipe consumers now get the full, greppable line.
+
+</Update>
+
+<Update label="v0.1.26-beta" description="2026-06-08">
+
+A false-positive-reduction release closing the "404 catch-all / SPA shell" and "reflected-but-not-executed" classes across the error-based injection and reflection modules: a shared error-surface status gate, structural (not bare-token) signatures, and a headless-browser confirmation tier for discovered-parameter XSS.
+
+### Added
+
+- **`infra.IsErrorSurfaceStatus`** — a shared status gate, companion to `IsBlockedResponse`. A genuine server-side leak (DBMS/driver error, reflected file contents, a stack trace) rides a 5xx or a 2xx/4xx that echoes the payload; a `404` means the route never resolved (no handler ran) and a `3xx` carries no handler output, so a signature substring in either body is page noise — a catch-all/SPA 404 shell or a redirect interstitial. Body-matching modules whose finding is not itself a status signal now reject a response failing *either* gate before matching.
+
+### Changed
+
+- **Error-based injection signatures hardened against catch-all 404 shells** — `sqli-error-based`, `nosqli-error-based`, `xxe-generic`, and `ws-injection` no longer match DBMS/driver/error tokens on a `404`/`3xx` body (via the new `IsErrorSurfaceStatus` gate), and their bare tokens are tightened to structural forms: the CockroachDB name is word-boundary-anchored (was firing on `userHasCockroachDBEnabled` in a Salesforce community 404 shell's feature-flag list), the MongoDB/`BSON` patterns now require genuine driver/error contexts instead of the bare 4–6-char token, XXE confirms `/etc/passwd` by the full `root:…:0:0:` line shape (not a `root:` substring that a `--dxp-g-root:` CSS var carries), and `ws-injection` requires a pattern to be absent from the baseline, match the body only (not headers), and — for the `{{7*7}}`/`${7*7}` template probes — proves evaluation by requiring the literal payload to be *gone* from the response.
+- **`nosqli-error-based` re-confirmation** — a matched DBMS error must now reproduce when the payload is re-sent (a per-request random token that coincidentally matched won't recur) and be absent from a fresh control fetch of the original value, with `NoClustering` forcing a real origin round-trip so the request-clustering cache can't replay the captured hit. Fails open on transport errors.
+- **`lfi-generic` reflection guards and file-shape confirmation** — the `php://filter/convert.base64-encode` read now discards base64 runs that are simply our own `data://` payload being reflected back (Salesforce-Aura-class echo endpoints) or that decode to carry our injection marker, the `/etc/passwd` rule requires the full `root:…:0:0:…` line shape (not the former greedy `root:.*:0:0:`), `win.ini` is confirmed by ≥2 distinct bracketed section headers (was the bare English words `fonts`/`extensions`), and `.env`/`.htaccess` are confirmed by ≥2 distinct file-shaped lines — sensitive `KEY=VALUE` assignments or recognised Apache directives — which both strengthens the evidence and broadens detection beyond the former rigid `DB_PASSWORD`+`APP_KEY`+`APP_SECRET` triple that real Laravel/Symfony files rarely carry.
+- **`xss-light` discovered-parameter confirmation** — a reflected character-transform hit is now re-sent as a real, context-shaped executable payload and graded in tiers: dropped when the breakout signature never survives unescaped in the body (the reflection-only false positive this gate exists to suppress), reported Low/Tentative when it survives but no dialog fires (CSP-locked or non-executing context), and only raised to High/Certain once a headless browser actually pops `alert(marker)`. Browser probes are globally rate-limited and injectable so tests never spawn a real browser.
+
+### Fixed
+
+- **Spidering no longer crashes the whole scan on a cross-origin iframe** — go-rod's lazy `getJSCtxID()` dereferences a nil `ContentDocument` for cross-origin/detached frames, and the existing `frameAccessible()` pre-filter could not close the TOCTOU gap where a same-origin iframe navigates cross-origin (or detaches) between frame enumeration and the element query during extraction — common on SPAs. The nil-pointer panic propagated to the top-level `RunNativeScan` recover and aborted the entire scan (later phases skipped, zero findings). The browser wrappers that reach `getJSCtxID` (`Element`/`ElementX`/`Elements`/`ElementsX`/`EvalWithArgs`/`HTML`/`HasElement[X]`, plus the recursive frame-HTML builders) now convert such panics into ordinary errors so the bad frame is skipped, with a per-frame `recover()` backstop in the candidate-element extractor as a second line of defense.
+
+</Update>
+
+<Update label="v0.1.25-beta" description="2026-06-07">
+
+A false-positive-reduction release hardening the endpoint- and file-exposure modules against generic markers and reflected error pages.
+
+### Changed
+
+- **Rails Active Storage / Action Mailbox probe** — confirms OPTIONS endpoints only on a 2xx `Allow: POST` header (no longer body-matching `"Allow"`/`"POST"`, which forged findings from nginx `405 Not Allowed` pages), and rejects blanket-OPTIONS hosts, CORS preflights, and WAF/rate-limit pages.
+- **Marker hardening** — `.env` files now require a real `KEY=VALUE` line (was bare `"="`), Magento `deployed_version.txt` a valid version token (was `"."`), and ASP.NET health checks an actual health-state word (was generic JSON keys).
+
+</Update>
+
+<Update label="v0.1.24-beta" description="2026-06-07">
+
+A false-positive-reduction and severity-recalibration release: per-template severity overrides for known-issue scan, decode-confirmed LFI and marker-confirmed WordPress detection, right-sized passive DOM-XSS severities, and a fix for response bodies being dropped from stored known-issue findings.
+
+### Added
+
+- **Known-issue-scan severity overrides** — a new `known_issue_scan.severity_overrides` map remaps a finding's recorded severity by nuclei template ID (case-insensitive), applied after a match but before output/persistence so the stored finding, console output, and severity counts all agree. Lets you right-size noisy or context-dependent templates without forking the upstream template (which reverts on `nuclei -update-templates`). Ships a default `config-json-exposure-fuzz: medium` — an exposed `config.json` often carries only public base URLs / feature flags rather than always-critical secrets; set an entry back to the template's own severity to undo a remap.
+
+### Changed
+
+- **WordPress module false-positive hardening** — `wp-ajax-exposure` now requires plugin/action-specific markers (AND-of-OR groups via `modkit.MatchAllGroups`) in the response body and rejects generic CDN/WAF/SPA error pages, so an unrelated "load-failed … Refresh" page is no longer mislabelled as a critical export vulnerability. `cms-installer-exposure` now requires the CMS-name anchor and installer-specific context to co-occur (instead of any single generic word like "language" or "database") and adds a soft-404 / SPA-shell gate (`ConfirmNotSoft404`) to reject wildcard catch-all hosts.
+- **LFI base64-read confirmation** — the `php://filter/convert.base64-encode` read is now confirmed by actually decoding the returned base64 and requiring real PHP source (a PHP open tag, not already present in the baseline), replacing a bare `^[A-Za-z0-9+/=]{50,}` charset regex that fired on incidental base64 (data-URI images/fonts) embedded in ordinary CDN/static 404 pages. LFI matches are additionally gated to 2xx/3xx responses, so a 4xx/5xx error/404 body is never mistaken for leaked file content.
+- **Passive DOM-XSS severity recalibration** — `dom-xss-detect`, `dom-xss-taint`, and `unsafe-html-sink` (and each of its per-sink patterns) are lowered from Medium to Low, reflecting that these are static source/sink indicators without runtime confirmation.
+
+### Fixed
+
+- **Known-issue-scan findings lost their response body** — `formatJSON` zeroed `Response` in place on the shared `*ResultEvent` before `SaveFinding`/`SaveRecord` ran, wiping the response body from the stored finding and its HTTP record. It now serializes a shallow copy with `Response` cleared, leaving the persisted finding and record intact.
+
+</Update>
+
+<Update label="v0.1.23-beta" description="2026-06-06">
+
+A combined detection and agentic-scan reliability release: routing-based SSRF detection from PortSwigger's "Cracking the lens" research, OpenRouter provider routing for the olium agent, resilient agent streaming with run cancellation and graceful shutdown, plus continued Spring/false-positive hardening.
+
+### Added
+
+- **Routing-based SSRF detection ("Cracking the lens")** — two new active modules. `routing-ssrf` writes an attacker-chosen host on the request line (absolute-URI `http://internal/`, `@`-userinfo, protocol-relative `//host/`) while still connecting to the victim host, confirming via an out-of-band OAST callback or a self-evidencing internal/metadata marker that reproduces, is absent from a baseline, and is absent for a benign decoy. `upgrade-routing-ssrf` detects internal/metadata endpoints reachable only when a WebSocket-upgrade handshake bypasses a proxy URL filter, confirmed by a with-vs-without differential. Backed by a new `http.Options.RawRequestTarget` request-line primitive (rawhttp, Host/target mismatch preserved) and shared `infra` payload ladders.
+- **"Collaborator Everywhere" OAST headers** — `oast-probe` expands its blind-callback header fan-out (`True-Client-IP`, `CF-Connecting-IP`, `Forwarded`, `X-WAP-Profile`, …) with per-header value shaping and a `Cache-Control: no-transform` hint, surfacing SSRF in routing/analytics headers that backends behind a reverse proxy commonly fetch.
+- **OpenRouter provider routing** — a typed `agent.olium.custom_provider.provider_routing` knob (provider order, fallbacks, data-collection, quantization, …) plus a generic `extra_body` JSON passthrough merged into every openai-compatible request, for steering OpenRouter and other OpenAI-compatible backends.
+- **Agent run cancellation** — `POST /api/agent/scans/:uuid/cancel` aborts an in-flight autopilot/swarm/query/audit run (recorded as `cancelled`), wired to a Stop control in the workbench UI.
+- **Agent config hot-reload** — the `agent` config section now reloads at runtime, so `vigolium config set agent.olium.*` (provider/model/credentials) takes effect on the next run without a server restart; the CLI echoes a reload line.
+- **Invalid-date mutation payloads** — the mutation engine now emits explicit, labeled invalid-date boundary values (impossible day-of-month, out-of-range month 13) for date parameters to probe lenient date parsers/validators, deterministically and reproducibly.
+
+### Changed
+
+- **Spring module false-positive hardening** — `spring-actuator-misconfig` now confirms each endpoint by its actuator-specific JSON structure (`"status":"UP"` for `/health`, the `propertySources` envelope for `/env`, dotted Micrometer metric ids for `/metrics`, …) instead of a generic word match, and the seven sibling exposure modules (boot-admin, cloud-config, data-rest, debug, gateway, h2-console, jolokia) now require co-occurring marker groups rather than any single weak token. All eight probe a guaranteed-nonexistent sibling under the same directory to reject catch-all handlers (e.g. Keycloak i18n message bundles, SPA fallbacks) that 200 every child path. New shared `modkit` primitives back this: `MatchAllGroups` (AND-of-OR groups) and `SiblingPathCatchAll`, folded into a single `MatchAndConfirmSibling` helper.
+- **Parallel-scan interrupts** — Ctrl-C during a `-P`/`--parallel` batch now treats un-started and cut-short targets as "not scanned" rather than failures: a muted per-target line, no `ERROR` log spam, a `Parallel scan interrupted · N not scanned` roll-up, and an exit status that distinguishes an operator stop from a genuine all-failed batch.
+
+### Fixed
+
+- **Streaming agent disconnects** — a streaming (`stream: true`) agent run no longer freezes `runtime.log` or hangs in `running` when the SSE client disconnects (e.g. a connection dropped during a long model "thinking" pause). Writes now drain the agent pipe to EOF so logging and DB finalization always complete, a vanished client cancels the run instead of burning its full budget, and a client disconnect or server shutdown is recorded as `cancelled` rather than `failed`. Concurrent SSE producers (swarm phase callbacks) are serialized through a single sink to stop interleaved/half-written events.
+- **Graceful server shutdown** — shutdown now cancels in-flight agent runs first so live SSE streams release their connections, honors the caller's deadline (`ShutdownWithContext`) instead of waiting indefinitely for connections to go idle, and a second Ctrl+C (or a hard deadline) force-quits a hung shutdown. The config watcher also watches the actual `--config` file rather than only the default path.
+
+</Update>
+
+<Update label="v0.1.22-beta" description="2026-06-06">
+
+An agentic-scan and traffic-capture release: attack-vector skills wired into autopilot and swarm with planner-driven selection, an HTTPS-intercepting ingest proxy, sturdier olium stream recovery, a static-root traversal file-read oracle, and cleaner parallel-scan output.
+
+### Added
+
+- **Attack-vector skills for agentic scan** — confirmation/escalation playbooks the agent loads to confirm and escalate findings (new `xss-browser-confirm`, upgraded `idor-blast-radius`). Built-in skills are materialized to `~/.vigolium/skills` (override `VIGOLIUM_SKILLS_DIR`) on `vigolium init` as editable copies, which the loader prefers over the embedded fallback.
+- **Planner-driven skill selection** — the swarm planner picks skills matching the target's attack surface (`RECOMMENDED_SKILLS`) and the triage phase loads just that subset; autopilot runs an equivalent best-effort pre-flight pick before its run. `--skill`, `--skill-tag`, and `--no-skill-filter` (on `agent autopilot` / `agent swarm`) override the selection per run, and `agent.olium.always_on_skills` (default `triage-finding`, `write-jsext`) pins general-purpose playbooks that stay available regardless of filtering.
+- **HTTPS-intercepting ingest proxy** — `vigolium server --ingest-proxy-port N --proxy-mitm` terminates TLS with a generated CA so HTTPS traffic is recorded (and scanned with `-S`); trust the CA printed at startup or write it out with `--export-ca <path>`, and use `--proxy-insecure` to skip upstream TLS verification. Plain HTTP and un-intercepted CONNECT tunnels still pass through untouched.
+
+### Changed
+
+- **Active module improvements** — additional detection coverage and false-positive hardening across the active modules (including a new static-root file-read oracle in `path-normalization`).
+- **Sturdier olium stream recovery** — transient upstream stream failures (HTTP/2 `INTERNAL_ERROR`/`GOAWAY`/idle reset and content-less codex `error` frames) now retry even mid-tool-call instead of tearing down the run, recovering exactly the in-flight-tool-call blips that previously killed autopilot/swarm runs.
+- **Parallel scan output** — each `-P`/`--parallel` child now writes a self-contained `<output>.console.log` that captures the live finding stream (even with deferred JSONL and no `console` format) and drops the repetitive `[status]` progress ticker, so per-target logs read like a normal console scan.
+
+</Update>
+
+<Update label="v0.1.21-beta" description="2026-06-05">
+
+A false-positive-reduction and observability release: broad confirmation-hardening across the active and passive modules, full secret disclosure in findings, and Pi-compatible JSONL transcripts for every olium agent mode.
+
+### Added
+
+- **Olium session transcripts** — every olium run (`olium`/`ol` TUI, `-p` headless, `agent autopilot`, and `agent swarm`/`query` per phase) writes a Pi-compatible JSONL conversation transcript to its session dir for debugging.
+- **Shared confirmation primitives** — static-asset Content-Type gate, WAF/CDN challenge-page detection (catching 200/202 Cloudflare/Incapsula interstitials), a genuine WebSocket-handshake check, and body-similarity / raw-replay helpers, reused across the hardening below.
+
+### Changed
+
+- **Active false-positive hardening** — ~20 High/Critical modules now drop findings that fail strict confirmation (soft-404 / wildcard / reflection / content-shape gates), and ones that confirmed on HTTP status alone now require a content/body gate, so catch-all and SPA 200s no longer trip findings.
+- **Error/marker matching** (`sqli-error-based`, `graphql-scan`, `ssrf-detection`, `ldap-injection`, `xxe-generic`, `nosqli-*`, …) skips WAF/CDN challenge, auth-gate, and rate-limit pages before matching, closing the SSO/Cloudflare-challenge false-positive class.
+- **Passive false-positive hardening** — ~12 detectors (env-secret, info-disclosure, error-message, MCP-endpoint, jackson/joomla, …) skip static-asset and binary bodies, so a token baked into a minified bundle is no longer flagged.
+- **Secrets shown in full** — target-discovered secrets are now reported unredacted (`secret-detect`, `env-secret-exposure`, `jwt-weak-secret`, `jwt-claims-detect`); only operator BYOK credentials in logs/config stay masked.
+- **vigolium-audit harness** — restructured output layout with pre-merge and artifact-redaction passes, so `agent audit` runs land cleaner, deduplicated, secret-safe output.
+
+</Update>
+
+<Update label="v0.1.20-beta" description="2026-06-02">
+
+A detection-expansion and false-positive-reduction release: OS command-injection detection, a `-P/--parallel` multi-target fan-out, finding evidence in output, and a broad hardening pass across the active modules and shared diffscan engine.
+
+### Added
+
+- **OS command-injection detection** — three new active modules covering results-based (in-band), out-of-band (OAST callback), and time-based blind techniques, each confirming execution across multiple rounds against a baseline to avoid false positives.
+- **`-P`/`--parallel` flag** (`scan`, default `1`): scan up to N targets concurrently via isolated child processes. Pair with `-S -T --split-by-host` for per-host output files, or `--db-isolate -T` to merge every target into one shared `--db` and export a single unified result. Single target / `-P 1` is unchanged.
+- **Finding evidence** — findings now carry the supporting request/response pairs (baselines, confirmation rounds, control fetches) behind each decision, surfaced in console output and stored in the database.
+
+### Changed
+
+- **Broad false-positive hardening** across the active modules: findings now have to reproduce and show real content-level changes, so they survive WAF/rate-limit pages, dynamic-content jitter, transient flaps, and reflection artifacts instead of misreading them as vulnerabilities. Confirmation replays also bypass the response cache so each sample is genuinely fresh.
+- **diffscan engine** — excludes reflection-prone and volatile attributes from comparisons, gates out responses where the payload couldn't have been evaluated (redirects, empty bodies, 404s), and surfaces which attributes actually differed across confirmation rounds.
+- **Severity recalibration** — server-side template injection lowered to Info (a human-confirmation lead) and HTTP method tampering to Suspect (frequently non-exploitable alone).
+- **Passive checks** — missing-security-header detection now also flags weak `Referrer-Policy` values and cacheable sensitive HTTPS responses; CSRF detection filters out requests that aren't actually CSRF-reachable (JSON bodies, header-based auth, no session cookie).
+- **OAST service** — command-injection callbacks are now classified as confirmed OS command injection rather than generic SSRF/XXE.
+- **Olium autopilot** — project custom skills now load from `.agents/skills/`, with a startup summary of available skills by source.
+
+### Removed
+
+- Folded the standalone cacheable-HTTPS and Referrer-Policy passive checks into the missing-security-header module.
+
+</Update>
+
+<Update label="v0.1.19-beta" description="2026-06-01">
+
+### Added
+
+- Five new active modules: `ssrf-filter-bypass`, `ssrf-protocol-smuggling`, `open-redirect-confusion`, `reverse-proxy-path-confusion` (High), and `cache-poisoned-dos` / CPDoS (Medium).
+- `--db-isolate` flag (`scan`, `agent autopilot`, `agent swarm`): scan into a private temp SQLite DB and merge into `--db` at the end, so parallel scans can share one `--db` without write contention.
+- `--soft-fail` global flag: always exit 0 even on error (error still printed to stderr) for CI/scripts.
+
+### Changed
+
+- `response-header-injection`: confirmed injections served over a keep-alive connection are now flagged as likely to let an attacker poison the shared connection's response queue and deliver their responses to other users, and are raised to High.
+
+</Update>
+
+<Update label="v0.1.18-beta" description="2026-05-30">
+
+A false-positive reduction release: high/critical active modules now re-confirm findings (replay payload vs. clean baseline) before reporting, plus discovery and crawler robustness fixes.
+
+### Re-confirmation safety net
+
+- Executor-level net (`modkit.ConfirmBodyDifferential` + opt-in `BodyDifferentialConfirmable`) replays a finding's payload vs. a clean baseline and drops it without a reproducible difference, fails *open* on anything inconclusive. Opted in by `host-header-injection`, `reflected-ssti`, `struts-ognl-injection`, `web-cache-poisoning`.
+- Dropped findings counted and surfaced via `SuppressedFindings()`.
+
+### SQL & NoSQL injection
+
+- **`sqli-boolean-blind`** — single-shot comparison replaced by a multi-round, multi-factor logic battery (operator probing, alternating comparisons, per-branch stability, invalid-syntax probe) + WAF payload mutation.
+- **`sqli-time-blind`** — multi-round, delay-scaling confirmation to separate injection from network jitter.
+- **`nosqli-operator-injection`, `nosqli-error-based`** — size-change hits re-confirmed against per-request variance; now require a captured baseline.
+- New `pkg/modules/infra` SQLi helpers: `sqldbms.go`, `sqlvalue.go`, `sqlwaf.go`.
+
+### Active module confirmation
+
+- **`crlf-injection`, `response-header-injection`** — replay with fresh canaries across rounds.
+- **`open-redirect`** — require the redirect to track a fresh injected domain across rounds.
+- **`ssrf-detection`** — verify matched markers are payload-introduced, not ambient.
+- **`idor-detection`, `idor-guid`** — determinism gate vs. per-request variance (skips analytics/beacon endpoints).
+- **`mass-assignment`** — canary field detects endpoints that echo arbitrary keys.
+- **`http-method-tampering`** — catch-all guard drops endpoints that accept *any* method.
+
+### Discovery & spidering
+
+- Built-in wordlists materialized to disk and used as defaults (`internal/resources/wordlists`).
+- `dedup_cluster_cap` (default 10) collapses near-identical responses so catch-all/SPA targets don't flood the scan; `auto_fuzz_low_yield` (default on) enables `FUZZ` brute-forcing on low-yield/SSO-walled spidering.
+- Initial navigation retries on transient transport errors; proxied scans force Chrome to HTTP/1.1 (fixes `net::ERR_HTTP2_PROTOCOL_ERROR` through Burp/ZAP); off-host start redirects classified as SSO wall vs. relocated app (host adopted into scope).
+
+</Update>
+
+<Update label="v0.1.17-beta" description="2026-05-29">
+
+Expand XSS detection with additive modules that sit alongside the existing scanners rather than changing them. The WAF-aware evasion and encoding-payload work takes inspiration from [dalfox](https://github.com/hahwul/dalfox).
+
+### XSS
+
+- **Stored XSS (`xss-stored`)** — browser-confirmed persistent XSS: writes a unique canary, re-fetches the page with a clean request, and only reports when the canary both persists and executes, distinguishing stored from reflected.
+- **DOM-XSS taint (`dom-xss-taint`)** — passive AST taint analysis that raises a finding only when a DOM-controlled source (`location.hash`, `document.cookie`, …) provably flows into a dangerous sink (`innerHTML`, `eval`, …), complementing the pattern-based `dom-xss-detect`.
+- **Pre-encoded injection (`xss-light-encoded`)** — targets filters that decode a parameter (base64 / double-URL) before reflecting it.
+- **WAF-aware evasion** — a per-host `WAFRegistry` lets modules publish the detected WAF/CDN so later insertion points reuse it, and a package-level `waf.ClassifyParts` helper classifies blocks from raw response primitives. Inspired by dalfox's WAF handling.
+- **Encoding payloads** — `pkg/modules/infra/xssencode` supplies execution-preserving payload mutators and an encoding ladder for bypassing filters. Inspired by dalfox's evasion payloads.
+
+### jsscan
+
+- Add axios and custom-protocol request-pattern extraction.
+- Surface DOM-XSS source→sink taint flows (`dom_flows`) in scanner output.
+- Add `linux/arm64` / `darwin/amd64` correlation testdata.
+
+### Audit
+
+- vigolium-audit no longer forces a hardcoded per-platform model and reasoning effort; it now inherits the agent runtime's own configured default unless `--model` or `VIGOLIUM_AUDIT_MODEL` is set explicitly.
+
+</Update>
+
+<Update label="v0.1.16-beta" description="2026-05-28">
+
+Fix cross-platform release packaging for embedded helper binaries: GoReleaser, snapshot, release, public-release, and Docker builds now stage the matching `vigolium-audit` blob per target, run cross-builds sequentially where the shared go:embed path would otherwise race, and restore the host blob afterward so local builds do not inherit the last release target. Add runtime and npm packaging guards that detect wrong-platform embedded audit blobs before users hit opaque exec-format failures. Also add missing `jsscan` embeds for `linux/arm64` and `darwin/amd64`, with coverage tests to ensure every shipped release target has a real scanner binary instead of the unsupported stub.
+
+</Update>
+
+<Update label="v0.1.15-beta" description="2026-05-28">
+
+Make `--format jsonl` emit the same post-scan, project-scoped `{"type":...,"data":...}` envelope as `vigolium export` (instead of the live nuclei-style stream) across scan, scan-url phase mode, and stateless runs; default stateless multi-target scans (`-S -T file`) to a single unified output file with new `--split-by-host` to opt into per-host files; surface timed-out modules in the scan status line (`X/Y (A active, P passive, T timed out)`); make failed scans exit non-zero and skip the "completed" banner instead of logging at INFO; accept `--session`/`--session-file` as aliases for `--auth`/`--auth-file`; and fold phases, intensities, and agent modes into `vigolium strategy` (dropping the `ls` subcommand).
+
+</Update>
+
+<Update label="v0.1.14-beta" description="2026-05-25">
+
+Publish multi-arch Docker images: `make docker-publish` now builds and pushes both `linux/amd64` and `linux/arm64` (override via `DOCKER_PLATFORMS`) as a single manifest using `docker buildx`.
+
+</Update>
+
+<Update label="v0.1.13-beta" description="2026-05-24">
+
+Make `--scanning-max-duration` cap total scan wall-clock time (all phases combined), widen severities to all levels for single-phase known-issue-scan runs, and add `cve`/`kis`/`known-issues` phase aliases.
+
+</Update>
+
+<Update label="v0.1.12-beta" description="2026-05-24">
+
+Bound the known-issue-scan phase to its `max_duration` and default it to critical+high severities.
+
+</Update>
+
+<Update label="v0.1.11-beta" description="2026-05-24">
+
+Initial release of Vigolium open source.
+
+</Update>
