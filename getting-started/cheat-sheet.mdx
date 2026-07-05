@@ -1,6 +1,6 @@
 ---
 title: "Vigolium Cheat Sheet"
-description: "A one-page, copy-paste reference for the workflows you reach for most: live traffic mirroring, replaying through Burp, passive/secret scanning of forwarded traffic, importing external data, parallel fan-out, resuming, spec-driven scans, single-request scans, filtering to one vulnerability class or technology, triaging findings with a coding agent, reproducing an exploit, and inspecting or editing config."
+description: "A one-page, copy-paste reference for the workflows you reach for most: live traffic mirroring, replaying through Burp, passive/secret scanning of forwarded traffic, importing external data, parallel fan-out, resuming, spec-driven scans, single-request scans, content discovery, filtering to one vulnerability class or technology, browsing recorded traffic in the database, triaging findings with a coding agent, reproducing an exploit, setting up the AI agent, and inspecting or editing config."
 icon: "square-terminal"
 ---
 
@@ -387,19 +387,31 @@ vigolium scan -t https://example.com --only extension \
 
 ## 12. Content discovery only
 
-Enable the content-discovery/fuzzing phase with `--discover` and point it at a wordlist with `--fuzz-wordlist`. Add `--only discovery` to stop after discovery and skip vulnerability scanning entirely.
+Run **only** the discovery/fuzzing phase, no crawling, no vulnerability modules. The most direct way is `vigolium run discover`, the phase runner: it executes a single named phase and nothing else. Point it at a wordlist with `--fuzz-wordlist`.
 
 ```bash
-# Content discovery + fuzzing (then continue into the rest of the scan)
-vigolium scan -t https://example.com --discover --fuzz-wordlist ~/.vigolium/wordlists/fuzz.txt
+# Discovery-only against a whole host (brute-force paths from a wordlist)
+vigolium run discover -S -t https://example.com --fuzz-wordlist ~/Tools/contents/fast.txt
 
-# Discovery only — enumerate paths and stop
+# Fuzz a SPECIFIC insertion point with an inline FUZZ marker in the URL —
+# each word replaces FUZZ (here: /api/<word>/users)
+vigolium run discover -S --fuzz-wordlist ~/Tools/contents/fast.txt \
+  -t 'https://example.com/api/FUZZ/users'
+```
+
+The **`FUZZ` marker** works anywhere in the target path: put it where you want the wordlist injected. With no marker, vigolium fuzzes off the target's directory (equivalent to appending `/FUZZ`). You can get the same discovery-only behavior on the full `scan` command with `--only discovery --discover`:
+
+```bash
+# Same idea via `scan`: run every phase-gate off except discovery
 vigolium scan -t https://example.com --only discovery \
   --discover --fuzz-wordlist ~/.vigolium/wordlists/fuzz.txt
+
+# Discovery as part of a full scan (fuzz, then keep going into vuln scanning)
+vigolium scan -t https://example.com --discover --fuzz-wordlist ~/.vigolium/wordlists/fuzz.txt
 ```
 
 <Callout icon="circle-info" color="#3B82F6" iconType="regular">
-  `--fuzz-wordlist` enables on-the-fly fuzzing during discovery. Combine with `--format fs` or `-o` to persist the discovered surface for later scans. See [Discovery phase](/native-scan/phases/discovery).
+  `vigolium run <phase>` runs one phase in isolation (`discover` is an alias for `discovery`; see [section 10](#10-run-only-specific-phases-or-skip-some) for the full phase/alias list). `-S/--stateless` keeps it throwaway (nothing written to your project DB); combine with `--format fs` or `-o` to persist the discovered surface for later scans. `--fuzz-wordlist` enables on-the-fly fuzzing; the `FUZZ` marker pins the exact insertion point. See [Discovery phase](/native-scan/phases/discovery).
 </Callout>
 
 ---
@@ -773,6 +785,111 @@ vigolium scan-url -S -t https://example.com --passive-only --silent --print-find
 
 <Callout icon="circle-info" color="#3B82F6" iconType="regular">
   `--print-finding` works on `scan`, `scan-url`, `scan-request`, and `run`. It prints **nothing** when the scan finds nothing, so `--silent --print-finding` yields either the findings or an empty screen — ideal for a fast triage loop. The Markdown is identical to `vigolium finding --markdown` ([section 21](#21-triage-findings-with-a-coding-agent-claude-codex)); to save it, redirect stdout (`... --print-finding > findings.md`). Enabling it routes the scan through the full runner so each finding's linked request/response is available to render, which is why it pairs naturally with `-S`.
+</Callout>
+
+---
+
+## 25. View HTTP traffic in the database
+
+Everything Vigolium scans, ingests, or records lands in the database. Browse it with `vigolium traffic` (aliases `tf`, and `vigolium db ls --table http_records`). With no flags it shows the 100 most recent records, newest first; add filters, search, or a display format to narrow and shape the output.
+
+```bash
+# Browse recent traffic (newest first, capped at 100)
+vigolium traffic
+
+# List EVERY stored record (lift the -n/--limit cap), or page through
+vigolium traffic --all
+vigolium traffic -n 50 --offset 100
+
+# Host/path hierarchy tree
+vigolium traffic tree
+```
+
+Search and filter to find the records you care about:
+
+```bash
+# Fuzzy search across URLs, paths, and hosts (positional term or --search)
+vigolium traffic admin
+vigolium traffic --search "/api/users"
+
+# Search within header names/values, or request/response body content
+vigolium traffic --header "Authorization"
+vigolium traffic --body "password"
+
+# Filter by host, status, method, path, source, or date range
+vigolium traffic --host "*.example.com"
+vigolium traffic --status 401,403,500 --method POST
+vigolium traffic --source ingest-proxy
+vigolium traffic --from 2026-01-01 --to 2026-02-01
+
+# Combine filters: POSTs to the API that returned 200 and leaked a token
+vigolium traffic --host api.example.com --method POST --body "token" --status 200
+```
+
+Choose how each record is rendered:
+
+```bash
+# Burp Suite-style colored request/response, or full raw HTTP
+vigolium traffic --burp --host example.com -n 5
+vigolium traffic --raw --host example.com -n 5
+
+# Pick / drop columns
+vigolium traffic --columns host,method,path,status,size
+vigolium traffic --exclude-columns source,words
+
+# Machine-readable JSON for scripting / jq (compact, token-aware bodies)
+vigolium traffic -j
+vigolium traffic --host api.example.com --status 200 -j
+```
+
+Read a colleague's standalone export without touching your own DB by pointing `-S` at the file (a `.jsonl` export or a standalone `.sqlite`), or read across many at once with `--glob-db`:
+
+```bash
+vigolium traffic -S --db scan.sqlite
+vigolium traffic --glob-db 'scans/*.sqlite'
+```
+
+<Callout icon="circle-info" color="#3B82F6" iconType="regular">
+  All filter flags (`--host`, `--status`, `--method`, `--path`, `--source`, `--search`, `--header`, `--body`, `--from`/`--to`) stack, and `--sort` + `--asc` control ordering. Add `--replay` to re-send the matched records instead of listing them (see [section 2](#2-replay-all-stored-traffic-through-burp-suite)). The compact `-j/--json` output is the same agent-friendly serializer described in [section 21](#21-triage-findings-with-a-coding-agent-claude-codex).
+</Callout>
+
+---
+
+## 26. Set up the AI agent (Codex or Claude CLI)
+
+Vigolium's AI features (autopilot, swarm, source-code audit, query) all run through one in-process runtime called **olium**, which talks to a provider. Pick one provider and give it credentials. The two most common setups are below; verify any of them with `vigolium ol -p 'what model are you running'`.
+
+**Method 1 — Codex (cheapest, with a ChatGPT subscription).** If you already use OpenAI's **Codex CLI**, vigolium reuses the same OAuth credential file, no API key, refresh handled automatically. This is the recommended default.
+
+```bash
+# 1. Install the Codex CLI (one-time) and log in.
+codex login
+codex exec 'hello'             # sanity check — should print a model name
+
+# 2. Pin vigolium to it (defaults already match; this just makes it explicit).
+vigolium config set agent.olium.provider openai-codex-oauth
+vigolium config set agent.olium.oauth_cred_path ~/.codex/auth.json
+vigolium config set agent.olium.model gpt-5.5
+
+# 3. Verify.
+vigolium ol -p 'what model are you running'
+```
+
+**Method 2 — Claude CLI (`claude` shell-out).** Delegate to the `claude` binary on your `$PATH`, so olium uses whatever auth `claude` itself is configured with (plus your personal `CLAUDE.md`, MCP servers, and installed skills).
+
+```bash
+which claude   # must resolve
+
+vigolium config set agent.olium.provider anthropic-cli   # alias: anthropic-claude-cli
+vigolium config set agent.olium.model claude-opus-4-7
+
+vigolium ol -p 'what model are you running'
+```
+
+Once `vigolium ol` returns a model name, every agent command works: `vigolium agent autopilot`, `vigolium agent swarm`, `vigolium agent query`, and `vigolium agent audit`.
+
+<Callout icon="circle-info" color="#3B82F6" iconType="regular">
+  These are two of several providers, olium also supports the Claude Code Agent SDK bridge, Anthropic OAuth/API-key, and any OpenAI-compatible backend (Ollama, OpenRouter, LM Studio, vLLM). For the full provider matrix, credential handling, and the source-code audit drivers, see the setup guide, starting with the recommended Codex path: [Set up the agent → Codex](https://docs.vigolium.com/getting-started/setup-agent#2-codex-cheapest-with-a-chatgpt-subscription-recommended).
 </Callout>
 
 ---
