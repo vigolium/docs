@@ -6,9 +6,18 @@ icon: "plug"
 
 This guide explains how to install and use the `vigolium-scanner` skill with AI coding agents, Claude Code and OpenAI Codex, to operate the Vigolium CLI for web vulnerability scanning, security testing, and custom extension authoring.
 
-**Skill repository:** [github.com/vigolium/skills](https://github.com/vigolium/skills)
+**Skill repository:** [github.com/vigolium/skills](https://github.com/vigolium/skills) — or install the copy **embedded in your `vigolium` binary**, which always matches your installed version.
 
 ### Quick Install
+
+```bash
+# Install the embedded skill into the current project (recommended — always matches your binary)
+vigolium skills install --agent claude --scope project
+```
+
+`vigolium skills install` (added in v0.2.1) writes the `vigolium-scanner` bundle straight from the binary, so it can never drift from the CLI you're driving. Pick the agent with `--agent claude|codex|agents` and the location with `--scope project` (current folder) or `--scope global` (home dir). Run `vigolium skills` to list what's bundled and `vigolium skills get vigolium-scanner` to print a bundle without installing it.
+
+Prefer to pull the latest from the repo instead? Use the external `skills` installer:
 
 ```bash
 bunx skills add vigolium/skills --skill vigolium-scanner --agent <agent-name> --yes
@@ -51,7 +60,23 @@ public/skills/vigolium-scanner/
 
 ## Installation
 
-**Option A: Install via npx / bunx (recommended)**
+**Option A: `vigolium skills install` (recommended — embedded, version-matched)**
+
+```bash
+# Default: install the vigolium-scanner bundle for Claude into the current project
+vigolium skills install
+
+# Choose the agent and scope explicitly
+vigolium skills install --agent codex --scope global
+
+# Install every bundled skill, or override the destination directory
+vigolium skills install --all
+vigolium skills install --dir ./.claude/skills
+```
+
+The bundle ships **inside** the `vigolium` binary, so `vigolium skills install` can never install a stale copy — it always matches the CLI version you're driving. `--agent` accepts `claude`, `codex`, or `agents` (an [agentskills.io](https://agentskills.io)-compatible layout); `--scope` is `project` (current folder) or `global` (home dir). Inspect what's bundled first with `vigolium skills` (list) and `vigolium skills get vigolium-scanner` (print).
+
+**Option B: Install via npx / bunx (pulls the latest from the repo)**
 
 ```bash
 bunx skills add vigolium/skills --skill vigolium-scanner --agent <agent-name> --yes
@@ -65,7 +90,7 @@ npx skills add vigolium/skills --skill vigolium-scanner --agent <agent-name> --y
 
 Replace `<agent-name>` with your agent (e.g., `claude-code`, `codex`). This fetches the skill from the [vigolium/skills](https://github.com/vigolium/skills) repository and registers it automatically.
 
-**Option B: Clone and copy manually**
+**Option C: Clone and copy manually**
 
 ```bash
 git clone https://github.com/vigolium/skills.git

@@ -10,7 +10,7 @@ Answers to the questions that come up most often. For a system-level picture, st
 
 <AccordionGroup>
   <Accordion title="What is Vigolium?">
-    Vigolium is a high-fidelity web vulnerability scanner written in Go. It combines deterministic, module-based scanning with AI-driven agentic analysis to provide broad and deep coverage of web application security issues. It ships 302 modules (193 active, 109 passive) covering injection flaws, misconfigurations, information disclosure, authentication issues, and more.
+    Vigolium is a high-fidelity web vulnerability scanner written in Go. It combines deterministic, module-based scanning with AI-driven agentic analysis to provide broad and deep coverage of web application security issues. It ships 313 modules (198 active, 115 passive) covering injection flaws, misconfigurations, information disclosure, authentication issues, and more.
   </Accordion>
   <Accordion title="What are the ways to run Vigolium?">
     Three operating modes:
@@ -70,7 +70,10 @@ Answers to the questions that come up most often. For a system-level picture, st
     | `anthropic-api-key` | `llm_api_key` or `$ANTHROPIC_API_KEY` |
     | `anthropic-oauth` | `oauth_token` (from `claude setup-token`); falls back to `$ANTHROPIC_API_KEY` |
     | `openai-api-key` | `llm_api_key` or `$OPENAI_API_KEY` |
-    | `anthropic-cli` | shells out to the `claude` binary |
+    | `openai-responses` | `llm_api_key` or `$OPENAI_API_KEY` (public OpenAI Responses API, `/v1/responses`) |
+    | `anthropic-cli` *(alias `anthropic-claude-cli`)* | shells out to the `claude` binary |
+    | `anthropic-claude-sdk-bridge` | logged-in Claude Code subscription via the `vigolium-audit bridge` sidecar (no key) |
+    | `anthropic-compatible` | `custom_provider.base_url` (Anthropic Messages `/v1/messages` gateway / proxy) |
     | `anthropic-vertex` | GCP service-account creds + project/location |
     | `google-vertex` | same GCP creds; routes `gemini-*` models |
     | `openai-compatible` | `custom_provider.base_url` (Ollama / OpenRouter / LM Studio / vLLM / …) |

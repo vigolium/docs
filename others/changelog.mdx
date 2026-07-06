@@ -15,6 +15,54 @@ package.
 </Note>
 
 
+<Update label="v0.2.1" description="2026-07-05">
+
+A detection-breadth and agent-provider release on top of the v0.2.0 stable line. Eleven new modules land (5 active + 6 passive), several existing detectors grow out-of-band and bypass legs, and the olium agent runtime gains three new provider backends (the public OpenAI Responses API, a Claude Code Agent-SDK bridge, and a generic Anthropic Messages proxy). A batch of read-command ergonomics also lands — a grouped `finding` tree view, `--pick` position selection, repeatable AND-combined `--search`, compact-by-default (and syntax-highlighted) Markdown, and post-scan traffic printing. The registry now stands at **198 active + 115 passive** modules.
+
+### Added
+
+- **New active modules (5):**
+  - `xpath-injection` (High) — XPath/XQuery injection via engine error signatures and a boolean oracle.
+  - `sqli-out-of-band` (Critical) — out-of-band SQL injection confirmed via OAST callbacks (`LOAD_FILE` / `xp_dirtree` / `UTL_HTTP`) to a per-payload subdomain.
+  - `unauth-service-exposure` (Critical) — unauthenticated Docker / Kubernetes / datastore APIs exposed over HTTP.
+  - `tls-protocol-cipher-audit` (Medium) — grades a host's TLS by directly negotiating deprecated protocols and weak cipher suites.
+  - `session-fixation` (Medium) — permissive session management (server accepts an attacker-fixed session identifier).
+- **New passive modules (6):**
+  - `llm-endpoint-fingerprint` (Info) — detects LLM / AI API endpoints, backed by a new `infra/llmsig` signature catalog.
+  - `payment-integration-audit` (Info) — flags payment-gateway integration risk surfaces (Stripe, PayPal, Braintree, Square, Adyen, Razorpay, Checkout.com).
+  - `css-injection-detect` (Info) — input reflected into a CSS context.
+  - `dom-clobbering` (Info) — DOM-clobbering gadget: a JavaScript sink fed from a named global.
+  - `cross-origin-isolation-audit` (Info) — missing cross-origin isolation headers (COOP / COEP / CORP).
+  - `reverse-tabnabbing-detect` (Low) — `target=_blank` links without `rel=noopener`.
+- **`vigolium skills` command** — `list`, inspect (`get`), and `install` the coding-agent skill bundles shipped **inside** the binary into a coding agent's skills directory (`--agent claude|codex|agents`, `--scope project|global`, `--all`, `--dir`). Because the bundle is embedded, it always matches your installed CLI version. See [Using Vigolium in your agent](/agentic-scan/using-vigolium-in-your-agent).
+- **olium provider `openai-responses`** — the public OpenAI Responses API (`POST /v1/responses`) with API-key auth. Same key resolution as `openai-api-key` (`agent.olium.llm_api_key` → `$OPENAI_API_KEY`), differing only in the wire format. Default model `gpt-5.5`.
+- **olium provider `anthropic-claude-sdk-bridge`** — drives Claude Code through the Agent SDK via a new `vigolium-audit bridge` sidecar, using your logged-in Claude Code subscription (no key required; an explicit `llm_api_key`/`oauth_token` is forwarded). The bridge binary resolves from `agent.olium.bridge_binary` / `--bridge-bin`, else the embedded blob, else `vigolium-audit` on `PATH`. `anthropic-claude-cli` is accepted as an alias for `anthropic-cli`.
+- **olium provider `anthropic-compatible`** — any Anthropic Messages (`/v1/messages`)-compatible endpoint at a custom `agent.olium.custom_provider.base_url` (a self-hosted Claude gateway or a Messages-format proxy); `extra_headers` can switch the auth scheme.
+- **`scan --print-traffic` / `--print-traffic-tree`** — after a scan, dump the run's HTTP traffic to stdout: raw request/response pairs (like `traffic --raw`) or a host/path hierarchy tree (like `traffic --tree`). Mirrors `--print-finding` and is available on `scan` / `scan-url` / `scan-request` / `run`.
+- **`finding --tree`** (also `vigolium finding tree`) — a host/path hierarchy that collapses recurring findings by title + severity into one `×N` node listing each affected `#id (confidence) → url`. The positional argument now routes like `traffic`: `tree` activates the tree, `ls`/`list` select the table, anything else is a fuzzy search term.
+- **`finding --pick`** — narrow the result page to specific 1-based positions after filters and sort (`--pick 2`, `--pick 1,3`, `--pick 2-4`); composes with `--raw` / `--burp` / `--markdown` / `--json` / `--tui`.
+- **Repeatable `--search` on `finding` and `traffic`** — now repeatable and AND-combined, so each added term further narrows the match. `finding` search also widened to cover the module name and short description.
+- **`--bridge-bin` flag / `agent.olium.bridge_binary` config** — point the `anthropic-claude-sdk-bridge` provider at a specific `vigolium-audit` binary hosting the SDK bridge.
+
+### Changed
+
+- **JWT vulnerability scanner** gains two forgery legs: `jku`/`x5u` header-claim injection pointing at unique OAST URLs, and a `kid` path-traversal token that forces `alg=HS256` and signs with the empty contents of `/dev/null`.
+- **XXE scanner** gains blind / out-of-band detection via per-payload external- and parameter-entity DTDs that reference a unique OAST URL.
+- **XML / SAML security** adds signature-bypass detection — stripping the `<Signature>` element and confirming the target still accepts the unsigned document.
+- **Sensitive-file discovery** adds high-confidence signatures for a fully walkable `.git` tree, Terraform state (`*.tfstate`), and docker-compose files, each with HTML anti-markers.
+- **CSP weakness audit** now understands `nonce-`/`sha*-` source expressions and `strict-dynamic`, so it no longer flags `unsafe-inline` when a nonce/hash or `strict-dynamic` makes modern browsers ignore it.
+- **`finding --markdown` / `traffic --markdown` compact response bodies by default** — a response now renders as a window around the finding's `matched_at`/evidence (or a leading preview) instead of a whole page, no longer depending on `-S`/`--compact`; pass `--full-body` to render bodies whole. The request is always shown whole. Rendered Markdown is syntax-highlighted on an interactive terminal and stays plain when piped/redirected.
+- **Subcommand help reorganized** — the inherited *Global Flags* block is regrouped and collapses to a single-line pointer when stdout is piped, and the native-scan local-flag help is regrouped into sections.
+- **Provider override flags list the new backends** — the `--provider` help across the agent subcommands now lists `openai-responses`, `anthropic-compatible`, and `anthropic-claude-sdk-bridge`; `vigolium agent --list-agents` shows the bridge agent and the `anthropic-claude-cli` alias.
+
+### Fixed
+
+- **Path-normalization / FUZZ baseline false negatives** — the discovery fingerprinter no longer runs bypass paths through `path.Clean`; bypass sequences (`%23`, `..`, `//`, `..;/`) are preserved byte-for-byte on the wire and the baseline is keyed correctly, so cache-key and content-discovery findings that depended on an un-normalized path are detected again.
+- **Scope keyword over-matching** — origin-scope keyword matching now compares against the host's registrable-domain leading label (eTLD+1) instead of a bare hostname substring, so an unrelated third party whose subdomain merely *contains* the keyword (e.g. a `*.cloudflareaccess.com` SSO wall) is correctly excluded.
+- **`--db-isolate` merge race on a fresh shared `--db`** — the destination-database critical section (open → schema-create → default-seed → merge) now runs entirely inside one cross-process merge lock, fixing a `SQLITE_BUSY` flake under a `-P` fan-out into one brand-new shared database.
+
+</Update>
+
 <Update label="v0.2.0" description="2026-07-05">
 
 The first stable (non-beta) release, and a major expansion of detection coverage. Six new module families land — GraphQL security testing, Adobe Experience Manager (AEM), SaaS data-exposure (Salesforce / ServiceNow / Power Pages), Internet Information Services (IIS), an enlarged Model Context Protocol (MCP) suite, plus standalone dependency-confusion and JavaScript-beautification passives. Together they add 29 registered modules (22 active + 7 passive), bringing the registry to 193 active + 109 passive. Every new active family is tech-gated, fail-closed, and multi-round-confirmed to keep the false-positive floor low.

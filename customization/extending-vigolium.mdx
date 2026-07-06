@@ -635,7 +635,10 @@ Default provider is `openai-compatible` with model `gemma4:latest` (a local Olla
 | `anthropic-api-key` | `claude-opus-4-7` | `llm_api_key` or `$ANTHROPIC_API_KEY` |
 | `anthropic-oauth` | `claude-opus-4-7` | `oauth_token` from `claude setup-token` (or `$ANTHROPIC_API_KEY`) |
 | `openai-api-key` | `gpt-5.5` | `llm_api_key` or `$OPENAI_API_KEY` |
-| `anthropic-cli` | `claude-opus-4-7` | shells out to the local `claude` binary on `$PATH` |
+| `openai-responses` | `gpt-5.5` | `llm_api_key` or `$OPENAI_API_KEY` (public OpenAI Responses API, `/v1/responses`) |
+| `anthropic-cli` *(alias `anthropic-claude-cli`)* | `claude-opus-4-7` | shells out to the local `claude` binary on `$PATH` |
+| `anthropic-claude-sdk-bridge` | Claude Code default | logged-in Claude Code subscription via the `vigolium-audit bridge` sidecar (no key); `bridge_binary` / `--bridge-bin` override |
+| `anthropic-compatible` | via `custom_provider.model_id` | `custom_provider.base_url` (Anthropic Messages `/v1/messages` gateway / proxy) |
 | `anthropic-vertex` | `claude-opus-4-6` | GCP service-account JSON (or `$GOOGLE_APPLICATION_CREDENTIALS`) + project/location |
 | `google-vertex` | `gemini-2.5-pro` | same GCP creds; routes `gemini-*` models |
 | `openai-compatible` *(default)* | `gemma4:latest` | `custom_provider.base_url` (Ollama / OpenRouter / LM Studio / vLLM / Groq / …); `api_key` optional |
@@ -682,14 +685,14 @@ The `vigolium.agent.*` APIs available to JavaScript extensions dispatch through 
 
 ### Pros
 
-- **Eight providers**: pick the credential model that fits (OAuth for ChatGPT Plus / Claude Max, API keys for raw API access, CLI shellout for `anthropic-cli`, Vertex for GCP, OpenAI-compatible for local/self-hosted models).
+- **Eleven providers**: pick the credential model that fits (OAuth for ChatGPT Plus / Claude Max, API keys for raw API access — Chat Completions or the OpenAI Responses API — CLI shellout or the Claude Code Agent-SDK bridge for a logged-in Claude subscription, Vertex for GCP, OpenAI- or Anthropic-compatible for local/self-hosted models).
 - **Single in-process runtime**: no subprocess startup overhead, prompt caching is reused across phases that share an engine (Anthropic + Codex providers only).
 - **Per-invocation overrides**: every CLI subcommand exposes `--provider`, `--model`, `--oauth-cred`, `--oauth-token`, `--llm-api-key`.
 - **Global concurrency cap**: `max_concurrent` keeps tier-1 plans from hitting 429s under fan-out.
 
 ### Cons
 
-- **Provider lock-in to supported drivers**: only the eight drivers above are recognised; arbitrary custom CLIs are not pluggable as backends anymore.
+- **Provider lock-in to supported drivers**: only the eleven drivers above are recognised; arbitrary custom CLIs are not pluggable as backends anymore.
 - **Cost**: LLM API calls still have token costs; the `--intensity` preset (autopilot) caps the iteration budget — `quick` is the lightest, `deep` the heaviest.
 
 ### When to use

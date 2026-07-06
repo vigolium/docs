@@ -20,7 +20,7 @@ A turn-based, tool-using LLM agent written in Go. Components:
 | Layer | Lives in | Responsibility |
 |---|---|---|
 | **Engine** | `pkg/olium/engine/` | Multi-turn loop: provider stream → tool dispatch → history append → repeat |
-| **Provider** | `pkg/olium/provider/` | LLM backend, eight drivers (openai-codex-oauth, anthropic-api-key, anthropic-oauth, openai-api-key, anthropic-cli, anthropic-vertex, google-vertex, openai-compatible) |
+| **Provider** | `pkg/olium/provider/` | LLM backend, eleven drivers (openai-codex-oauth, anthropic-api-key, anthropic-oauth, openai-api-key, openai-responses, anthropic-cli, anthropic-claude-sdk-bridge, anthropic-compatible, anthropic-vertex, google-vertex, openai-compatible) |
 | **Tools** | `pkg/olium/tool/` | The eight built-in primitives the model can call (bash, file ops, search, web fetch) |
 | **Skills** | `pkg/olium/skill/` | SKILL.md workflow files (agentskills.io format) discovered from project, user, and embedded scopes |
 | **TUI** | `pkg/olium/tui/` | Bubble Tea front-end (inline scrollback, slash commands, live tool cards) |
@@ -46,7 +46,7 @@ Surrounding behavior:
 
 - **Tool result truncation / spill**: results larger than `MaxToolResultBytes` (default 16 KiB) get head+tail truncation with an elision marker. If `SpillDir` is set (autopilot does this), the full payload spills to `<SpillDir>/tool-results/` and the model gets a head excerpt plus an on-disk path it can `read_file`.
 - **Per-tool timeout**: each tool invocation gets its own deadline (default 5 minutes). A runaway `bash curl` can't hang the whole session.
-- **Prompt caching**: opt-in via `EnablePromptCache`. Autopilot turns it on; the Anthropic providers write `cache_control: ephemeral` markers and the Codex OAuth provider writes `prompt_cache_key` headers, cutting repeated-prefix tokens by ~90 % across long runs. `openai-api-key`, `openai-compatible` (Ollama / OpenRouter / LM Studio / vLLM / Groq / …), and `google-vertex` do not emit cache markers, so the flag is silently ignored for them.
+- **Prompt caching**: opt-in via `EnablePromptCache`. Autopilot turns it on; the Anthropic providers write `cache_control: ephemeral` markers and the Codex OAuth provider writes `prompt_cache_key` headers, cutting repeated-prefix tokens by ~90 % across long runs. `openai-api-key`, `openai-responses`, `openai-compatible` (Ollama / OpenRouter / LM Studio / vLLM / Groq / …), `anthropic-compatible`, and `google-vertex` do not emit cache markers, so the flag is silently ignored for them. (`anthropic-claude-sdk-bridge` manages caching inside the Claude Code Agent SDK.)
 - **Skills**: when a registry is loaded the engine injects an `<available_skills>` block into the system prompt at construction, and registers a `load_skill` tool the model can call to fetch a skill body on demand.
 
 ---
@@ -93,7 +93,7 @@ Prints assistant text to **stdout**; thinking deltas, tool start/end cards, and 
 
 ## Providers
 
-Eight drivers in `pkg/olium/provider/`. The provider ID is vendor-first so it's obvious which credential field applies:
+Eleven drivers in `pkg/olium/provider/`. The provider ID is vendor-first so it's obvious which credential field applies:
 
 | Provider | Auth | Default / typical model | Source of credential |
 |---|---|---|---|
@@ -101,7 +101,10 @@ Eight drivers in `pkg/olium/provider/`. The provider ID is vendor-first so it's 
 | `anthropic-api-key` | `x-api-key` header | `claude-opus-4-7` | `--llm-api-key` → `agent.olium.llm_api_key` → `$ANTHROPIC_API_KEY` |
 | `anthropic-oauth` | Bearer token (Claude Code OAuth) | `claude-opus-4-7` | `--oauth-token` → `agent.olium.oauth_token` → `$ANTHROPIC_API_KEY` (produced by `claude setup-token`) |
 | `openai-api-key` | `x-api-key` header | `gpt-5.5` | `--llm-api-key` → `agent.olium.llm_api_key` → `$OPENAI_API_KEY` |
-| `anthropic-cli` | (none, subprocess) | `claude-opus-4-7` | `--claude-bin` (default `claude` on `$PATH`) |
+| `openai-responses` | `x-api-key` header | `gpt-5.5` | `--llm-api-key` → `agent.olium.llm_api_key` → `$OPENAI_API_KEY`; public OpenAI Responses API (`/v1/responses`) instead of Chat Completions |
+| `anthropic-cli` | (none, subprocess) | `claude-opus-4-7` | `--claude-bin` (default `claude` on `$PATH`); alias `anthropic-claude-cli` |
+| `anthropic-claude-sdk-bridge` | (none, subscription) | Claude Code default | Drives Claude Code via the `vigolium-audit bridge` sidecar using your logged-in subscription; `--bridge-bin` → `agent.olium.bridge_binary` → embedded blob → `vigolium-audit` on `$PATH` |
+| `anthropic-compatible` | optional bearer | via `custom_provider.model_id` | `custom_provider.base_url` (Anthropic Messages `/v1/messages` gateway or proxy), `custom_provider.api_key`, `custom_provider.model_id`, `custom_provider.extra_headers` |
 | `anthropic-vertex` | GCP SA JSON | `claude-opus-4-6` | `agent.olium.oauth_cred_path` (or `$GOOGLE_APPLICATION_CREDENTIALS`) + `google_cloud_project` / `google_cloud_location`; routes `claude-*` models to publishers/anthropic |
 | `google-vertex` | GCP SA JSON | `gemini-2.5-pro` | Same GCP creds as `anthropic-vertex`; routes `gemini-*` models to publishers/google |
 | `openai-compatible` *(default)* | optional bearer | `gemma4:latest` (Ollama) | `custom_provider.base_url` (required), `custom_provider.api_key` (optional), `custom_provider.model_id`, `custom_provider.extra_headers` (Ollama / OpenRouter / LM Studio / vLLM / Together / Groq / LocalAI / custom proxies) |
@@ -183,13 +186,14 @@ In the TUI, type `/skill:<name> [args]` to inline-expand a skill body into your 
 ## CLI flags
 
 ```text
---provider          openai-codex-oauth | anthropic-api-key | anthropic-oauth | openai-api-key | anthropic-cli | anthropic-vertex | google-vertex | openai-compatible
+--provider          openai-codex-oauth | anthropic-api-key | anthropic-oauth | openai-api-key | openai-responses | anthropic-cli | anthropic-claude-sdk-bridge | anthropic-compatible | anthropic-vertex | google-vertex | openai-compatible
 --model             provider-specific (empty = provider default)
 --oauth-cred        OAuth credential file (openai-codex-oauth; default ~/.codex/auth.json). Also the GCP SA JSON for the Vertex providers.
 --oauth-token       Claude Code OAuth bearer token (anthropic-oauth)
---llm-api-key       API key for anthropic-api-key / openai-api-key
+--llm-api-key       API key for anthropic-api-key / openai-api-key / openai-responses
 --claude-bin        Path to the `claude` binary (anthropic-cli)
---base-url          Override custom_provider.base_url (openai-compatible)
+--bridge-bin        Path to the vigolium-audit binary hosting the SDK bridge (anthropic-claude-sdk-bridge; empty = embedded blob, then PATH)
+--base-url          Override custom_provider.base_url (openai-compatible / anthropic-compatible)
 --system            Override the built-in system prompt
 -p, --prompt        Initial prompt (alternative to a positional arg). Forces non-interactive mode.
 --stdin             Force reading the prompt from stdin
@@ -206,16 +210,17 @@ The full `agent.olium` block:
 ```yaml
 agent:
   olium:
-    provider: openai-compatible    # openai-codex-oauth | anthropic-api-key | anthropic-oauth | openai-api-key | anthropic-cli | anthropic-vertex | google-vertex | openai-compatible
+    provider: openai-compatible    # openai-codex-oauth | anthropic-api-key | anthropic-oauth | openai-api-key | openai-responses | anthropic-cli | anthropic-claude-sdk-bridge | anthropic-compatible | anthropic-vertex | google-vertex | openai-compatible
     model: gemma4:latest           # empty = provider default
     oauth_cred_path: ~/.codex/auth.json  # also GCP SA JSON for anthropic-vertex / google-vertex
+    bridge_binary: ""              # anthropic-claude-sdk-bridge; empty = embedded blob, then PATH
     oauth_token: ""                # anthropic-oauth; supports ${ENV_VAR}; falls back to $ANTHROPIC_API_KEY
     llm_api_key: ""                # supports ${ENV_VAR}; falls back to $ANTHROPIC_API_KEY / $OPENAI_API_KEY
     google_cloud_project: ""       # Vertex providers; $GOOGLE_CLOUD_PROJECT wins
     google_cloud_location: ""      # Vertex providers; default us-central1
     reasoning_effort: medium       # minimal|low|medium|high|xhigh (codex)
     system_prompt: ""              # empty = built-in olium prompt
-    custom_provider:               # only used when provider == openai-compatible
+    custom_provider:               # used when provider == openai-compatible or anthropic-compatible
       base_url: http://localhost:11434/v1   # full chat-completions URL also works
       model_id: gemma4:latest               # fallback for olium.model
       api_key: ""                           # optional

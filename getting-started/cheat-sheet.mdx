@@ -652,10 +652,14 @@ The Burp extension forwards traffic you browse/proxy in Burp Suite into a runnin
 
 Vigolium is built to be shelled out to by an LLM/coding agent. The `finding` and `traffic` read commands emit **compact, token-aware** output under `-j/--json` (headers kept, bodies bounded to ~1–2 KB with `body_size`/`body_sha256`/`body_truncated`, binary bodies stubbed, findings windowed to a `response_evidence` snippet), so an agent can survey dozens of findings without blowing its context window and pull full detail only for the ones worth confirming.
 
-Teach your agent to drive Vigolium by installing the **`vigolium-scanner` skill** ([github.com/vigolium/skills](https://github.com/vigolium/skills)):
+Teach your agent to drive Vigolium by installing the **`vigolium-scanner` skill**. The copy embedded in your binary always matches the CLI version, so prefer the native installer:
 
 ```bash
-# Install the skill for your agent (e.g. claude-code, codex)
+# Install the embedded skill (recommended — version-matched to your binary)
+vigolium skills install --agent claude --scope project   # --agent claude|codex|agents, --scope project|global
+vigolium skills                                          # list what's bundled
+
+# Or pull the latest from the repo (github.com/vigolium/skills)
 bunx skills add vigolium/skills --skill vigolium-scanner --agent <agent-name> --yes
 ```
 
@@ -685,13 +689,16 @@ Output-shaping flags on `finding` / `traffic` / `db ls`:
 | `--compact` | metadata only, drop bodies — cheapest survey pass |
 | `--fields a,b,c` | project to just these top-level keys, cuts tokens hard |
 | `--with-records` | *(finding)* embed the linked HTTP records → self-contained triage bundle |
-| `--full-body` | complete decoded bodies (use when writing an exploit — see [section 22](#22-show-how-to-exploit-a-finding)) |
-| `--markdown` | render the finding with request/response in fenced `http` blocks |
+| `--full-body` | complete decoded bodies (use when writing an exploit — see [section 22](#22-show-how-to-exploit-a-finding)); also un-compacts `--markdown` response bodies |
+| `--markdown` | render the finding with request/response in fenced `http` blocks (response bodies compacted to a preview by default) |
+| `--tree` *(finding / traffic)* | host/path hierarchy view; recurring findings collapse by title + severity into one `×N` node |
+| `--pick 2-4` *(finding)* | narrow to specific 1-based positions after filters + sort (`2`, `1,3`, `2-4`); composes with `--raw`/`--burp`/`--markdown`/`--json` |
+| `--search a --search b` | repeatable, AND-combined — each added term further narrows the match |
 | `--min-severity high` | filter to the severities that matter |
 | `--agentic-scan <uuid>` | only findings from a given agent run (expands to the whole run tree) |
 
 <Callout icon="circle-info" color="#3B82F6" iconType="regular">
-  Under `--json`, bodies are **always** bounded regardless of `-S`. Under `--markdown`, the response is only windowed with `-S`/`--stateless` + `--compact` — against your live project DB, `--markdown` renders bodies whole. So for token-safe Markdown triage, read from a stateless export (`-S --db ./scan.jsonl --compact`). An agent run (`agent autopilot|swarm|audit`) under `--json` even prints a ready-made follow-up command in its summary: `vigolium finding --agentic-scan <uuid> --json --with-records`. Full guide: [Using Vigolium in your agent](/agentic-scan/using-vigolium-in-your-agent).
+  Under `--json`, bodies are **always** bounded regardless of `-S`. As of v0.2.1, `--markdown` also **compacts response bodies by default** — the response renders as a window around the finding's `matched_at`/evidence (or a leading preview) rather than a whole page, regardless of `-S`/`--compact`; pass `--full-body` to render bodies whole. The request is always shown whole (it carries the payload). On an interactive terminal the Markdown is syntax-highlighted; piped/redirected output stays plain, greppable Markdown. An agent run (`agent autopilot|swarm|audit`) under `--json` even prints a ready-made follow-up command in its summary: `vigolium finding --agentic-scan <uuid> --json --with-records`. Full guide: [Using Vigolium in your agent](/agentic-scan/using-vigolium-in-your-agent).
 </Callout>
 
 ---
@@ -705,7 +712,8 @@ Once a finding is confirmed, pull the exact request that triggered it, then re-f
 vigolium finding --id 42 --json --with-records --full-body
 
 # Or as a report-ready Markdown PoC (request/response in fenced http blocks).
-vigolium finding --id 42 --markdown > finding-42.md
+# --markdown compacts response bodies by default; add --full-body for the whole page.
+vigolium finding --id 42 --markdown --full-body > finding-42.md
 ```
 
 Reproduce and iterate the payload by replaying the finding's linked record. `vigolium replay --finding-id` re-sends the request behind a finding, and `-m/--mutate` lets you change one insertion point at a time to prove exploitability:
@@ -781,10 +789,14 @@ vigolium scan-url -S -t https://example.com \
 
 # Passive-only sweep of one URL, printed to the console
 vigolium scan-url -S -t https://example.com --passive-only --silent --print-finding
+
+# Also dump the scan's HTTP traffic — as a host/path tree, or raw request/response pairs
+vigolium scan-url -S -t https://example.com --silent --print-traffic-tree
+vigolium scan-url -S -t https://example.com --silent --print-traffic
 ```
 
 <Callout icon="circle-info" color="#3B82F6" iconType="regular">
-  `--print-finding` works on `scan`, `scan-url`, `scan-request`, and `run`. It prints **nothing** when the scan finds nothing, so `--silent --print-finding` yields either the findings or an empty screen — ideal for a fast triage loop. The Markdown is identical to `vigolium finding --markdown` ([section 21](#21-triage-findings-with-a-coding-agent-claude-codex)); to save it, redirect stdout (`... --print-finding > findings.md`). Enabling it routes the scan through the full runner so each finding's linked request/response is available to render, which is why it pairs naturally with `-S`.
+  `--print-finding` works on `scan`, `scan-url`, `scan-request`, and `run`. It prints **nothing** when the scan finds nothing, so `--silent --print-finding` yields either the findings or an empty screen — ideal for a fast triage loop. The Markdown is identical to `vigolium finding --markdown` ([section 21](#21-triage-findings-with-a-coding-agent-claude-codex)); to save it, redirect stdout (`... --print-finding > findings.md`). Enabling it routes the scan through the full runner so each finding's linked request/response is available to render, which is why it pairs naturally with `-S`. The same commands take **`--print-traffic-tree`** (host/path hierarchy, like `traffic --tree`) and **`--print-traffic`** (raw request/response pairs, like `traffic --raw`) to dump the run's traffic after it finishes — set both to print the tree first, then the raw pairs.
 </Callout>
 
 ---

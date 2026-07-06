@@ -299,11 +299,12 @@ agent:
 
   # Olium engine — used by every agent subcommand
   olium:
-    provider: openai-compatible    # openai-codex-oauth | anthropic-api-key | anthropic-oauth | openai-api-key | anthropic-cli | anthropic-vertex | google-vertex | openai-compatible (default: openai-compatible)
-    model: gemma4:latest           # empty = provider default; matches custom_provider.model_id default
+    provider: openai-compatible    # openai-codex-oauth | anthropic-api-key | anthropic-oauth | openai-api-key | openai-responses | anthropic-cli | anthropic-claude-sdk-bridge | anthropic-compatible | anthropic-vertex | google-vertex | openai-compatible (default: openai-compatible)
+    model: gemma4:latest           # empty = provider default; matches custom_provider.model_id default (openai-compatible / anthropic-compatible)
     oauth_cred_path: ~/.codex/auth.json    # openai-codex-oauth provider
+    bridge_binary: ""              # anthropic-claude-sdk-bridge: path to the vigolium-audit binary hosting the SDK bridge (empty = embedded blob, then PATH)
     oauth_token: ""                # anthropic-oauth bearer token (from `claude setup-token`); supports ${ENV_VAR}
-    llm_api_key: ""                # for anthropic-api-key / openai-api-key; supports ${ENV_VAR}; falls back to provider env
+    llm_api_key: ""                # for anthropic-api-key / openai-api-key / openai-responses; supports ${ENV_VAR}; falls back to provider env
     reasoning_effort: medium       # minimal | low | medium | high | xhigh (codex)
     system_prompt: ""              # override built-in olium system prompt
     max_tokens: 1000000
@@ -318,8 +319,9 @@ agent:
     # --skill / --skill-tag / --no-skill-filter override selection per-run.
     always_on_skills: []
 
-    # Custom OpenAI-compatible backend (used when provider == openai-compatible).
-    # Drives Ollama, OpenRouter, LM Studio, vLLM, Together, Groq, etc.
+    # Custom backend: used when provider == openai-compatible (OpenAI Chat
+    # Completions — Ollama, OpenRouter, LM Studio, vLLM, Together, Groq, …) or
+    # provider == anthropic-compatible (Anthropic Messages /v1/messages gateway).
     custom_provider:
       base_url: http://localhost:11434/v1   # e.g. http://localhost:11434/v1 (Ollama)
       model_id: gemma4:latest               # backend-specific model id
@@ -401,12 +403,15 @@ Provider quick reference:
 | `anthropic-api-key` | `claude-opus-4-7` | `llm_api_key` or `$ANTHROPIC_API_KEY` |
 | `anthropic-oauth` | `claude-opus-4-7` | `oauth_token` (from `claude setup-token`); falls back to `$ANTHROPIC_API_KEY` |
 | `openai-api-key` | `gpt-5.5` | `llm_api_key` or `$OPENAI_API_KEY` |
-| `anthropic-cli` | `claude-opus-4-7` | local `claude` binary on `$PATH` |
+| `openai-responses` | `gpt-5.5` | `llm_api_key` or `$OPENAI_API_KEY` (public OpenAI Responses API, `/v1/responses`) |
+| `anthropic-cli` *(alias `anthropic-claude-cli`)* | `claude-opus-4-7` | local `claude` binary on `$PATH` |
+| `anthropic-claude-sdk-bridge` | Claude Code default | logged-in Claude Code subscription via the `vigolium-audit bridge` sidecar (no key); `bridge_binary` / `--bridge-bin` override |
+| `anthropic-compatible` | via `custom_provider.model_id` | `agent.olium.custom_provider` (Anthropic Messages `/v1/messages` gateway or proxy) |
 | `anthropic-vertex` | `claude-opus-4-6` | GCP service-account JSON (or ADC) via `google_cloud_project` / `google_cloud_location` |
 | `google-vertex` | `gemini-2.5-pro` | GCP service-account JSON (or ADC) via `google_cloud_project` / `google_cloud_location` |
 | `openai-compatible` *(default)* | `gemma4:latest` (via `custom_provider.model_id`) | `agent.olium.custom_provider` (Ollama, OpenRouter, LM Studio, vLLM, …) |
 
-CLI flags `--provider`, `--model`, `--oauth-cred`, `--oauth-token`, `--llm-api-key`, `--base-url` override these per-invocation. The REST API does **not** mirror these overrides, server-side workloads use the YAML config exclusively. See [Setting Up the Agent](/getting-started/setup-agent) for a step-by-step walkthrough or [Olium Agent](/agentic-scan/olium) for full provider details.
+CLI flags `--provider`, `--model`, `--oauth-cred`, `--oauth-token`, `--llm-api-key`, `--base-url`, `--bridge-bin` override these per-invocation. The REST API does **not** mirror these overrides, server-side workloads use the YAML config exclusively. See [Setting Up the Agent](/getting-started/setup-agent) for a step-by-step walkthrough or [Olium Agent](/agentic-scan/olium) for full provider details.
 
 ### `database`
 

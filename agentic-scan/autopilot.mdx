@@ -228,12 +228,15 @@ Supported provider IDs:
 | `anthropic-api-key`    | `claude-opus-4-7`    | `--llm-api-key` / `$ANTHROPIC_API_KEY`                    |
 | `anthropic-oauth`      | `claude-opus-4-7`    | Bearer token from `claude setup-token` (`--oauth-token` / `$ANTHROPIC_API_KEY`) |
 | `openai-api-key`       | `gpt-5.5`            | `--llm-api-key` / `$OPENAI_API_KEY`                       |
-| `anthropic-cli`        | `claude-opus-4-7`    | The local `claude` binary on `$PATH`                      |
+| `openai-responses`     | `gpt-5.5`            | `--llm-api-key` / `$OPENAI_API_KEY` (public OpenAI Responses API, `/v1/responses`) |
+| `anthropic-cli`        | `claude-opus-4-7`    | The local `claude` binary on `$PATH` (alias: `anthropic-claude-cli`) |
+| `anthropic-claude-sdk-bridge` | Claude Code default | Logged-in Claude Code subscription via the `vigolium-audit bridge` sidecar (`--bridge-bin` override); no key |
+| `anthropic-compatible` | via `custom_provider.model_id` | `custom_provider.base_url` (Anthropic Messages `/v1/messages` gateway / proxy) |
 | `anthropic-vertex`     | `claude-opus-4-6`    | GCP service-account JSON + project/location               |
 | `google-vertex`        | `gemini-2.5-pro`     | Same GCP creds; routes `gemini-*` models                  |
 | `openai-compatible`    | `gemma4:latest`      | `custom_provider.base_url` (Ollama, OpenRouter, LM Studio, vLLM, …); `api_key` optional |
 
-Prompt caching (`EnablePromptCache: true`) is set on the engine; only the Anthropic providers and the Codex OAuth provider actually emit cache markers — `openai-compatible` (including Ollama) and `openai-api-key` ignore them.
+Prompt caching (`EnablePromptCache: true`) is set on the engine; only the Anthropic providers and the Codex OAuth provider actually emit cache markers — `openai-compatible` (including Ollama), `openai-api-key`, and `openai-responses` ignore them.
 
 ---
 

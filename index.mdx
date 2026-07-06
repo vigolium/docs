@@ -88,7 +88,7 @@ For a guided walkthrough including validation and your first scan, see the [Quic
 
 ### Agentic Scan
 
-Agentic scanning uses AI agents to drive or augment the scanning process. Invoked via `vigolium agent <mode>`. All AI dispatch is routed through the in-process **olium** engine, which supports eight providers: `openai-codex-oauth`, `anthropic-api-key`, `anthropic-oauth`, `openai-api-key`, `anthropic-cli`, `anthropic-vertex`, `google-vertex`, and `openai-compatible` (Ollama / OpenRouter / LM Studio / vLLM).
+Agentic scanning uses AI agents to drive or augment the scanning process. Invoked via `vigolium agent <mode>`. All AI dispatch is routed through the in-process **olium** engine, which supports eleven providers: `openai-codex-oauth`, `anthropic-api-key`, `anthropic-oauth`, `openai-api-key`, `openai-responses`, `anthropic-cli`, `anthropic-claude-sdk-bridge`, `anthropic-compatible`, `anthropic-vertex`, `google-vertex`, and `openai-compatible` (Ollama / OpenRouter / LM Studio / vLLM).
 
 | Mode | Command | Description |
 |------|---------|-------------|
@@ -103,7 +103,7 @@ All scan-oriented modes support `--source` for source-aware analysis and store s
 
 ### Native Scan
 
-Deterministic, multi-phase vulnerability scanning via `vigolium scan`. Fast, modular, and repeatable, runs content discovery, browser spidering, SPA crawling, and active/passive `dynamic-assessment` phases with **302 scanner modules** (193 active, 109 passive).
+Deterministic, multi-phase vulnerability scanning via `vigolium scan`. Fast, modular, and repeatable, runs content discovery, browser spidering, SPA crawling, and active/passive `dynamic-assessment` phases with **313 scanner modules** (198 active, 115 passive).
 
 | Category | Coverage |
 |----------|----------|

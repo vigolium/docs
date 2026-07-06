@@ -109,7 +109,10 @@ Native, in-process replacement for the old SDK pool.
   | `anthropic-api-key`   | `llm_api_key` or `$ANTHROPIC_API_KEY`                 |
   | `anthropic-oauth`     | `oauth_token` (from `claude setup-token`); falls back to `$ANTHROPIC_API_KEY` |
   | `openai-api-key`      | `llm_api_key` or `$OPENAI_API_KEY`                    |
-  | `anthropic-cli`       | shells out to the `claude` binary                     |
+  | `openai-responses`    | `llm_api_key` or `$OPENAI_API_KEY` (public OpenAI Responses API, `/v1/responses`) |
+  | `anthropic-cli`       | shells out to the `claude` binary (alias: `anthropic-claude-cli`) |
+  | `anthropic-claude-sdk-bridge` | logged-in Claude Code subscription via the `vigolium-audit bridge` sidecar; `bridge_binary` / `--bridge-bin` (embedded blob, then `PATH`) |
+  | `anthropic-compatible` | `custom_provider.base_url` (Anthropic Messages `/v1/messages`), `custom_provider.api_key`, `custom_provider.model_id`, `custom_provider.extra_headers` |
   | `anthropic-vertex`    | `oauth_cred_path` (GCP SA JSON, or `$GOOGLE_APPLICATION_CREDENTIALS`) + `google_cloud_project` / `google_cloud_location` |
   | `google-vertex`       | same GCP creds; routes `gemini-*` models             |
   | `openai-compatible`   | `custom_provider.base_url` (required), `custom_provider.api_key` (optional), `custom_provider.model_id`, `custom_provider.extra_headers` |

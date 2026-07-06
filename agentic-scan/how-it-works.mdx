@@ -67,7 +67,8 @@ Vigolium's agent mode runs AI-driven security scans on top of the native scanner
                                 │
 ┌───────────────────────────────▼─────────────────────────────────┐
 │  Providers                    pkg/olium/provider/               │
-│  anthropic (API/OAuth/CLI/Vertex) · openai (API/codex-OAuth) ·  │
+│  anthropic (API/OAuth/CLI/SDK-bridge/compatible/Vertex) ·       │
+│  openai (API/Responses/codex-OAuth) ·                           │
 │  google-vertex · openai-compatible (HTTP)                       │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -99,7 +100,7 @@ Native, in-process replacement for the old subprocess pool.
 - **`pkg/olium/engine`**: `Engine.Run(ctx, prompt) <-chan Event` returns a stream of events: `EventTextDelta`, `EventThinkingDelta`, `EventToolCall`, `EventTurnDone` (with token usage), `EventError`. Conversation state (system prompt, tool definitions, prior turns) lives on the engine and is reused across calls when phases share an engine.
 - **`pkg/olium/tool`**: registry of built-in tools (bash, file ops, grep, fetch, …). Autopilot exposes the full set; swarm uses a smaller set per phase.
 - **`pkg/olium/skill`**: optional skill files (Markdown SKILL.md packages) that augment the system prompt; loaded from embedded assets and `~/.vigolium/skills/`.
-- **`pkg/olium/provider`**: provider dispatch (eight drivers):
+- **`pkg/olium/provider`**: provider dispatch (eleven drivers):
 
   | Provider              | Auth source                                           |
   |-----------------------|-------------------------------------------------------|
@@ -107,7 +108,10 @@ Native, in-process replacement for the old subprocess pool.
   | `anthropic-api-key`   | `llm_api_key` or `$ANTHROPIC_API_KEY`                 |
   | `anthropic-oauth`     | `oauth_token` (from `claude setup-token`); falls back to `$ANTHROPIC_API_KEY` |
   | `openai-api-key`      | `llm_api_key` or `$OPENAI_API_KEY`                    |
-  | `anthropic-cli`       | shells out to the local `claude` binary               |
+  | `openai-responses`    | `llm_api_key` or `$OPENAI_API_KEY` (public OpenAI Responses API, `/v1/responses`) |
+  | `anthropic-cli`       | shells out to the local `claude` binary (alias: `anthropic-claude-cli`) |
+  | `anthropic-claude-sdk-bridge` | logged-in Claude Code subscription via the `vigolium-audit bridge` sidecar; `bridge_binary` / `--bridge-bin` (embedded blob, then `PATH`) |
+  | `anthropic-compatible` | `custom_provider.base_url` (Anthropic Messages `/v1/messages`), `custom_provider.api_key`, `custom_provider.model_id`, `custom_provider.extra_headers` |
   | `anthropic-vertex`    | `oauth_cred_path` (GCP SA JSON or `$GOOGLE_APPLICATION_CREDENTIALS`) + `google_cloud_project` / `google_cloud_location` |
   | `google-vertex`       | same GCP creds; routes `gemini-*` models             |
   | `openai-compatible`   | `custom_provider.base_url` (required), `custom_provider.api_key` (optional), `custom_provider.model_id`, `custom_provider.extra_headers` (Ollama / OpenRouter / LM Studio / vLLM / Groq / Together / LocalAI / custom proxies) |
@@ -321,7 +325,7 @@ agent:
     max_high_risk: 20
     min_risk_score: 50
   olium:
-    provider: openai-compatible    # openai-codex-oauth | anthropic-api-key | openai-api-key | anthropic-oauth | anthropic-cli | anthropic-vertex | google-vertex | openai-compatible
+    provider: openai-compatible    # openai-codex-oauth | anthropic-api-key | openai-api-key | openai-responses | anthropic-oauth | anthropic-cli | anthropic-claude-sdk-bridge | anthropic-compatible | anthropic-vertex | google-vertex | openai-compatible
     model: gemma4:latest           # provider default if empty
     oauth_cred_path: ~/.codex/auth.json
     llm_api_key: ${ANTHROPIC_API_KEY}
@@ -342,7 +346,7 @@ agent:
     binary_path: agent-browser
 ```
 
-CLI flags (`--provider`, `--model`, `--oauth-cred`, `--oauth-token`, `--llm-api-key`) override the config at runtime. The REST API also accepts per-request BYOK credentials.
+CLI flags (`--provider`, `--model`, `--oauth-cred`, `--oauth-token`, `--llm-api-key`, `--bridge-bin`) override the config at runtime. The REST API also accepts per-request BYOK credentials.
 
 ---
 

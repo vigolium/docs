@@ -41,7 +41,8 @@ The supported providers:
 | `openai-codex-oauth` | `~/.codex/auth.json` (from `codex login`) | `gpt-5.5` | Cheapest with a ChatGPT sub. |
 | `anthropic-api-key` | `$ANTHROPIC_API_KEY` | `claude-opus-4-7` | Direct Anthropic API billing. |
 | `anthropic-oauth` | `claude setup-token` bearer | `claude-opus-4-7` | Uses your Claude Pro/Max plan. |
-| `openai-api-key` | `$OPENAI_API_KEY` | `gpt-5.5` | Direct OpenAI API billing. |
+| `openai-api-key` | `$OPENAI_API_KEY` | `gpt-5.5` | Direct OpenAI API billing (Chat Completions). |
+| `openai-responses` | `$OPENAI_API_KEY` | `gpt-5.5` | Direct OpenAI API billing via the public Responses API (`/v1/responses`). |
 | `anthropic-claude-sdk-bridge` | Claude Code subscription (no key) | Claude Code default | Claude via the [Agent SDK](https://github.com/vigolium/vigolium-audit); the recommended default Claude path. |
 | `anthropic-cli` | `claude` binary on `$PATH` | `claude-opus-4-7` | Shells out to the Claude Code CLI (alias: `anthropic-claude-cli`). |
 | `anthropic-vertex` | GCP service-account JSON | `claude-opus-4-6` | Claude on Vertex AI. |

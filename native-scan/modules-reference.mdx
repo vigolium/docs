@@ -1,12 +1,12 @@
 ---
 title: "Scanner Modules Reference"
-description: "Reference for Vigolium's 302 scanner modules, 193 active and 109 passive, covering the OWASP Top 10 and beyond."
+description: "Reference for Vigolium's 313 scanner modules, 198 active and 115 passive, covering the OWASP Top 10 and beyond."
 icon: "cubes"
 ---
 
-Vigolium ships with **302 scanner modules**, 193 active and 109 passive, covering the OWASP Top 10 and beyond. Run `vigolium module ls` for the up-to-date enabled list (the registry can grow between releases without a docs refresh).
+Vigolium ships with **313 scanner modules**, 198 active and 115 passive, covering the OWASP Top 10 and beyond. Run `vigolium module ls` for the up-to-date enabled list (the registry can grow between releases without a docs refresh).
 
-Active modules send modified requests to detect vulnerabilities; passive modules analyze existing request/response pairs without generating traffic. Recent additions include the GraphQL security suite, the Adobe Experience Manager (AEM) family, the SaaS data-exposure family (Salesforce / ServiceNow / Power Pages), the Model Context Protocol (MCP) suite, the expanded IIS family, and the `dependency-confusion` and `js-beautify` passives — see `vigolium module ls --tag graphql`, `--tag aem`, `--tag salesforce`, `--tag servicenow`, `--tag powerpages`, `--tag mcp`, and `--tag iis` to view them.
+Active modules send modified requests to detect vulnerabilities; passive modules analyze existing request/response pairs without generating traffic. Recent additions include the GraphQL security suite, the Adobe Experience Manager (AEM) family, the SaaS data-exposure family (Salesforce / ServiceNow / Power Pages), the Model Context Protocol (MCP) suite, the expanded IIS family, the `dependency-confusion` and `js-beautify` passives, and the v0.2.1 batch (out-of-band SQLi, XPath injection, unauthenticated infra-service exposure, TLS protocol/cipher audit, session fixation, and the LLM-endpoint / payment-integration / DOM-clobbering / CSS-injection / cross-origin-isolation / reverse-tabnabbing passives) — see `vigolium module ls --tag graphql`, `--tag aem`, `--tag salesforce`, `--tag servicenow`, `--tag powerpages`, `--tag mcp`, and `--tag iis` to view them.
 
 ## Severity Scale
 
@@ -20,7 +20,7 @@ Active modules send modified requests to detect vulnerabilities; passive modules
 
 ---
 
-## Active Modules (193)
+## Active Modules (198)
 
 Active modules send modified requests to detect vulnerabilities via fuzzing, injection, and behavioral analysis. The list below is a curated highlight, run `vigolium module ls --type active` for the full list.
 
@@ -38,6 +38,7 @@ Active modules send modified requests to detect vulnerabilities via fuzzing, inj
 |---|---|---|---|---|---|
 | `active-sqli-error-based` | SQLi Error Based | Error-based SQLi via database error messages (MySQL, PostgreSQL, MSSQL, Oracle, SQLite) | Critical | Certain | `sqli`, `injection` |
 | `active-sqli-boolean-blind` | Blind SQL Injection (Boolean-Based) | Boolean-based blind SQLi using a randomized boundary matrix with difflib-style page-similarity comparison, a multi-round/multi-factor logic battery (AND/OR oracle, alternating comparison operators, invalid-syntax probe), and WAF-adaptive payload mutation. Only reports 200-vs-200 differentials with a large body-size delta (rejects status-flip false positives) | High | Certain | `sqli`, `injection`, `heavy` |
+| `sqli-out-of-band` | SQL Injection (Out-of-Band) | Blind SQLi confirmed via out-of-band DBMS callbacks (`LOAD_FILE` / `xp_dirtree` / `UTL_HTTP`) to a per-payload OAST subdomain — an unforgeable hit proves execution | Critical | Certain | `sqli`, `injection`, `oast` |
 
 ### NoSQL Injection
 
@@ -70,7 +71,8 @@ Active modules send modified requests to detect vulnerabilities via fuzzing, inj
 | `command-injection-oast` | OS Command Injection (Out-of-Band) | Blind OS command injection via DNS/HTTP OAST callbacks (classified distinctly from SSRF/XXE) | Critical | Certain | `rce`, `command-injection`, `oast` |
 | `command-injection-timing` | OS Command Injection (Time-Based) | Time-based blind OS command injection with delay-scaling confirmation across rounds | Critical | Tentative | `rce`, `command-injection`, `injection`, `heavy` |
 | `active-crlf-injection` | CRLF Injection | CRLF injection in HTTP headers via CR/LF character sequences | Medium | Firm | `injection` |
-| `active-xxe-generic` | XXE Generic | XML external entity injection in generic XML endpoints | Critical | Certain | `xxe`, `injection` |
+| `active-xxe-generic` | XXE Generic | XML external entity injection in generic XML endpoints; includes blind / out-of-band detection via external- and parameter-entity DTDs referencing a unique OAST URL | Critical | Certain | `xxe`, `injection` |
+| `xpath-injection` | XPath Injection | XPath/XQuery injection detected via engine error signatures and a boolean oracle (e.g. `' or '1'='1`) | High | Firm | `xpath`, `injection` |
 | `active-insecure-deserialization` | Insecure Deserialization | Error-based detection for Java, PHP, Python, Ruby, and .NET deserialization | High | Firm | `injection` |
 | `active-input-behavior-probe` | Input Behavior Probe | Behavior change detection via header, path, debug param, and char probing | Suspect | Tentative | `injection` |
 
@@ -95,6 +97,8 @@ Active modules send modified requests to detect vulnerabilities via fuzzing, inj
 | `active-host-header-injection` | Host Header Injection | Host header injection via value reflection (password reset/cache poisoning) | Medium | Firm | `misconfiguration` |
 | `active-web-cache-poisoning` | Web Cache Poisoning | Cache poisoning via unkeyed header injection (X-Forwarded-Host, X-Forwarded-Scheme) | High | Firm | `misconfiguration` |
 | `cache-poisoned-dos` | Cache-Poisoned Denial of Service (CPDoS) | CPDoS via header-only HMO/HHO variants that make a shared cache store and replay an origin error; safe unique-buster oracle, never affects shared keys | Medium | Firm | `cache-poisoning`, `cpdos`, `dos` |
+| `unauth-service-exposure` | Unauthenticated Infrastructure Service Exposure | Unauthenticated Docker / Kubernetes / datastore APIs exposed over HTTP, confirmed by a service-specific structural signature and re-verified | Critical | Certain | `exposure`, `infrastructure`, `misconfiguration` |
+| `tls-protocol-cipher-audit` | TLS Protocol & Cipher Audit | Grades a host's TLS by directly negotiating deprecated protocols and weak cipher suites | Medium | Certain | `tls`, `crypto`, `transport`, `misconfiguration` |
 
 ### Access Control
 
@@ -107,6 +111,7 @@ Active modules send modified requests to detect vulnerabilities via fuzzing, inj
 | `active-mass-assignment` | Mass Assignment | Mass assignment via injecting privilege keys into JSON APIs | High | Firm | `auth-bypass` |
 | `active-open-redirect` | Open Redirect | Open redirect via injected external URL in Location/meta refresh | Medium | Firm | `auth-bypass` |
 | `open-redirect-confusion` | Open Redirect via URL Parser Confusion | Open redirect reached through URL-parser-confusion payloads (`@`, backslash, embedded host) that slip past naive redirect validation | High | Firm | `open-redirect`, `ssrf`, `moderate` |
+| `session-fixation` | Session Fixation | Permissive session mechanism that adopts an attacker-supplied session ID across authentication | Medium | Firm | `session`, `auth`, `session-fixation` |
 
 ### Path Analysis
 
@@ -359,7 +364,7 @@ Audited against OWASP; every active probe gates on a reachable MCP endpoint (`pa
 
 ---
 
-## Passive Modules (109)
+## Passive Modules (115)
 
 Passive modules analyze existing request/response pairs without sending new traffic.
 
@@ -368,6 +373,8 @@ Passive modules analyze existing request/response pairs without sending new traf
 | Module ID | Name | Description | Severity | Confidence | Tags |
 |---|---|---|---|---|---|
 | `passive-dom-xss-detect` | DOM XSS Detect | DOM XSS source-to-sink data flows (location.hash, innerHTML, eval, document.write) | Medium | Firm | `xss` |
+| `css-injection-detect` | CSS Injection | Request values reflected into a `<style>` block or `style=` attribute | Info | Tentative | `client-side`, `css-injection`, `reflection` |
+| `dom-clobbering` | DOM Clobbering Gadget | JavaScript that feeds a named-property global (`window.x` / `id`-addressed element) into a dangerous sink | Info | Tentative | `client-side`, `dom-clobbering`, `javascript` |
 
 ### Authentication & Session
 
@@ -420,6 +427,7 @@ Passive modules analyze existing request/response pairs without sending new traf
 | `passive-cors-headers-detect` | CORS Headers Detect | Permissive CORS headers (wildcard origin, credentials enabled) | Low | Firm | `cors` |
 | `passive-openredirect-params` | Open Redirect Params | URL parameter names associated with open redirects (redirect, url, next, goto) | Info | Tentative | `cors` |
 | `passive-oauth-facebook-detect` | Facebook OAuth Detect | Facebook OAuth redirect parameters for OAuth flow analysis | Medium | Firm | `cors` |
+| `reverse-tabnabbing-detect` | Reverse Tabnabbing | `target=_blank` links to cross-origin URLs missing `rel=noopener` | Low | Firm | `client-side`, `tabnabbing`, `html` |
 
 ### Access Control
 
@@ -427,6 +435,7 @@ Passive modules analyze existing request/response pairs without sending new traf
 |---|---|---|---|---|---|
 | `passive-csrf-detect` | CSRF Detection | State-changing requests (POST/PUT/DELETE/PATCH) missing anti-CSRF protections | Medium | Tentative | `auth-bypass` |
 | `passive-idor-params-detect` | IDOR Parameter Detection | Parameters referencing object identifiers for IDOR/BOLA triage | Info | Tentative | `auth-bypass` |
+| `payment-integration-audit` | Payment Integration Risk Surface | Flags client-controlled amounts / trusted payment-status params on payment-gateway checkout pages (Stripe, PayPal, Braintree, Square, Adyen, Razorpay, Checkout.com) | Info | Tentative | `payment`, `business-logic`, `recon` |
 
 ### Cryptography
 
@@ -494,6 +503,7 @@ Passive modules analyze existing request/response pairs without sending new traf
 | `passive-mcp-endpoint-detect` | MCP Endpoint Detect | Detects Model Context Protocol (MCP) server endpoints from HTTP responses (gates the `mcp-*` active family) | Medium | Firm | `mcp`, `api-security` |
 | `passive-mcp-description-injection` | MCP Tool/Prompt Description Injection | Prompt-injection imperatives, bidi/zero-width unicode, and base64 payloads inside MCP tool/prompt descriptions | High | Firm | `mcp`, `prompt-injection`, `supply-chain` |
 | `passive-mcp-dangerous-tool-exposure` | MCP Dangerous Tool Exposure | Inventories MCP tools whose names expose high-impact capabilities (code exec, file write/delete, outbound fetch, raw SQL, secret access) | Low | Firm | `mcp`, `excessive-permissions`, `api-security` |
+| `llm-endpoint-fingerprint` | LLM Endpoint Fingerprint | Identifies application-level LLM chat/completion API endpoints (backed by the `infra/llmsig` signature catalog) | Info | Firm | `llm`, `ai`, `fingerprint` |
 
 ### Security Headers & Policy
 
@@ -505,6 +515,7 @@ Passive modules analyze existing request/response pairs without sending new traf
 | `passive-referrer-policy-detect` | Referrer-Policy Detect | Missing or weak Referrer-Policy | Info | Firm | `header-security` |
 | `passive-subresource-integrity-detect` | Subresource Integrity Detect | Scripts/styles loaded without SRI attributes | Low | Firm | `header-security` |
 | `passive-cors-vary-origin-missing` | CORS Vary: Origin Missing | CORS responses without Vary: Origin header | Low | Firm | `cors`, `header-security` |
+| `cross-origin-isolation-audit` | Cross-Origin Isolation Headers Missing | Authenticated responses missing COOP / COEP / CORP cross-origin isolation headers (XS-Leaks exposure) | Info | Firm | `client-side`, `xs-leaks`, `headers` |
 
 ### Cloud & Firebase
 

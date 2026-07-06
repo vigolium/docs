@@ -53,6 +53,11 @@ vigolium scan -t https://example.com --format html -o report.html
 vigolium scan -S -t https://example.com --format sqlite -o scan      # standalone .sqlite (stateless only)
 vigolium scan -t https://example.com --format fs -o run             # browsable run-traffic/ + run-findings/ tree
 
+# Print results to stdout after the scan (pairs with -S --silent; also on scan-url/scan-request/run)
+vigolium scan-url -S -t https://example.com --silent --print-finding        # findings as Markdown
+vigolium scan-url -S -t https://example.com --silent --print-traffic-tree   # traffic as a host/path tree
+vigolium scan-url -S -t https://example.com --silent --print-traffic        # raw request/response pairs
+
 # Network controls
 vigolium scan -t https://example.com --proxy http://127.0.0.1:8080
 vigolium scan -t https://example.com -c 100 --rate-limit 200
@@ -251,6 +256,10 @@ vigolium replay --session-id login --record-uuid <action-uuid>
 # Confirm against a different environment than the baseline
 vigolium replay --record-uuid abc12345 --target https://staging.example.com \
                  -m 'name=user,payload=admin' -H 'X-Forwarded-For: 127.0.0.1'
+
+# Merge headers from a saved auth session (from `vigolium auth list`)
+vigolium replay --record-uuid abc12345 --target https://staging.example.com \
+                 --auth-session my-session
 ```
 
 ### Bulk replay
@@ -292,6 +301,19 @@ vigolium module ls xss             # Search by keyword
 vigolium module enable xss
 vigolium module disable sqli
 vigolium scan -M                   # List all modules from the scan command
+```
+
+## Skills
+
+Install the coding-agent skill bundles shipped **inside** the binary (so they always match your CLI version) into a coding agent's skills directory. See [Using Vigolium in your agent](/agentic-scan/using-vigolium-in-your-agent).
+
+```bash
+vigolium skills                                   # List bundled skills (alias: vigolium skills list)
+vigolium skills get vigolium-scanner              # Print a bundle without installing it
+vigolium skills install                           # Install vigolium-scanner for Claude into the current project
+vigolium skills install --agent codex --scope global   # --agent claude|codex|agents, --scope project|global
+vigolium skills install --all                     # Install every bundled skill
+vigolium skills install --dir ./.claude/skills    # Override the destination directory
 ```
 
 ## Extensions
