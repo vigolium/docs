@@ -1,6 +1,6 @@
 ---
 title: "Vigolium Cheat Sheet"
-description: "A one-page, copy-paste reference for the workflows you reach for most: live traffic mirroring, replaying through Burp, passive/secret scanning of forwarded traffic, importing external data, parallel fan-out, resuming, spec-driven scans, single-request scans, content discovery, filtering to one vulnerability class or technology, browsing recorded traffic in the database, triaging findings with a coding agent, reproducing an exploit, setting up the AI agent, and inspecting or editing config."
+description: "A one-page, copy-paste reference for the workflows you reach for most: live traffic mirroring, replaying through Burp, passive/secret scanning of forwarded traffic, importing external data, parallel fan-out, resuming, spec-driven scans, single-request scans, content discovery, filtering to one vulnerability class or technology, browsing recorded traffic in the database, triaging findings with a coding agent, reproducing an exploit, setting up the AI agent, exporting stored data to a browsable filesystem tree, and inspecting or editing config."
 icon: "square-terminal"
 ---
 
@@ -902,6 +902,43 @@ Once `vigolium ol` returns a model name, every agent command works: `vigolium ag
 
 <Callout icon="circle-info" color="#3B82F6" iconType="regular">
   These are two of several providers, olium also supports the Claude Code Agent SDK bridge, Anthropic OAuth/API-key, and any OpenAI-compatible backend (Ollama, OpenRouter, LM Studio, vLLM). For the full provider matrix, credential handling, and the source-code audit drivers, see the setup guide, starting with the recommended Codex path: [Set up the agent → Codex](https://docs.vigolium.com/getting-started/setup-agent#2-codex-cheapest-with-a-chatgpt-subscription-recommended).
+</Callout>
+
+---
+
+## 27. Export existing SQLite data to a browsable `fs` tree
+
+Already have a scan sitting in a `.sqlite` database (your project DB or a standalone export)? Turn it into the same **flat, browsable filesystem tree** the live mirror produces ([section 1](#1-mirror-ingested-traffic-findings-to-a-live-filesystem-tree)), so a coding agent (or plain `ls`/`grep`/`jq`) can investigate it with no DB. Use `--format fs` on `export` or `db export`, it writes two sibling directories off the `-o` base (defaulting to `vigolium` in the cwd when no `-o` is given, so `-o run` yields `run-traffic/` + `run-findings/`).
+
+```bash
+# Whole project DB → run-traffic/ + run-findings/
+vigolium export --format fs -o run
+
+# A standalone .sqlite export, read-only (project scoping off, nothing written back)
+vigolium export -S --db scan.sqlite --format fs -o run
+
+# Many standalone exports merged into one tree (--glob-db implies -S)
+vigolium export --glob-db 'scans/*.sqlite' --format fs -o run
+
+# Filtered export via `db export` — honors --host/--status/--method/--severity/--search/--limit
+vigolium db export --format fs -o run --severity high,critical --host api.example.com
+
+# Drop the .resp.* files (request-only tree)
+vigolium export --format fs -o run --omit-response
+```
+
+What you get under each `<base>-traffic/<host>/` and `<base>-findings/<host>/`:
+
+| Path | Contents |
+|------|----------|
+| `<base>-traffic/<host>/<id>.req` | Raw request (leading `@target <scheme>://<authority>` line, then the request verbatim, replayable by stripping line 1) |
+| `<base>-traffic/<host>/<id>.resp.headers` | Status line + response headers |
+| `<base>-traffic/<host>/<id>.resp.body` | Response body (gzip-decoded so it greps clean) |
+| `<base>-traffic/<host>/index.json` | Flat, jq-friendly array of ids → method/url/status/content-type (+ top severity) |
+| `<base>-findings/<host>/<id>.md` | Each finding, cross-linked to its `.req` file |
+
+<Callout icon="circle-info" color="#3B82F6" iconType="regular">
+  Ids are zero-padded and assigned in `sent_at` order, so re-exports are reproducible. This is the one-shot counterpart to the server's live `--mirror-fs` ([section 1](#1-mirror-ingested-traffic-findings-to-a-live-filesystem-tree)): `export` writes a one-shot `index.json` array, the mirror appends to `index.jsonl`. `export` honors `--search`/`--severity`/`--limit`; `db export` adds the full `--host`/`--status`/`--method`/`--path`/`--scan-uuid`/`--from`/`--to` filter set (scoped to the active project). `--split-by-host` is a no-op here, `fs` already splits by host. To read a colleague's export without merging it into your DB first, see [section 4](#4-import-external-scan-data-into-the-database).
 </Callout>
 
 ---
