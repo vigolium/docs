@@ -618,32 +618,53 @@ vigolium version
 
 ---
 
-## 20. Install the Vigolium Burp extension
+## 20. How do I use Burp Suite with Vigolium?
 
-The Burp extension forwards traffic you browse/proxy in Burp Suite into a running Vigolium server, so it lands in the database (and, with `--mirror-fs`, on disk) for scanning and agent triage.
+The **Vigolium Burp Suite extension** turns Burp into a front-end for a running Vigolium server: as you browse, requests/responses forward into Vigolium (and, with `--mirror-fs`, onto disk), you launch native and agentic scans straight from Burp's right-click menu, and findings stream back into both Burp and the Web UI. It doesn't run the scanner inside Burp's JVM — it forwards traffic and polls the server, so scans keep running even after Burp closes.
 
 <Steps>
-  <Step title="Download the extension JAR">
-    Grab the latest `.jar` from the releases page: [github.com/vigolium/burp-vigolium/releases](https://github.com/vigolium/burp-vigolium/releases/tag/0.1.0)
-  </Step>
-  <Step title="Load it into Burp Suite">
-    In Burp, go to **Extensions → Installed → Add**. Set **Extension type: Java**, then **Select file...** and choose the downloaded `.jar`. Click **Next** — a **Vigolium** tab appears.
-  </Step>
-  <Step title="Point it at your Vigolium server">
-    Start an ingestion server and enter its URL (and API key, if set) in the extension's Vigolium tab:
-
+  <Step title="Start a Vigolium server">
     ```bash
-    # Start the ingestion server (add --mirror-fs to also write traffic to disk)
-    vigolium server --mirror-fs output-dir -A
+    # The ingestion server the extension talks to (add --mirror-fs to also write traffic to disk)
+    export VIGOLIUM_API_KEY=my-secret-key
+    vigolium server --mirror-fs output-dir
     ```
   </Step>
-  <Step title="Browse — traffic flows into Vigolium">
-    Every request/response Burp sees is forwarded and persisted. Scan it passively as it arrives, or mirror it to files for your agent.
+  <Step title="Load the JAR into Burp">
+    Grab `burp-vigolium.jar` from [github.com/vigolium/burp-vigolium](https://github.com/vigolium/burp-vigolium), then **Extensions → Installed → Add → Extension type: Java**. A **Vigolium** tab appears.
+  </Step>
+  <Step title="Point it at your server">
+    Open **Vigolium → Settings**, enter the **Server URL** (default `http://127.0.0.1:9002`) and **API Key**, then click **Test Connection**.
   </Step>
 </Steps>
 
+What the extension can do:
+
+| Feature | How |
+|---------|-----|
+| **Send one request** to ingestion / native scan / agentic scan | Right-click in Proxy History or Repeater — or the `Ctrl+Alt+V` / `Ctrl+Alt+N` / `Ctrl+Alt+A` hotkeys |
+| **Forward everything** through Burp Proxy automatically | **Bridge → Proxy Interception → Turn ON** (pair with **In-scope only** + filter rules) |
+| **Snapshot the whole Target Site map** into Vigolium | **Bridge → Target Site Map Snapshot** (`Ctrl+Alt+S`, or auto every N minutes) |
+| **Bidirectional live bridge** — read Burp history from the CLI, or push Vigolium traffic back into Burp's Site map | Enable **Bridge → Enable live bridge** (loopback `http://127.0.0.1:9009`), then drive it from the CLI |
+
+Once the loopback bridge is enabled in Burp, drive it from Vigolium with the `--burp-bridge-url` flag (export `VIGOLIUM_BURP_BRIDGE_URL` only if you'd rather not repeat the flag):
+
+```bash
+# Merge live Burp Proxy history into the local traffic view
+vigolium traffic --burp-bridge-url http://127.0.0.1:9009
+
+# Persist the traffic selected by the active filters into Vigolium's DB
+vigolium traffic --burp-bridge-url http://127.0.0.1:9009 --save-to-vigolium-db
+
+# Copy the selected Vigolium DB traffic back into Burp's Target Site map
+vigolium traffic --burp-bridge-url http://127.0.0.1:9009 --save-to-burp
+
+# Save a mutated replay + its fresh response straight into Burp's Site map
+vigolium replay --finding-id 42 --burp-bridge-url http://127.0.0.1:9009 --save-to-burp
+```
+
 <Callout icon="circle-info" color="#3B82F6" iconType="regular">
-  Pairs naturally with [section 1 (live filesystem mirror)](#1-mirror-ingested-traffic-findings-to-a-live-filesystem-tree) and [section 3 (passive/secret scan on forwarded traffic)](#3-passive-secret-scan-on-forwarded-traffic): run `vigolium server -S --passive-only --mirror-fs output-dir -A` and the extension feeds it while findings and readable request/response files appear in real time.
+  Pairs naturally with [section 1 (live filesystem mirror)](#1-mirror-ingested-traffic-findings-to-a-live-filesystem-tree) and [section 3 (passive/secret scan on forwarded traffic)](#3-passive-secret-scan-on-forwarded-traffic): run `vigolium server -S --passive-only --mirror-fs output-dir -A` and the extension feeds it while findings and readable request/response files appear in real time. **Full walkthrough** — install, connect, the three dispatch workflows, proxy forwarding, site-map snapshots, and the live bridge: [Using Vigolium with Burp Suite](/getting-started/burp-suite).
 </Callout>
 
 ---

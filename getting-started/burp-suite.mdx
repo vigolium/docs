@@ -8,8 +8,8 @@ The **Vigolium Burp Suite extension** turns Burp into a front-end for your Vigol
 
 The extension does **not** run the scanner inside Burp's JVM. It forwards traffic to the Vigolium server and polls it for findings, so scans use your Vigolium server resources and keep running even after Burp is closed.
 
-<Frame caption="Vigolium tab in Burp Suite — findings, request/response evidence, and live scan status">
-  <img src="/images/vigolium-burp-extension-1.png" alt="Vigolium Burp extension showing findings, request and response evidence, and live scan status" />
+<Frame caption="Findings Records tab in Burp Suite — findings, request/response evidence, and Copy Finding as Markdown">
+  <img src="/images/burp-extension/vigolium-burp-ext-1.png" alt="Vigolium Burp extension Findings Records tab showing findings, request and response evidence, and live scan status" />
 </Frame>
 
 ## Download the extension
@@ -98,10 +98,14 @@ The **Vigolium** panel is organized into six tabs:
 | **Settings** | Extension version, server connection, scan options, request statistics, and configurable hotkeys |
 | **Logs** | Timestamped activity log (INFO / WARN / ERROR) |
 
+<Frame caption="HTTP Records tab — filterable, sortable request/response records synchronized with Vigolium">
+  <img src="/images/burp-extension/vigolium-burp-ext-4.png" alt="Vigolium Burp extension HTTP Records tab showing filterable request and response records with inline editors" />
+</Frame>
+
 Selecting a finding opens its primary request and response in Burp's message editors; additional evidence appears as adjacent tabs so you can compare without a drop-down. The orange **Copy Finding as Markdown** action copies the full finding — metadata, description, matched URLs, requests, responses, and extra evidence — ready to paste into a report or a coding agent.
 
-<Frame caption="Vigolium extension Settings tab — server connection, scan options, shortcuts, and filter rules">
-  <img src="/images/vigolium-burp-extension-2.png" alt="Vigolium Burp extension settings for server connection, scan options, shortcuts, proxy interception, and filter rules" />
+<Frame caption="Settings tab — server connection, scan options, keyboard shortcuts, and request statistics">
+  <img src="/images/burp-extension/vigolium-burp-ext-2.png" alt="Vigolium Burp extension Settings tab for server connection, scan options, shortcuts, and request statistics" />
 </Frame>
 
 ### Keyboard shortcuts
@@ -128,34 +132,46 @@ Snapshots are **incremental** within the current Burp session and **idempotent**
 
 The **live bridge** connects Vigolium's CLI and server to Burp in *both* directions over an opt-in, loopback-only listener — query live Burp Proxy history from Vigolium, or copy Vigolium traffic back into Burp's Target Site map.
 
+<Frame caption="Bridge tab — Target Site map snapshots, the loopback live-bridge listener, Proxy forwarding, and filter rules">
+  <img src="/images/burp-extension/vigolium-burp-ext-3.png" alt="Vigolium Burp extension Bridge tab showing the live bridge listener URL, proxy interception, and proxy filter rules" />
+</Frame>
+
 <Steps>
   <Step title="Enable the listener in Burp">
     Open **Vigolium → Bridge**, select **Enable live bridge**, and set the listener URL (default `http://127.0.0.1:9009`). The extension starts an embedded HTTP server on that loopback address; it refuses non-loopback binds. Optionally enable **In-scope items only** to keep bridge searches within Burp's Target scope.
   </Step>
   <Step title="Point Vigolium at the listener">
+    Pass the listener URL to any bridge-aware command with the `--burp-bridge-url` flag — this is the recommended way, since each command stays explicit and self-contained:
+
     ```bash
-    export VIGOLIUM_BURP_BRIDGE_URL="http://127.0.0.1:9009"
+    vigolium traffic --burp-bridge-url http://127.0.0.1:9009
     ```
 
-    Every command below also accepts an explicit `--burp-bridge-url` flag instead of the env var.
+    Only when you'd rather not repeat the flag across many commands in the same shell, export the env var once instead:
+
+    ```bash
+    export VIGOLIUM_BURP_BRIDGE_URL="http://127.0.0.1:9009"   # optional fallback — the --burp-bridge-url flag overrides it
+    ```
   </Step>
   <Step title="Read and write traffic across the bridge">
     ```bash
     # Merge live Burp Proxy history into the local traffic view
-    vigolium traffic
+    vigolium traffic --burp-bridge-url http://127.0.0.1:9009
 
     # Merge live Burp rows into GET /api/http-records while the server runs
-    vigolium server
+    vigolium server --burp-bridge-url http://127.0.0.1:9009
 
     # Persist the traffic selected by the active filters into Vigolium's DB
-    vigolium traffic --save-to-vigolium-db          # add --all for every match
+    vigolium traffic --burp-bridge-url http://127.0.0.1:9009 --save-to-vigolium-db   # add --all for every match
 
     # Copy the selected Vigolium DB traffic into Burp's Target Site map
-    vigolium traffic --save-to-burp
+    vigolium traffic --burp-bridge-url http://127.0.0.1:9009 --save-to-burp
 
     # Save a mutated replay + its fresh response straight into Burp's Site map
-    vigolium replay --record-uuid <uuid> --save-to-burp
+    vigolium replay --record-uuid <uuid> --burp-bridge-url http://127.0.0.1:9009 --save-to-burp
     ```
+
+    If you exported `VIGOLIUM_BURP_BRIDGE_URL`, drop the `--burp-bridge-url` flag from each command.
   </Step>
 </Steps>
 
