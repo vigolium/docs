@@ -29,6 +29,10 @@ cd burp-vigolium
 ./gradlew spotlessCheck test shadowJar   # → build/libs/burp-vigolium.jar
 ```
 
+<Callout icon="circle-info" color="#3B82F6" iconType="regular">
+  The bidirectional live bridge and Target Site map snapshots require **`burp-vigolium` v0.2.0 or later**. Earlier builds can still forward per-request traffic and launch scans, but do not expose the loopback bridge listener. The installed version is shown in the upper-right corner of the **Settings** view.
+</Callout>
+
 ## Install and connect
 
 <Steps>
@@ -164,6 +168,9 @@ The **live bridge** connects Vigolium's CLI and server to Burp in *both* directi
     # Persist the traffic selected by the active filters into Vigolium's DB
     vigolium traffic --burp-bridge-url http://127.0.0.1:9009 --save-to-vigolium-db   # add --all for every match
 
+    # One-shot persist of ALL bridge-visible Proxy history into the DB
+    vigolium import --burp-bridge-url http://127.0.0.1:9009
+
     # Copy the selected Vigolium DB traffic into Burp's Target Site map
     vigolium traffic --burp-bridge-url http://127.0.0.1:9009 --save-to-burp
 
@@ -176,6 +183,8 @@ The **live bridge** connects Vigolium's CLI and server to Burp in *both* directi
 </Steps>
 
 Live rows are labelled `source: burp`, and the usual traffic filters, sorting, pagination, and JSON output all continue to apply. Bridge imports are idempotent — new requests are inserted, changed responses refresh the existing row, and unchanged traffic is skipped.
+
+Unlike `vigolium traffic --save-to-vigolium-db` (which persists only the currently selected page), `vigolium import --burp-bridge-url` is a one-shot bulk import of *all* Proxy history the bridge exposes. Because the bridge is an import source in its own right, `--burp-bridge-url` cannot be combined with a path argument or `--glob-db` in the same `import` invocation.
 
 <Callout icon="shield-halved" color="#00b368" iconType="regular">
   The bridge listener is **disabled by default** and requires no credentials because it only binds to a validated loopback address, rejects unexpected `Host`/`Origin` headers, and uses temporary result references that expire when the listener restarts or the extension unloads. Disabling the setting or unloading the extension stops the listener immediately.

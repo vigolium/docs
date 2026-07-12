@@ -72,6 +72,26 @@ The Form Handler detects and fills forms with smart value generation:
 - Pairwise fallback when filling all inputs at once fails
 - File upload support with type-aware file selection
 
+#### Submission and link-priming crawlers
+
+Filling a form only exercises its inputs — the endpoints *behind* those forms and links stay invisible until something submits them. After a page settles, the crawler runs a set of bounded, default-on priming passes so those routes enter discovery:
+
+- **GET-form submission** (`SubmitGetForms`) — synthesizes the submit URL for each filled GET form and fetches it, so the resulting query-string endpoints are captured as traffic.
+- **Same-origin POST-form submission** (`SubmitPostForms`) — exercises JS-driven POST endpoints (a common home for XXE and body/cookie SQLi) by triggering their submit handlers. Both submission passes share `SubmitFormMaxVariants`, a cap on how many distinct submit variants are fetched per page.
+- **Anchor-link priming** (`AnchorLinkPriming`, capped by `AnchorLinkMaxAssets`) — on each settled page, fetches same-origin anchor-link targets so their routes are pulled into discovery even when nothing clicks them.
+- **DOM-quiescence settle** (`WaitDOMQuiescence`) — before harvesting a page, the settle waits for the DOM to stop mutating, so late-rendered forms and links are seen instead of being missed mid-render.
+
+These passes are **default-on and bounded**. The form-submission passes are gated off by the same `--no-forms` flag that disables form filling. Destructive forms and paths are deliberately skipped — delete/logout actions, `_method`-override forms, and similar state-changing submits are never fetched.
+
+### DOM-based XSS (Browser-Confirmed)
+
+As the final step of the crawl, the browser crawler runs a **browser-confirmed DOM-based XSS probe** over the client-side routes it already visited. It reuses the live browser and the routes discovered during the crawl rather than sending a separate fuzzing pass:
+
+- A **marker-reflection gate** first checks whether a route reflects an injected marker into the client-rendered DOM.
+- Only then does an **execution canary** run — the payload must *actually fire* in the browser (a real script execution, not just a textual reflection) before anything is reported, which keeps this free of the reflection false positives that plague raw-response DOM-XSS heuristics.
+
+Confirmed hits are emitted as a finding titled **"DOM-based XSS (Browser-Confirmed)"** (module id `spider-dom-xss`), with severity reported by the browser-accurate probe. The probe is **bounded** — at most ~16 confirmations under a ~45-second budget — so it corroborates real DOM-XSS on reflected client routes without ever dominating the crawl.
+
 ### Default-credential login attempts
 
 To reach areas hidden behind a login, the crawler can try a short list of common default credentials against a **confirmed local login form** so the browser session stays authenticated and the crawl continues into the now-unlocked area.

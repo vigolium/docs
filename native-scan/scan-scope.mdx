@@ -268,7 +268,7 @@ Notice how none of these attacks target a single parameter - they modify the req
 
 **Invoked once per unique host.**
 
-The executor deduplicates by hostname - if 500 requests arrive for `example.com`, the module runs only once. This scope is for expensive one-time checks that apply to the entire host, not to individual pages or parameters.
+The executor deduplicates by **canonical origin** (`scheme://host:port`) - if 500 requests arrive for `https://example.com`, the module runs only once for that origin. Because the key is the full origin, the same host on a different port is treated independently: `example.com:443` (https), `example.com:8443`, and `example.com:8080` are each scanned on their own, so a `ScanScopeHost` module is no longer suppressed on `:8443`/`:8080` after `:443` claims the `(module, host)` pair. This scope is for expensive one-time checks that apply to the entire origin, not to individual pages or parameters.
 
 #### How it works step by step
 
@@ -282,7 +282,7 @@ Request #3:   GET /products?id=42 HTTP/1.1   Host: example.com
 Request #500: GET /about HTTP/1.1            Host: example.com
 ```
 
-**The executor runs each `ScanScopeHost` module only on the first request it sees for that host. The remaining 499 requests are skipped:**
+**The executor runs each `ScanScopeHost` module only on the first request it sees for each canonical origin (`scheme://host:port`). The remaining 499 requests to the same origin are skipped — but a request to a different scheme/port claims the module afresh:**
 
 ```
 Request #1 arrives for example.com (first time seen)
@@ -311,7 +311,8 @@ Request #1 arrives for example.com (first time seen)
         CL.TE and TE.CL desync probes
 
 Request #2-500 arrive for example.com
-  └── Host already seen → all ScanScopeHost modules SKIPPED
+  └── Origin already seen → all ScanScopeHost modules SKIPPED
+        (a different scheme/port, e.g. example.com:8443, runs them again)
 ```
 
 **Typical vulnerabilities found:**

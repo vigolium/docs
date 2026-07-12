@@ -83,7 +83,7 @@ Every newly discovered directory is probed with ALL observed values as high-prio
 
 Two layers of JS analysis feed endpoints back into the discovery queue:
 
-- **JSScan** (embedded binary): Deobfuscates bundled JS, resolves string concatenation, traces variable assignments, and extracts `fetch()` / `XMLHttpRequest` / `$.ajax` call sites into full HTTP request specs.
+- **jstangle** (embedded binary): Deobfuscates bundled JS, resolves string concatenation, traces variable assignments, and extracts `fetch()` / `XMLHttpRequest` / `$.ajax` call sites into full HTTP request specs.
 - **Spider extractors**: Parse inline `<script>` tags and JS string literals for URL patterns.
 
 Extracted endpoints become priority-0 tasks - tested before any wordlist fuzzing.
@@ -95,6 +95,10 @@ Response bodies are tokenized (content-type-aware for HTML, JSON, JS, CSS) to ex
 ### 5. Recursive Directory Expansion
 
 When a file is found at `/a/b/c/file.txt`, the engine extracts `/a/`, `/a/b/`, `/a/b/c/` as directories to test. Each new directory triggers its own full task set (wordlists + observed + modules).
+
+### 6. Immutable Build-Output Awareness
+
+SPA frameworks (Next.js/Nuxt/Vite/webpack/CRA) emit content-hash fingerprinted bundles — e.g. `main-5cf96b0d57f7f579.js`, `938-50137dfb3187f5b2.js`, CRA `main.073c9bfa.chunk.js` — into immutable build-output directories. Discovery detects these fingerprinted filenames (a `-`/`.`/`_`-delimited token of ≥8 hex chars containing at least one `a-f` letter, so plain version numbers and timestamps don't match) and skips recursive wordlist/observed brute-forcing — plus backup/numeric derivations off the files themselves — into any directory that holds them. This is framework-agnostic (no hardcoded directory list), with a cheap fast-path for the well-known roots (`/_next/static/`, `/_nuxt/`, `/_app/immutable/`). The bundles the spider actually found are still fetched and scanned; a hand-authored `/static/` with real assets and genuine endpoints like `/api/...` stay fully discoverable.
 
 ## Task Types
 
@@ -123,7 +127,7 @@ Multiple layers prevent redundant work **during** the crawl:
 - **Task-level**: FNV-1a hash prevents duplicate task enqueueing
 - **Request-level**: Cache prevents sending the same HTTP request twice
 - **URL-level**: DiskSet tracks processed URLs
-- **Body-level**: Hash prevents re-analyzing identical responses with JSScan
+- **Body-level**: Hash prevents re-analyzing identical responses with jstangle
 - **Directory/file trackers**: Prevent re-processing the same discovery
 
 ### Output deduplication
@@ -154,10 +158,14 @@ YAML-configured modules trigger specialized tasks when matching directories are 
 
 | Component | Purpose |
 |-----------|---------|
-| **WAF Detection** | Identifies Cloudflare, Akamai, AWS WAF, F5, Imperva, Sucuri, ModSecurity. Tracks consecutive blocks for backoff/early exit |
+| **WAF / CDN & Bot-Management Detection** | Fingerprints WAF/CDN and bot-management vendors — Cloudflare, Akamai, AWS WAF, F5, Imperva, Sucuri, ModSecurity, Azure (Application Gateway / Front Door), Fortinet FortiWeb, Barracuda, Citrix NetScaler, Wallarm, Radware, Reblaze, Wordfence, plus anti-automation stacks DataDome, PerimeterX (HUMAN), Kasada, and Queue-it. Every `Set-Cookie` value is inspected for cookie-name signatures (e.g. `datadome=`, `rbzid=`, `_pxhd`) behind a status-code gate, so a tracking cookie on an ordinary 200 is never mistaken for a block. Tracks consecutive blocks for backoff/early exit |
 | **Scope Enforcement** | Three modes: `any` (no check), `subdomain` (same eTLD+1), `exact` (same host). Checked on every discovery and redirect |
 | **Case Sensitivity Detection** | Auto-detected on first file discovery by re-requesting with altered casing |
 | **Storage** | SQLite-backed sitemap with semantic dedup (FNV-1a-64). Supports session comparison for differential scanning across runs |
+
+<Note>
+**WAF/CDN block warning.** The first time scan traffic to a host comes back as a WAF/CDN block (a captcha, bot-detection, or challenge page), Vigolium prints a one-time-per-host `[waf-block-detected]` warning to stderr (and the session log) noting the edge is filtering traffic and results for that host may be incomplete. Detection runs on the shared HTTP requester, so it fires across every phase (discovery, spidering, dynamic-assessment); the dedup means at most one line per host regardless of how many requests are blocked. Suppressed under `--silent`.
+</Note>
 
 ## Integration with Vigolium
 

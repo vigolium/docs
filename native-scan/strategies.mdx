@@ -243,6 +243,21 @@ scanning_pace:
 
 Precedence (highest to lowest): CLI flags > scanning profile > per-phase overrides > common values > built-in defaults.
 
+### Proactive WAF/CDN Pacing
+
+An aggressive active phase can burst a WAF/CDN edge into a **rate-based block** — and once the edge starts filtering, the findings that would have surfaced are hidden behind challenge pages. To stay ahead of that, the per-host rate limiter **pre-throttles** a host the first time earlier-phase traffic fingerprints it behind a recognized edge, before the heavy phase ever fires:
+
+- Detection reads ordinary responses — headers on plain `200`s are enough to fingerprint **CloudFront, Cloudflare, Akamai, Imperva/Incapsula, Sucuri, and Azure Front Door**. No block or challenge is required to arm the pacing.
+- On the first match, per-host concurrency drops to a quarter of its ceiling (`MaxPerHost/4`), then **ramps back up on healthy responses** so a well-behaved edge isn't paced forever.
+- The drop prints once per host as a `[waf-pacing-armed]` notice (for example `40→10`), so you can see exactly when and how far a host was throttled.
+
+```bash
+# Disable the proactive pre-throttle (reactive back-off after a confirmed block still applies)
+vigolium scan -t https://example.com --no-waf-pacing
+```
+
+This is the **proactive** half of Vigolium's WAF handling: it slows down *before* an edge blocks. It complements the **reactive** WAF-block warning (the one-time-per-host `[waf-block-detected]` notice covered on the [discovery](/native-scan/phases/discovery) phase page), which fires *after* a confirmed block. Passing `--no-waf-pacing` disables only the proactive pacing; the reactive back-off after a confirmed block is unaffected.
+
 ## Output Formats
 
 | Format | Flag | Description |
@@ -322,6 +337,10 @@ vigolium scan -t https://example.com -m xss-reflected,sqli-error
 # Run a single module
 vigolium scan-url https://example.com/search?q=test -m xss-reflected
 ```
+
+<Note>
+**Hand-picking modules auto-skips `known-issue-scan`.** Narrowing a scan to specific modules (`--module-id`, or `-m`/`--modules`) signals a targeted, low-noise run, so Vigolium auto-appends `--skip known-issue-scan` — otherwise the broad Nuclei/Kingfisher known-issue pass would flood the results. A one-line console note explains the auto-skip; pass `--only known-issue-scan` to force the pass back on. It's a no-op when `--only` is set or when no module narrowing is active, and is silent under `--silent`.
+</Note>
 
 ### Filtering by Tag
 

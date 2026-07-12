@@ -73,10 +73,14 @@ Each individual check returns one of: `ok`, `warning`, `error`.
 | `agent` | Yes | Resolves the configured olium provider and confirms credentials are available |
 | `queue` | No | Reports queue depth and error counts |
 | `browser` | No | Checks `agent-browser` binary if enabled in config |
-| `tools.chromium` | No | Checks for chromium/chrome binary (fallbacks: `chromium-browser`, `google-chrome`, `google-chrome-stable`) |
+| `tools.chromium` | No | Resolves the chromium/chrome binary (fallbacks: `chromium-browser`, `google-chrome`, `google-chrome-stable`). On the one-shot CLI paths it also smoke-launches the browser — see the note below |
 | `tools.piolium` | No | Reports whether the optional piolium harness is installed under `~/.piolium` |
 | `templates_dir` | No | Verifies prompt templates directory exists and contains `.md` files |
 | `sessions_dir` | No | Verifies agent sessions directory exists and is writable |
+
+<Note>
+**Browser smoke-test on the CLI paths.** On the one-shot CLI paths — `vigolium doctor` and the first-run dependency check — the `tools.chromium` check goes beyond reading the `--version` banner: it *actually launches* the resolved Chromium headless, performing the same DevTools remote-debugging handshake the spider relies on, in an isolated self-cleaning user-data dir, bounded to ~30s. A binary that prints a version but SIGTRAPs / crashes on real launch (seen with some distro Chromium builds) or is missing a runtime shared library is downgraded from `ok` to `warning`, carrying a remedy: run `vigolium doctor --fix --only chrome` to download a working Chrome for Testing, or point `spidering.browser_path` at a working browser. The server `GET /api/diagnostics` endpoint leaves this heavy probe **off** to stay a cheap, poll-safe readout.
+</Note>
 
 ### CLI Equivalent
 

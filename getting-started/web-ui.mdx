@@ -1,10 +1,10 @@
 ---
-title: "Web UI"
-description: "Start Vigolium's built-in web UI with vigolium server, then visualize scan data, inspect findings, choose modules, launch scans, and adjust configuration."
+title: "Web UI & Vigolium Server"
+description: "Start Vigolium's server with vigolium server to run the built-in Web UI, back the Burp Suite extension, and expose a REST API for viewing results and triggering scans."
 icon: "desktop"
 ---
 
-Run `vigolium server` to start the Vigolium web server and open the built-in Web UI.
+`vigolium server` starts the Vigolium server: one process that serves the built-in **Web UI**, backs the **Burp Suite extension**, and exposes a full **REST API**. It's the hub every non-CLI surface talks to — the UI, Burp, and any script you write all read and write the same local database.
 
 ```bash
 vigolium server
@@ -16,20 +16,39 @@ By default, the server listens on `http://localhost:9002`. Open that URL in your
   <img src="/images/vigolium-ui-dashboard-1.png" alt="Vigolium Web UI dashboard with project summary, scan data, and severity breakdown" />
 </Frame>
 
-<Callout icon="shield-halved" color="#00b368">
-  For shared or production use, set `VIGOLIUM_API_KEY` before starting the server. Use `vigolium server -A` only for local development when you intentionally want to disable authentication.
-</Callout>
+## Ways to run the server
+
+The server takes flags for authentication, binding, ingestion, and passive-only analysis. Common setups:
 
 ```bash
-# Start with API authentication
+# Recommended: start with API-key authentication
 export VIGOLIUM_API_KEY=my-secret-key
 vigolium server
 
 # Bind to a specific host and port
 vigolium server --host 127.0.0.1 --service-port 9002
 
-# Development only: disable API authentication
+# Back the Burp extension and also mirror ingested traffic to disk as files
+vigolium server --mirror-fs ./mirror
+
+# Passive-only ingestion — analyze browsed traffic without sending active requests
+vigolium server --scan-on-receive --passive-only
+
+# Merge live Burp Proxy history over the loopback bridge
+vigolium server --burp-bridge-url http://127.0.0.1:9009
+
+# Local development only — DISABLE authentication (see warning below)
 vigolium server -A
+```
+
+<Callout icon="triangle-exclamation" color="#dc2626">
+  **`-A` / `--no-auth` runs the server with no authentication.** Every `/api/*` route — including endpoints that trigger scans and read stored findings and traffic — becomes callable by anyone who can reach the port. Only use `-A` on `localhost` for local development, and **never expose an `-A` server to the internet or an untrusted network.** For shared, remote, or production use, always start with `VIGOLIUM_API_KEY` (or `server.auth_api_key` in config) set and bind to a trusted interface.
+</Callout>
+
+The default bind address is `0.0.0.0`, so if you must reach the server from another machine, keep authentication on and prefer restricting the bind with `--host` plus a firewall or reverse proxy. Retrieve the active key at any time:
+
+```bash
+vigolium config ls server.auth_api_key --force
 ```
 
 ## What you can do in the Web UI
@@ -71,11 +90,63 @@ When starting a scan, you can tune common options such as:
 
 ## Use it with the Burp Suite extension
 
-`vigolium server` is also the local backend for the **Vigolium Burp extension**: it connects to your running server, forwards traffic through `/api/ingest-http`, and launches native and agentic scans from Burp's context menus, so findings appear in both Burp and the Web UI.
+`vigolium server` is also the local backend for the **Vigolium Burp extension** — running the server is the setup step for using Burp with Vigolium. The extension connects to your running server, forwards traffic through `/api/ingest-http`, and launches native and agentic scans from Burp's context menus, so findings appear in both Burp and the Web UI because everything is stored in the same database.
+
+```bash
+# Start a server for the Burp extension to connect to
+export VIGOLIUM_API_KEY=my-secret-key
+vigolium server
+```
+
+Point the extension at the **Server URL** (`http://127.0.0.1:9002`) and paste in the API key — then browse, forward proxy traffic, and dispatch scans straight from Burp.
 
 <Card title="Using Vigolium with Burp Suite" icon="puzzle-piece" href="/getting-started/burp-suite" horizontal>
-  Install the extension, forward proxy traffic, dispatch scans, and use the bidirectional live bridge — see the dedicated guide.
+  Install the extension, forward proxy traffic, dispatch native and agentic scans, and use the bidirectional live bridge — see the dedicated guide.
 </Card>
+
+## REST API for results and scans
+
+Everything the Web UI and the Burp extension do is backed by a documented REST API, so you can drive Vigolium from scripts, CI, or a coding agent. All `/api/*` routes require `Authorization: Bearer <API_KEY>` unless the server was started with `-A`.
+
+**View results:**
+
+```bash
+# List findings (filter by severity, project, scan, and more)
+curl -s http://localhost:9002/api/findings \
+  -H "Authorization: Bearer my-secret-key" | jq .
+
+# Inspect stored HTTP records (traffic)
+curl -s http://localhost:9002/api/http-records \
+  -H "Authorization: Bearer my-secret-key" | jq .
+
+# Project-level statistics and severity counts
+curl -s http://localhost:9002/api/stats \
+  -H "Authorization: Bearer my-secret-key" | jq .
+```
+
+**Trigger scans:**
+
+```bash
+# Native scan of a single URL
+curl -s -X POST http://localhost:9002/api/scan-url \
+  -H "Authorization: Bearer my-secret-key" \
+  -H "Content-Type: application/json" \
+  -d '{ "url": "https://example.com/api/users?id=1" }'
+
+# Native scan of one or more targets (equivalent to vigolium scan -t <url>)
+curl -s -X POST http://localhost:9002/api/scans/run \
+  -H "Authorization: Bearer my-secret-key" \
+  -H "Content-Type: application/json" \
+  -d '{ "targets": ["https://example.com"] }'
+
+# Agentic (AI-guided) scan of stored or supplied traffic
+curl -s -X POST http://localhost:9002/api/agent/run/swarm \
+  -H "Authorization: Bearer my-secret-key" \
+  -H "Content-Type: application/json" \
+  -d '{ "target": "https://example.com" }'
+```
+
+The API also covers ingestion, scope, projects, modules, config, OAST interactions, and scan status/history. See the [API overview](/api-references/overview) for the full surface, and the [Scan](/api-references/scan), [Findings](/api-references/findings), and [HTTP Records](/api-references/http-records) references for request/response fields. A live Swagger UI is served at `http://localhost:9002/swagger/` while the server runs.
 
 ## Review available modules
 

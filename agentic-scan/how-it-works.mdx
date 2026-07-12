@@ -23,12 +23,12 @@ Vigolium's agent mode runs AI-driven security scans on top of the native scanner
 | `query`      | Single-shot prompt (template or inline). Code review, secret hunt, endpoint discovery. |
 | `autopilot`  | Agentic scan: autonomous operator with full tool access.         |
 | `swarm`      | Agentic scan: 10-phase guided pipeline (plan → extension → scan → triage). |
-| `audit`      | Unified source-audit dispatcher (drives the embedded vigolium-audit harness, piolium, or both). |
-| `piolium`    | Direct piolium harness driver (Pi-native install required).      |
+| `audit`      | Unified source-audit dispatcher (drives the embedded vigolium-audit harness, piolium, or both via `--driver`). |
 | `olium`      | Interactive olium TUI or one-shot non-interactive prompt.        |
 | `session`    | List or inspect past agent runs (sessions list / detail view).   |
+| `triage`     | AI triage of a single existing finding (`triage [finding-id]`) — confirm or downgrade it. |
 
-`query` is the only mode that does **not** orchestrate a scan, it's a one-shot prompt with optional source-code context. `autopilot` and `swarm` are the two **agentic scan** modes.
+`query` and `triage` are one-shot modes that do **not** orchestrate a scan (`query` runs a prompt with optional source-code context; `triage` re-evaluates one existing finding). `autopilot` and `swarm` are the two **agentic scan** modes.
 
 ---
 
@@ -37,7 +37,7 @@ Vigolium's agent mode runs AI-driven security scans on top of the native scanner
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │  CLI                          pkg/cli/agent_*.go                │
-│  query · autopilot · swarm · audit · piolium · olium · session  │
+│  query · autopilot · swarm · audit · olium · session · triage   │
 └───────────────────────────────┬─────────────────────────────────┘
                                 │
 ┌───────────────────────────────▼─────────────────────────────────┐

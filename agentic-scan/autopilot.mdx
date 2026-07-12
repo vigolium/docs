@@ -192,7 +192,7 @@ POST /api/agent/run/autopilot
 
 ## What the agent actually has access to
 
-The autopilot is **not** restricted to the vigolium CLI. The engine ships a generic agentic toolset; security-specific behavior comes from the system prompt and skills, not from the tool surface itself.
+The autopilot is **not** restricted to the vigolium CLI. The engine ships a generic agentic toolset, and — once a project database is wired — a set of first-class vigolium scanner/record tools on top of it. Much of the security-specific behavior still comes from the system prompt and skills, not just the tool surface.
 
 | Tool             | Notes                                                                 |
 | ---------------- | --------------------------------------------------------------------- |
@@ -203,12 +203,27 @@ The autopilot is **not** restricted to the vigolium CLI. The engine ships a gene
 | `ls`             | Parallelizable.                                                       |
 | `grep`           | Parallelizable.                                                       |
 | `glob`           | Parallelizable.                                                       |
-| `web_fetch`      | Parallelizable.                                                       |
+| `web_fetch`      | Under autopilot the capture variant persists an `http_record` per fetch (`http` mode returns a `record_uuid`; `browser` mode captures every XHR/fetch), so it is **not** read-only and runs serial — it is not part of the parallel fan-out. |
 | `load_skill`     | Pulls a skill body by name (skills are indexed in the system prompt). |
 | `halt_scan`      | Autopilot-only. Sets `HaltSignal`, engine exits naturally next turn.  |
-| `report_finding` | Autopilot-only. Writes a `Finding` row scoped to the AgenticScan UUID. |
+| `report_finding` | Autopilot-only. Writes a `Finding` row scoped to the AgenticScan UUID. Accepts a `record_uuids[]` array linking the proving `http_records` (populates `HTTPRecordUUIDs`). |
+| `update_plan` / `remember` | Autopilot-only. Scratchpad plan + notes that survive context eviction. |
 
-The model decides when to invoke `vigolium scan-url`, `vigolium finding`, etc., those are **shell commands**, not first-class tools. The agent runs them via `bash` if it judges them useful.
+When a project database is wired (always the case for a real autopilot run) the agent also gets **first-class vigolium tools** from `pkg/olium/vigtool/`, so it doesn't have to shell out to the CLI for common scanner actions:
+
+| Tool | Notes |
+| ---- | ----- |
+| `run_native_scan` / `run_module` / `run_extension` / `list_modules` | Launch native scans, single modules, or JS extensions; enumerate the module catalog. |
+| `query_records` / `inspect_record` | Explore stored `http_records` and their insertion points. |
+| `replay_request` | Send a mutated record; persists the exchange as an `olium-replay` `http_record` and returns `replay_record_uuid` (feed it back into `report_finding` via `record_uuids`). |
+| `send_raw_http` | Exact-bytes socket primitive for smuggling / desync / CRLF; scope-gated to the target. |
+| `attack_kit` | Read-only, non-mutating starter-payload catalog per attack class. Its Redis gopher PoC is a harmless `PING` probe (v0.2.5 changed it from a destructive `FLUSHALL`), so the agent can't wipe target data. |
+| `oast_poll` / `oast_mint` | Poll for and mint OAST callbacks for blind payloads. |
+| `list_sessions` / `get_session` / `list_findings` / `update_finding` | Query and annotate prior runs and findings. |
+| `list_auth_sessions` / `auth_session_lookup` / `browser_auth` | Reuse auth sessions; `browser_auth` drives interactive login (only when `agent-browser` is on `$PATH`). |
+| `search_burp_items` / `inspect_burp_item` | Read-only, server runs only — search / inspect the live Burp site map or Proxy history over an operator-enabled bridge listener; never modifies Burp. |
+
+The model still decides when to invoke `vigolium scan-url`, `vigolium finding`, etc. via `bash` for anything not covered by a first-class tool. See the [olium tools reference](/agentic-scan/olium#tools) for the full surface.
 
 ---
 
@@ -277,6 +292,7 @@ Every successful `report_finding` call writes a row via `repo.SaveFindingDirect`
 - `ProjectUUID`, `ScanUUID`, `AgenticScanUUID`, propagate the project/scan scope so `vigolium finding` and `vigolium agent sessions` can join back.
 - `ModuleID = "olium-autopilot"`, `ModuleType = "ai-agent"`, `FindingSource = "autopilot"`, distinguishes agent-originated findings from scanner-module findings.
 - `FindingHash`: SHA-256 over (title, severity, source_file, url, description-fingerprint), or over an explicit `dedup_key` if the model supplies one. The DB's `ON CONFLICT` handler squashes duplicates.
+- `HTTPRecordUUIDs`: the `record_uuids` array the model passes to link the `http_records` that prove the finding (from `replay_request`'s `replay_record_uuid`, `web_fetch`'s `record_uuid`, or `query_records`/`inspect_record`), so the evidence exchange survives the session and `vigolium finding --with-records` can rehydrate it.
 
 Because the autopilot writes findings as it confirms them, partial results survive a crash or timeout, the parent `AgenticScan` row is just updated to `status=failed` with the error message, but everything saved before that point stays in the DB.
 

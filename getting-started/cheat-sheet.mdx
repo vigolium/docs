@@ -410,6 +410,13 @@ vigolium scan -t https://example.com --only discovery \
 vigolium scan -t https://example.com --discover --fuzz-wordlist ~/.vigolium/wordlists/fuzz.txt
 ```
 
+Separately from path fuzzing, `scan` can sweep **alternate HTTP(S) ports** on the target hosts so a service on a non-standard port is discovered and scanned. The sweep runs at `--intensity deep` or with `--follow-subdomains`; `--port-sweep-ports` overrides which ports it probes (comma-separated, in addition to the standard `80`/`443`):
+
+```bash
+# Discover and scan services on alternate ports (deep intensity)
+vigolium scan -t https://example.com --intensity deep --port-sweep-ports 80,443,8080,8443
+```
+
 <Callout icon="circle-info" color="#3B82F6" iconType="regular">
   `vigolium run <phase>` runs one phase in isolation (`discover` is an alias for `discovery`; see [section 10](#10-run-only-specific-phases-or-skip-some) for the full phase/alias list). `-S/--stateless` keeps it throwaway (nothing written to your project DB); combine with `--format fs` or `-o` to persist the discovered surface for later scans. `--fuzz-wordlist` enables on-the-fly fuzzing; the `FUZZ` marker pins the exact insertion point. See [Discovery phase](/native-scan/phases/discovery).
 </Callout>
@@ -427,6 +434,10 @@ vigolium scan -t https://example.com \
   -H 'X-Api-Key: secret' \
   -H 'Cookie: session=abc123'
 ```
+
+<Callout icon="circle-info" color="#3B82F6" iconType="regular">
+  `-H/--header` — like the other repeatable value flags (`-t/--target`, `-T/--target-file`, `--auth`, `--auth-file`, `--spec-header`, `--cookie`) — takes each value **verbatim**: commas are **literal**, so a comma-bearing header/cookie value or a `?ids=1,2,3` URL survives intact. Pass multiple values by **repeating the flag**, never by comma-joining them.
+</Callout>
 
 <Callout icon="circle-info" color="#3B82F6" iconType="regular">
   For richer authenticated scans (login flows, token refresh, multi-step sessions), use an auth session file instead, see [Authentication](/native-scan/authentication) and the `vigolium auth` command.
@@ -452,9 +463,14 @@ vigolium scan -T targets.txt -c 100 --rate-limit 200 --max-per-host 5
 | `-c` / `--concurrency` | `50` | Number of concurrent scan workers |
 | `-r` / `--rate-limit` | `100` | Maximum HTTP requests per second (global) |
 | `--max-per-host` | `50` | Maximum concurrent requests to any single host |
+| `--no-waf-pacing` | `false` (pacing on) | Disable proactive WAF/CDN pre-throttling (reactive back-off after a confirmed block still applies) |
 
 <Callout icon="circle-info" color="#3B82F6" iconType="regular">
   Lower `--rate-limit` and `--max-per-host` to stay gentle on fragile targets; raise `-c` and `--rate-limit` to go faster against robust infrastructure. Under `-P/--parallel`, each child keeps its own `--concurrency`, so real in-flight requests are roughly `P × --concurrency`.
+</Callout>
+
+<Callout icon="circle-info" color="#3B82F6" iconType="regular">
+  **WAF-aware pacing.** The first time earlier-phase traffic fingerprints a host behind a recognized CDN/WAF edge (CloudFront, Cloudflare, Akamai, Imperva/Incapsula, Sucuri, or Azure Front Door — detected from headers on ordinary `200`s), the per-host rate limiter **proactively** drops that host's concurrency to `MaxPerHost/4` and ramps back up on healthy responses, so an aggressive active phase can't burst the edge into a rate-based block that hides findings. A one-time-per-host `[waf-pacing-armed]` notice prints the drop (e.g. `40→10`) to stderr and the session log. Pass `--no-waf-pacing` to turn off this proactive pre-throttle — the reactive back-off after a *confirmed* WAF block still applies. Global flag on `scan` / `scan-url` / `scan-request` / `run` / `ingest`.
 </Callout>
 
 ---
@@ -473,8 +489,8 @@ vigolium config view database.sqlite
 vigolium config view 'oast*'
 vigolium config view 'kno*'          # → known_issue_scan.*
 
-# Reveal redacted secrets (tokens, API keys) with --force / -F
-vigolium config view notify -F
+# Reveal redacted secrets (tokens, API keys) in plaintext with --show-secrets
+vigolium config view notify --show-secrets
 ```
 
 Set values with dot-notation keys — the three forms below are equivalent, so you can copy a line straight out of `config view` output:
@@ -492,7 +508,7 @@ vigolium config set 'oast.server_url = your-oast-domain.com'
 ```
 
 <Callout icon="circle-info" color="#3B82F6" iconType="regular">
-  `config view` sorts keys and prints the active config file path at the bottom. Sensitive values show as `[redacted]` unless you pass `-F/--force`. `config set` validates the key and writes it back to the same file. Reset everything to clean defaults with `vigolium config clean`. See [Configuration](/getting-started/configuration) for the full key reference.
+  `config view` sorts keys and prints the active config file path at the bottom. Sensitive values (API keys, tokens, credentials) show as `[redacted]` unless you pass `--show-secrets`, which reveals them in plaintext and prints a warning to stderr (the generic `-F/--force` no longer reveals secrets). `config set` validates the key and writes it back to the same file. Reset everything to clean defaults with `vigolium config clean`. See [Configuration](/getting-started/configuration) for the full key reference.
 </Callout>
 
 ---
@@ -715,7 +731,11 @@ Output-shaping flags on `finding` / `traffic` / `db ls`:
 | `--tree` *(finding / traffic)* | host/path hierarchy view; recurring findings collapse by title + severity into one `×N` node |
 | `--pick 2-4` *(finding)* | narrow to specific 1-based positions after filters + sort (`2`, `1,3`, `2-4`); composes with `--raw`/`--burp`/`--markdown`/`--json` |
 | `--search a --search b` | repeatable, AND-combined — each added term further narrows the match |
-| `--min-severity high` | filter to the severities that matter |
+| `--exclude-search x` | *(finding / traffic)* repeatable inverse of `--search` — drop a row if **any** term appears (also `--exclude-header` / `--exclude-body`) |
+| `--severity crit,high` / `--sev h,c` | *(finding; `--severity` on `db ls`)* explicit severity **set** — single-letter shorthands + unambiguous prefixes (`crit`, `me`, `info`) |
+| `--min-severity high` | severity **floor** — `high` expands to `high,critical` (contrast the explicit `--severity` set; `--severity` wins if both are set) |
+| `--record-kind finding,candidate` | *(finding / `db list`)* filter by record kind — `finding` (default), `candidate`, `observation` (comma-separated) |
+| `--module-type active,passive` | *(finding / `db list`)* filter by producing module type — `active`, `passive`, `nuclei`, `agent`, `source-tools`, `oast`, `extension` |
 | `--agentic-scan <uuid>` | only findings from a given agent run (expands to the whole run tree) |
 
 <Callout icon="circle-info" color="#3B82F6" iconType="regular">
@@ -824,7 +844,7 @@ vigolium scan-url -S -t https://example.com --silent --print-traffic
 
 ## 25. View HTTP traffic in the database
 
-Everything Vigolium scans, ingests, or records lands in the database. Browse it with `vigolium traffic` (aliases `tf`, and `vigolium db ls --table http_records`). With no flags it shows the 100 most recent records, newest first; add filters, search, or a display format to narrow and shape the output.
+Everything Vigolium scans, ingests, or records lands in the database. Browse it with `vigolium traffic` (aliases `tf`, and `vigolium db ls http_records` — `db ls` takes a positional table name; the old `--table` form is deprecated). With no flags it shows the 100 most recent records, newest first; add filters, search, or a display format to narrow and shape the output.
 
 ```bash
 # Browse recent traffic (newest first, capped at 100)
@@ -841,13 +861,18 @@ vigolium traffic tree
 Search and filter to find the records you care about:
 
 ```bash
-# Fuzzy search across URLs, paths, and hosts (positional term or --search)
+# Fuzzy search across the full request/response — URL, path, headers, and body (positional term or --search)
 vigolium traffic admin
 vigolium traffic --search "/api/users"
 
 # Search within header names/values, or request/response body content
 vigolium traffic --header "Authorization"
 vigolium traffic --body "password"
+
+# Exclude (inverse of --search/--header/--body): drop rows where the term appears
+vigolium traffic --search api --exclude-search "/health"     # keep api traffic, drop the health checks
+vigolium traffic --exclude-search .css --exclude-search .js  # repeatable — drop if ANY term matches
+vigolium traffic --exclude-header Authorization              # drop rows carrying an Authorization header
 
 # Filter by host, status, method, path, source, or date range
 vigolium traffic --host "*.example.com"
@@ -883,8 +908,17 @@ vigolium traffic --glob-db 'scans/*.sqlite'
 ```
 
 <Callout icon="circle-info" color="#3B82F6" iconType="regular">
-  All filter flags (`--host`, `--status`, `--method`, `--path`, `--source`, `--search`, `--header`, `--body`, `--from`/`--to`) stack, and `--sort` + `--asc` control ordering. Add `--replay` to re-send the matched records instead of listing them (see [section 2](#2-replay-all-stored-traffic-through-burp-suite)). The compact `-j/--json` output is the same agent-friendly serializer described in [section 21](#21-triage-findings-with-a-coding-agent-claude-codex).
+  All filter flags (`--host`, `--status`, `--method`, `--path`, `--source`, `--search`, `--header`, `--body`, `--exclude-search`, `--exclude-header`, `--exclude-body`, `--from`/`--to`) stack, and `--sort` + `--asc` control ordering. `--search` spans the **full request/response** — URL, path, headers, and body (for `finding` it also covers module metadata and linked records); repeated `--search` terms AND-narrow, while repeated `--exclude-search` terms drop a row if **any** matches. Add `--replay` to re-send the matched records instead of listing them (see [section 2](#2-replay-all-stored-traffic-through-burp-suite)). The compact `-j/--json` output is the same agent-friendly serializer described in [section 21](#21-triage-findings-with-a-coding-agent-claude-codex).
 </Callout>
+
+Prune the database when you're done — a selector is always required, so a bare `db clean` is rejected:
+
+```bash
+vigolium db clean --scan-uuid my-scan        # delete one scan's records
+vigolium db clean --host api.example.com     # delete by host
+vigolium db clean --all --force              # empty every data table
+vigolium db reset --force                    # delete + recreate the DB file (SQLite; VACUUMs automatically)
+```
 
 ---
 

@@ -15,6 +15,8 @@ Vigolium's browser-based spidering engine (Spitolas) uses Chromium via the Chrom
 - **Render JavaScript**: Pages are fully rendered in a headless browser, allowing Vigolium to discover routes that only exist after JS execution.
 - **Capture network traffic**: All HTTP requests made by the application (XHR, fetch, WebSocket upgrades) are intercepted via CDP and fed into the scanner as inputs.
 - **Interact with the DOM**: The spider clicks buttons, fills forms, and triggers UI events to discover endpoints behind user interactions.
+- **Exercise JS-driven POST forms**: Beyond filling forms, the crawl now triggers same-origin POST-form submit handlers — surfacing the JS-driven POST endpoints (a common home for XXE and body/cookie SQLi) that never appear in the raw HTML. Destructive submits (delete/logout, `_method`-override forms) are skipped, and the pass is disabled by `--no-forms`.
+- **Confirm DOM-based XSS in the browser**: On the reflected client routes it visited, the crawl runs a browser-confirmed DOM-XSS probe — an execution canary must actually fire in the browser before it reports the finding **"DOM-based XSS (Browser-Confirmed)"** (`spider-dom-xss`). It is bounded so it corroborates real DOM-XSS without dominating the crawl.
 - **Extract client-side routes**: SPA router configurations and navigation links are identified even when they do not result in full page loads.
 
 ## Running a SPA Scan
@@ -41,7 +43,11 @@ vigolium scan -t https://spa.example.com --only spidering
 
 Vigolium requires a Chromium-based browser for spidering. On first use, it automatically downloads a compatible Chromium binary. No manual installation is needed in most cases.
 
-For environments where auto-download is not possible (air-gapped systems, containers), pre-install Chromium and point Vigolium to it via the `browser.executable_path` config option.
+For environments where auto-download is not possible (air-gapped systems, containers), pre-install Chromium and point Vigolium to it via the `spidering.browser_path` config option.
+
+<Note>
+**Launch tries candidates in priority order and falls through on failure.** Instead of resolving a single browser binary and aborting the scan if it crashes, spidering enumerates candidates in priority order — configured `spidering.browser_path` → the embedded engine binary → system Google Chrome → system Chromium → Chrome for Testing (cached, then downloaded) → rod auto-download — and moves to the next whenever one fails the launch/DevTools handshake. So a crash-on-startup distro Chromium auto-recovers to a working browser (in practice Chrome for Testing) rather than aborting; only when *every* candidate fails does launch return an aggregated error.
+</Note>
 
 To verify the browser is available:
 
@@ -72,7 +78,7 @@ For large SPAs, increase `max_pages` and `max_depth` to ensure full coverage. Fo
 
 If you see an error about a missing browser executable:
 
-- Ensure you have internet access for the auto-download, or set `browser.executable_path` to a local Chromium installation.
+- Ensure you have internet access for the auto-download, or set `spidering.browser_path` to a local Chromium installation.
 - In Docker containers, use the embedded build or install Chromium in the image.
 
 ### Timeouts

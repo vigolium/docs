@@ -159,3 +159,74 @@ curl -s -X POST http://localhost:9002/api/ingest-http \
   "message": "imported 1 request from URL"
 }
 ```
+
+## POST /api/burp/sitemap/snapshot, Ingest a Burp Site Map Snapshot
+
+Uploads a chunk of a Burp Suite **Target Site map** snapshot into the database. This is the endpoint the companion [`burp-vigolium`](https://github.com/vigolium/burp-vigolium) extension calls when you snapshot your Target Site map (`Ctrl+Alt+S` or periodic snapshots). Snapshots are **chunked** (a single site map is split across sequential requests), **incremental** within a Burp session, and **idempotent** on the server — unchanged records are never duplicated.
+
+**Headers:**
+
+| Header            | Required | Description                                                        |
+|-------------------|----------|--------------------------------------------------------------------|
+| `Authorization`   | Yes      | `Bearer <token>` — requires **operator** (or admin) role          |
+| `Content-Type`    | Yes      | Must be `application/json`                                         |
+| `X-Project-UUID`  | No       | Project UUID to scope the imported records. Falls back to the default project if omitted. |
+
+**Request body:**
+
+| Field          | Type    | Required | Description                                                        |
+|----------------|---------|----------|--------------------------------------------------------------------|
+| `snapshot_id`  | string  | Yes      | Identifier for the snapshot the chunks belong to                  |
+| `chunk_index`  | int     | Yes      | Zero-based index of this chunk within the snapshot                |
+| `final_chunk`  | bool    | No       | `true` on the last chunk of the snapshot                          |
+| `captured_at`  | string  | No       | Timestamp the snapshot was captured in Burp                       |
+| `records`      | array   | Yes      | Up to **200** site map records per chunk (see below)              |
+
+Each entry in `records`:
+
+| Field                   | Type   | Required | Description                                                        |
+|-------------------------|--------|----------|--------------------------------------------------------------------|
+| `url`                   | string | No       | Absolute URL — supplies the scheme and host the raw request lacks |
+| `request_base64`        | string | Yes      | Base64-encoded raw HTTP request                                   |
+| `response_base64`       | string | No       | Base64-encoded raw HTTP response, when Burp captured one          |
+| `identity_fingerprint`  | string | No       | Extension-computed request-identity hash (drives dedup)          |
+| `content_fingerprint`   | string | No       | Extension-computed response-content hash (detects changed rows)  |
+
+A chunk carrying more than 200 records is rejected with `400`.
+
+### Upload a snapshot chunk
+
+```bash
+curl -s -X POST http://localhost:9002/api/burp/sitemap/snapshot \
+  -H "Authorization: Bearer my-secret-key" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"snapshot_id\": \"snap-2026-07-11T10-00-00\",
+    \"chunk_index\": 0,
+    \"final_chunk\": true,
+    \"records\": [
+      {
+        \"url\": \"https://example.com/api/users\",
+        \"request_base64\": \"$REQ_B64\",
+        \"response_base64\": \"$RESP_B64\",
+        \"identity_fingerprint\": \"a1b2c3\",
+        \"content_fingerprint\": \"d4e5f6\"
+      }
+    ]
+  }" | jq .
+```
+
+**Response:**
+
+```json
+{
+  "received": 1,
+  "inserted": 1,
+  "updated": 0,
+  "unchanged": 0,
+  "skipped": 0,
+  "errors": []
+}
+```
+
+Every record is upserted individually: `inserted` counts new rows, `updated` counts rows whose response changed, `unchanged` counts idempotent no-ops, and `skipped` counts records that failed to decode or parse (with the reason appended to `errors`). `received` is the number of records in the chunk.

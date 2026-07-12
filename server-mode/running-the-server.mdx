@@ -31,6 +31,9 @@ vigolium server --mirror-fs ./mirror
 
 # Passively scan every ingested request as it arrives (no active traffic)
 vigolium server --scan-on-receive --passive-only
+
+# Merge live Burp Proxy history into GET /api/http-records
+vigolium server --burp-bridge-url http://127.0.0.1:9009
 ```
 
 The server listens on `0.0.0.0:9002` by default.
@@ -67,6 +70,20 @@ vigolium server --scan-on-receive --passive-only
 
 - `--passive-only` restricts scan-on-receive to **passive modules only** — the safest way to analyze forwarded traffic in place.
 - Combining `--passive-only` with `--full-native-scan-on-receive` still crawls (discovery + spidering send requests); for zero active traffic, use `--scan-on-receive` without the full-native flag.
+
+## Live Burp Bridge
+
+`--burp-bridge-url <url>` connects the server to a running Burp Suite through the [`burp-vigolium`](https://github.com/vigolium/burp-vigolium) extension's loopback live-bridge listener. Live Burp **Proxy history** rows are merged into `GET /api/http-records` on the fly, so the Web UI and API see current Burp traffic alongside the database without a separate ingest step:
+
+```bash
+vigolium server --burp-bridge-url http://127.0.0.1:9009
+```
+
+- The listener is a loopback-only address the extension exposes; `http://127.0.0.1:9009` is the default. Enable it under **Vigolium → Bridge → Enable live bridge** in Burp.
+- Live rows are labelled `source: burp`, and the usual `/api/http-records` filters, sorting, and pagination continue to apply.
+- The `VIGOLIUM_BURP_BRIDGE_URL` env var supplies the same URL as a fallback; the flag overrides it.
+
+See the [Burp Suite guide](/getting-started/burp-suite) for the full bidirectional bridge workflow.
 
 ## Authentication
 
@@ -128,6 +145,7 @@ A condensed view — see the [API References](/others/api-references) index for 
 | GET | `/api/findings` | Query scan findings |
 | PATCH | `/api/findings/:id/status` | Update finding status (open/triaged/closed) |
 | POST | `/api/ingest-http` | Ingest HTTP traffic into the database |
+| POST | `/api/burp/sitemap/snapshot` | Ingest a chunked Burp Target Site map snapshot |
 | POST | `/api/import` | Bulk import scans/records/findings |
 | GET | `/api/stats` | Aggregated scan statistics |
 | GET | `/api/oast-interactions` | List OAST callbacks |

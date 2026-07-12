@@ -1,10 +1,10 @@
 ---
 title: "Scanner Modules Reference"
-description: "Reference for Vigolium's 313 scanner modules, 198 active and 115 passive, covering the OWASP Top 10 and beyond."
+description: "Reference for Vigolium's 317 scanner modules, 201 active and 116 passive, covering the OWASP Top 10 and beyond."
 icon: "cubes"
 ---
 
-Vigolium ships with **313 scanner modules**, 198 active and 115 passive, covering the OWASP Top 10 and beyond. Run `vigolium module ls` for the up-to-date enabled list (the registry can grow between releases without a docs refresh).
+Vigolium ships with **317 scanner modules**, 201 active and 116 passive, covering the OWASP Top 10 and beyond. Run `vigolium module ls` for the up-to-date enabled list (the registry can grow between releases without a docs refresh).
 
 Active modules send modified requests to detect vulnerabilities; passive modules analyze existing request/response pairs without generating traffic. Recent additions include the GraphQL security suite, the Adobe Experience Manager (AEM) family, the SaaS data-exposure family (Salesforce / ServiceNow / Power Pages), the Model Context Protocol (MCP) suite, the expanded IIS family, the `dependency-confusion` and `js-beautify` passives, and the v0.2.1 batch (out-of-band SQLi, XPath injection, unauthenticated infra-service exposure, TLS protocol/cipher audit, session fixation, and the LLM-endpoint / payment-integration / DOM-clobbering / CSS-injection / cross-origin-isolation / reverse-tabnabbing passives) — see `vigolium module ls --tag graphql`, `--tag aem`, `--tag salesforce`, `--tag servicenow`, `--tag powerpages`, `--tag mcp`, and `--tag iis` to view them.
 
@@ -20,7 +20,7 @@ Active modules send modified requests to detect vulnerabilities; passive modules
 
 ---
 
-## Active Modules (198)
+## Active Modules (201)
 
 Active modules send modified requests to detect vulnerabilities via fuzzing, injection, and behavioral analysis. The list below is a curated highlight, run `vigolium module ls --type active` for the full list.
 
@@ -75,6 +75,7 @@ Active modules send modified requests to detect vulnerabilities via fuzzing, inj
 | `xpath-injection` | XPath Injection | XPath/XQuery injection detected via engine error signatures and a boolean oracle (e.g. `' or '1'='1`) | High | Firm | `xpath`, `injection` |
 | `active-insecure-deserialization` | Insecure Deserialization | Error-based detection for Java, PHP, Python, Ruby, and .NET deserialization | High | Firm | `injection` |
 | `active-input-behavior-probe` | Input Behavior Probe | Behavior change detection via header, path, debug param, and char probing | Suspect | Tentative | `injection` |
+| `active-padding-oracle` | CBC Padding Oracle | Confirms a CBC padding oracle by flipping ciphertext bytes and observing a reproducible padding-error differential | High | Firm | `cryptography`, `injection`, `heavy` |
 
 ### SSRF & Out-of-Band (OAST)
 
@@ -121,6 +122,7 @@ Active modules send modified requests to detect vulnerabilities via fuzzing, inj
 | `active-nginx-off-by-slash` | Nginx Off-by-Slash | Nginx alias traversal via missing trailing slash | High | Tentative | `misconfiguration` |
 | `active-nginx-path-escape` | Nginx Path Escape Detection | Diff-based detection for alias traversal, URL encoding bypass, semicolon injection | High | Firm | `misconfiguration` |
 | `reverse-proxy-path-confusion` | Reverse Proxy Path Confusion | Reaches access-controlled backend paths the reverse proxy and origin normalize differently (encoded slashes, dot-segments, semicolons) | High | Firm | `proxy`, `access-control`, `heavy` |
+| `active-client-path-traversal-confirm` | Client-Side Path Traversal Confirm | Browser-confirms a URL-controlled value escaping a client-side request path prefix | Medium | Firm | `cspt`, `dom`, `browser`, `heavy` |
 
 ### Differential & Behavior Detection
 
@@ -160,6 +162,8 @@ Active modules send modified requests to detect vulnerabilities via fuzzing, inj
 | `active-default-credentials` | Default Credentials | Login endpoints tested with common credential pairs; CAPTCHA/lockout aware | High | Certain | `auth-bypass` |
 | `active-sensitive-file-discovery` | Sensitive File Discovery | ~25 marker-based sensitive files and ~1,350 generic paths (.env, .git, logs) | Medium | Firm | `info-disclosure` |
 | `active-jsonp-callback` | JSONP Callback Injection | JSONP endpoints via callback injection enabling cross-origin data theft | Medium | Firm | `injection` |
+| `active-grpc-surface-audit` | gRPC-Web Surface Audit | gRPC-Web (HTTP/1.1) endpoints with missing authorization and exposed reflection/health services | High | Firm | `grpc`, `api`, `authorization`, `heavy` |
+| `active-llm-boundary-probe` | LLM Boundary Probe | Probes LLM endpoints for system-prompt / secret disclosure and tool abuse | High | Firm | `llm`, `ai`, `prompt-injection`, `heavy` |
 
 ### Proxy & Utility
 
@@ -168,7 +172,6 @@ Active modules send modified requests to detect vulnerabilities via fuzzing, inj
 | `active-proxy` | Proxy | Replay all requests through configured proxy | Info | Firm | `utility`, `light` |
 | `active-proxy-header-trust` | Proxy Header Trust | Cross-framework proxy header trust issues via X-Forwarded-* manipulation | High | Firm | `misconfiguration`, `moderate` |
 | `active-api-rate-limit-bypass` | API Rate Limit Bypass | Rate limiting bypass via IP spoofing headers | Medium | Firm | `auth-bypass`, `moderate` |
-| `active-websocket-security` | WebSocket Security | Insecure WebSocket upgrade policies and missing origin validation | High | Firm | `misconfiguration`, `light` |
 | `active-swagger-disclose` | Swagger Disclosure | Exposed Swagger/OpenAPI documentation | Medium | Firm | `api`, `info-disclosure`, `light` |
 | `active-backup-file-discovery` | Backup File Discovery | Exposed backup archives derived from hostname and year variants | High | Firm | `sensitive-file`, `moderate` |
 | `active-angular-template-injection` | Angular Template Injection | Angular template injection via expression evaluation | High | Firm | `angular`, `injection`, `ssti` |
@@ -364,7 +367,7 @@ Audited against OWASP; every active probe gates on a reachable MCP endpoint (`pa
 
 ---
 
-## Passive Modules (115)
+## Passive Modules (116)
 
 Passive modules analyze existing request/response pairs without sending new traffic.
 
@@ -375,6 +378,7 @@ Passive modules analyze existing request/response pairs without sending new traf
 | `passive-dom-xss-detect` | DOM XSS Detect | DOM XSS source-to-sink data flows (location.hash, innerHTML, eval, document.write) | Medium | Firm | `xss` |
 | `css-injection-detect` | CSS Injection | Request values reflected into a `<style>` block or `style=` attribute | Info | Tentative | `client-side`, `css-injection`, `reflection` |
 | `dom-clobbering` | DOM Clobbering Gadget | JavaScript that feeds a named-property global (`window.x` / `id`-addressed element) into a dangerous sink | Info | Tentative | `client-side`, `dom-clobbering`, `javascript` |
+| `passive-client-path-taint` | Client-Side Path Traversal (taint candidate) | URL-controlled source flowing into a client-side request path | Low | Firm | `cspt`, `dom`, `javascript`, `light` |
 
 ### Authentication & Session
 
@@ -410,7 +414,7 @@ Passive modules analyze existing request/response pairs without sending new traf
 
 | Module ID | Name | Description | Severity | Confidence | Tags |
 |---|---|---|---|---|---|
-| `passive-js-beautify` | JavaScript Beautifier | Unminifies and unpacks bundled first-party JS into readable, module-annotated source (embedded jsscan/webcrack, no `eval`); rewrites the stored JS record so downstream analysis reads clean source | Info | Certain | `javascript`, `beautify`, `deobfuscation`, `source-analysis` |
+| `passive-js-beautify` | JavaScript Beautifier | Unminifies and unpacks bundled first-party JS into readable, module-annotated source (embedded jstangle/webcrack, no `eval`); rewrites the stored JS record so downstream analysis reads clean source | Info | Certain | `javascript`, `beautify`, `deobfuscation`, `source-analysis` |
 | `passive-dependency-confusion` | Dependency Confusion Candidate | Flags scoped npm package names referenced in first-party JS that are left unclaimed (404) on the public registry | Suspect | Tentative | `dependency-confusion`, `supply-chain`, `source-analysis`, `npm` |
 
 ### Security Headers & Configuration

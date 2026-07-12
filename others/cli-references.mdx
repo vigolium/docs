@@ -21,6 +21,10 @@ The global `--soft-fail` flag forces an exit code of `0` even when a command fai
 vigolium scan -t https://example.com --soft-fail
 ```
 
+<Note>
+Mistype a long flag and Vigolium suggests the nearest match instead of a bare "unknown flag" error — e.g. `--module` yields `unknown flag: --module. Did you mean --modules? (run 'vigolium scan --help' for all flags)`. Added in v0.3.0.
+</Note>
+
 ## Scanning
 
 Run the full native pipeline against one or more targets.
@@ -28,6 +32,9 @@ Run the full native pipeline against one or more targets.
 ```bash
 # Single target
 vigolium scan -t https://example.com
+
+# Bare positional target URLs also work (deduped against -t/--target); also on scan-url/scan-request/run
+vigolium scan https://example.com https://api.example.com
 
 # Multiple targets (-t and -T/--target-file are both repeatable and combine)
 vigolium scan -t https://example.com -t https://api.example.com
@@ -62,6 +69,10 @@ vigolium scan-url -S -t https://example.com --silent --print-traffic        # ra
 vigolium scan -t https://example.com --proxy http://127.0.0.1:8080
 vigolium scan -t https://example.com -c 100 --rate-limit 200
 vigolium scan -t https://example.com --scanning-max-duration 2h
+vigolium scan -t https://example.com --no-waf-pacing         # Disable proactive WAF/CDN pre-throttling (speed control)
+
+# Discovery: sweep alternate HTTP(S) ports on the target hosts (deep intensity or --follow-subdomains)
+vigolium scan -t https://example.com --intensity deep --port-sweep-ports 80,443,8080,8443
 
 # CI/agent exit-code gating
 vigolium scan -t https://example.com --fail-on high       # exit non-zero on any high+ finding
@@ -79,6 +90,12 @@ vigolium scan -t https://example.com --project-name my-project
 vigolium scan -t https://example.com --oast-url https://interact.sh/abc123
 vigolium scan -t https://example.com --known-issue-scan-tags cve,misconfig --known-issue-scan-severities critical,high
 ```
+
+The repeatable "opaque" flags — `-H/--header`, `--auth`, `--auth-file`, `-t/--target`, `-T/--target-file`, `--spec-header`, and `--cookie` — take each value **verbatim**: commas are **literal**, not separators. So a target URL with a query like `?ids=1,2,3`, or a header/cookie whose value contains a comma, survives intact. To pass several values, **repeat the flag** (`-t https://a -t https://b`) rather than comma-joining them.
+
+**Speed control — WAF-aware pacing.** The per-host rate limiter now **proactively pre-throttles** a host the first time earlier-phase traffic fingerprints it behind a recognized CDN/WAF edge (CloudFront, Cloudflare, Akamai, Imperva/Incapsula, Sucuri, or Azure Front Door — detected from headers on ordinary 200s), dropping that host's concurrency to `MaxPerHost/4` and ramping back up on healthy responses. This keeps an aggressive active phase from bursting the edge into a rate-based block that would hide findings. A one-time-per-host `[waf-pacing-armed]` notice prints the drop (e.g. `40→10`) to stderr and the session log. `--no-waf-pacing` disables this **proactive** pacing; the **reactive** back-off after a *confirmed* WAF block still applies. It's a Speed Control flag, available on `scan` / `scan-url` / `scan-request` / `run` / `ingest`.
+
+**Discovery — alternate-port sweep.** `--port-sweep-ports` overrides the alternate HTTP(S) ports swept on the CLI target hosts (comma-separated). The sweep runs when `--intensity deep` is set or `--follow-subdomains` is on, so a host reachable on `8080`/`8443` (or any port you list) is discovered and scanned alongside the standard `80`/`443`.
 
 ### Parallel & isolated scans
 
@@ -133,7 +150,9 @@ vigolium scan -I har     -i traffic.har
 cat urls.txt | vigolium scan -i -
 ```
 
-Run `vigolium --list-input-mode` to see every supported input format with examples.
+Run `vigolium --list-input-mode` to see every supported input format with examples. Accepted formats are `urls`, `openapi`/`swagger`, `postman`, `curl`, `burpraw`/`raw`, `burpxml`/`burp`, `har`, and `nuclei`.
+
+An unknown `-I/--input-mode` value is now **rejected up front** with a clear error (it previously fell through to the Nuclei parser silently, so a typo could yield zero or partial records with no warning).
 
 ## Ingestion
 
@@ -159,6 +178,7 @@ vigolium server --no-auth                                    # Local use only �
 vigolium server -t https://example.com --scan-on-receive     # Auto-scan ingested traffic (-S is shorthand for --scan-on-receive)
 vigolium server -S --passive-only                            # Passive modules only — no active traffic; includes secret detection
 vigolium server --mirror-fs ./mirror                         # Live-mirror ingested traffic + findings to a filesystem tree
+vigolium server --burp-bridge-url http://127.0.0.1:9009      # Merge live Burp Proxy history into GET /api/http-records
 
 # Transparent ingest proxy (records traffic flowing through it)
 vigolium server --ingest-proxy-port 9003
@@ -173,6 +193,8 @@ vigolium server --export-ca ./vigolium-ca.pem
 
 See [Transparent Proxy](/server-mode/proxy) for the full MITM workflow.
 
+`--burp-bridge-url <url>` points the server at a running Burp Suite's loopback **live bridge** (default listener `http://127.0.0.1:9009`, exposed by the [`burp-vigolium`](https://github.com/vigolium/burp-vigolium) extension) and merges Burp's live Proxy rows into `GET /api/http-records` — labelled `source: burp` — for the UI and API. The flag also reads the `VIGOLIUM_BURP_BRIDGE_URL` env var as a fallback. See [Using Vigolium with Burp Suite](/getting-started/burp-suite) for bridge setup.
+
 `--passive-only` (with `--scan-on-receive`) restricts scanning to **passive modules only** — no active scan traffic is sent, and secret detection is included. It's the safest way to analyze forwarded Burp/proxy traffic in place. Combining it with `--full-native-scan-on-receive` still crawls (discovery + spidering send requests); for zero active traffic, use `--scan-on-receive` without the full-native flag.
 
 ## Database & Results
@@ -182,14 +204,30 @@ Browse, export, and prune scan data.
 ```bash
 # Browse
 vigolium db ls
-vigolium db ls --table findings
+vigolium db ls findings           # Positional table selector: findings | scans | scopes (--table is deprecated)
 vigolium db stats
 vigolium db stats --detailed
-vigolium traffic                  # Alias for `db ls --table http_records`
+vigolium traffic                  # Alias for `db ls http_records`
 vigolium traffic login            # Filter to login-related records
 vigolium finding                  # Fuzzy-search findings
 vigolium finding xss --markdown   # Render matches as Markdown (evidence + http blocks) to stdout
-vigolium finding --min-severity high --confidence certain,firm   # Filter by severity floor + confidence
+
+# Severity: --severity is an explicit set (alias --sev on `finding`); --min-severity is a floor
+vigolium finding --severity high,critical                        # exactly these severities
+vigolium finding --sev h,c                                       # single-letter shorthands
+vigolium finding --sev crit,me,info                              # unambiguous prefixes
+vigolium finding --min-severity high --confidence certain,firm   # floor (high+critical) + confidence
+vigolium db ls findings --severity high,critical                 # --severity also on `db ls`
+
+# Record kind & producing-module type (on `finding` and `db list`)
+vigolium finding --record-kind finding,candidate                 # kinds: finding (default), candidate, observation
+vigolium finding --module-type active,passive                    # by producing module type
+vigolium db ls findings --module-type nuclei,agent               # also on `db ls`
+
+# Exclude filters (on `finding` and `traffic`) — inverse of --search/--header/--body
+vigolium finding --search sqli --exclude-search login            # keep sqli, drop anything mentioning login
+vigolium traffic --exclude-header Authorization                  # drop rows carrying an Authorization header
+vigolium traffic --exclude-search .css --exclude-search .js      # repeatable — drop if ANY term matches
 
 # Read a standalone export directly (project scoping off, never writes to your DB)
 vigolium finding -S --db ./scan.jsonl --min-severity high
@@ -202,11 +240,30 @@ vigolium export --format jsonl --only findings,http
 vigolium export --format html -o report.html
 vigolium export --format fs -o run            # browsable run-traffic/ + run-findings/ tree (also on `db export`)
 
-# Cleanup
+# Live Burp bridge — read Burp history into the traffic view, or push DB traffic back into Burp
+vigolium traffic --burp-bridge-url http://127.0.0.1:9009                                # merge live Burp Proxy history
+vigolium traffic --burp-bridge-url http://127.0.0.1:9009 --save-to-vigolium-db          # persist the current page into the DB
+vigolium traffic --burp-bridge-url http://127.0.0.1:9009 --save-to-vigolium-db --all    # persist every matching record
+vigolium traffic --burp-bridge-url http://127.0.0.1:9009 --save-to-burp                 # copy DB traffic into Burp's Site map
+
+# Cleanup — a selector is required; a bare `db clean` is rejected
 vigolium db clean --scan-uuid my-scan
+vigolium db clean --host api.example.com
+vigolium db clean --all --force                    # delete every row from the data tables
+vigolium db reset --force                          # delete + recreate the DB file (SQLite; VACUUMs automatically)
 ```
 
 `finding`/`traffic` accept `-S/--stateless` + `--db <file>` to read a `--format jsonl` export or a standalone `.sqlite` directly, and `--markdown` to print the matched items as Markdown (under `-S`, add `--compact` to window long responses around the match).
+
+**Severity filters.** `--severity` (alias `--sev` on `finding`) takes an explicit comma-separated set, accepting single-letter shorthands (`h,c`) and any unambiguous prefix (`crit`, `me`, `info`). It differs from `--min-severity`, which is a **floor** — `--min-severity high` expands to `high,critical`. When both are given, `--severity` wins. `db ls` carries `--severity` too (findings tables).
+
+**Record-kind & module-type filters.** `--record-kind` (on `finding` and `db list`) filters by record kind — `finding`, `candidate`, or `observation` (comma-separated; default `finding`). `--module-type` (same commands) filters by the **producing module type** — `active`, `passive`, `nuclei`, `agent`, `source-tools`, `oast`, or `extension` (comma-separated).
+
+**Exclude filters.** `--exclude-search` / `--exclude-header` / `--exclude-body` (on `finding` and `traffic`) are the inverse of `--search` / `--header` / `--body`: they **drop** any row where the term appears. `--exclude-search` is repeatable, and a row is dropped if **any** term matches (contrast `--search`, whose repeated terms AND-narrow the kept set).
+
+**Live Burp bridge.** With a running Burp Suite exposing the loopback bridge (default listener `http://127.0.0.1:9009`, from the [`burp-vigolium`](https://github.com/vigolium/burp-vigolium) extension; env fallback `VIGOLIUM_BURP_BRIDGE_URL`), `vigolium traffic --burp-bridge-url <url>` merges Burp's live Proxy history into the traffic view. Add `--save-to-vigolium-db` to persist those bridge rows into the DB (the current page, or every match with `--all`), or `--save-to-burp` to copy DB traffic **into** Burp's Target Site map (the two `--save-to-*` flags are mutually exclusive). See [Using Vigolium with Burp Suite](/getting-started/burp-suite) for bridge setup.
+
+**Cleanup safety.** A bare `vigolium db clean` with no selector is **rejected** — narrow the delete with a filter (`--scan-uuid`, `--host`, `--before`, `--status`, `--severity`, `--search`, `--orphans`, `--findings-only`, `--table`), use `db clean --all --force` to empty the data tables, or `vigolium db reset --force` to delete and recreate the SQLite database file from scratch (it VACUUMs automatically; without `--force` on a TTY it prompts for interactive confirmation).
 
 ### Import
 
@@ -231,7 +288,12 @@ for f in scans/*.sqlite; do vigolium import --db combined.sqlite "$f"; done
 # Compressed archive (.tar.gz / .tgz / .zip) or a cloud-storage object
 vigolium import ./scan-bundle.tar.gz
 vigolium import gs://<project-uuid>/imports/scan.tar.gz
+
+# One-shot persist of a running Burp Suite's live Proxy history into the DB
+vigolium import --burp-bridge-url http://127.0.0.1:9009
 ```
+
+`--burp-bridge-url <url>` turns `import` into a one-shot persist of **all** of a running Burp's live Proxy history into the database (default listener `http://127.0.0.1:9009`; env fallback `VIGOLIUM_BURP_BRIDGE_URL`). It's an import *source*, so it cannot be combined with path arguments or `--glob-db`. See [Using Vigolium with Burp Suite](/getting-started/burp-suite).
 
 A **SQLite database input** (detected by its magic header, any extension) is a lossless, idempotent SQLite→SQLite merge: HTTP records, findings, scans, agentic scans, OAST interactions, and projects are deduped on their natural keys, and each row keeps its original project. Re-importing the same database adds nothing the second time. The destination is the `--db` target (or the configured default database when `--db` is omitted). Add `-j/--json` to print a per-table merge summary (rows inserted vs. skipped). This pairs with `scan -S --format sqlite`: fan out per-host `.sqlite` files, then merge them back into one queryable DB.
 
@@ -260,7 +322,13 @@ vigolium replay --record-uuid abc12345 --target https://staging.example.com \
 # Merge headers from a saved auth session (from `vigolium auth list`)
 vigolium replay --record-uuid abc12345 --target https://staging.example.com \
                  --auth-session my-session
+
+# Save a mutated replay + its fresh response back into Burp's Target Site map
+vigolium replay --record-uuid abc12345 -m 'name=id,payload=1 OR 1=1' \
+                 --burp-bridge-url http://127.0.0.1:9009 --save-to-burp
 ```
+
+`--save-to-burp` (paired with `--burp-bridge-url`) adds each replayed request and its fresh response straight into Burp's Target Site map — without proxying it twice — so a confirmed exploit lands back in Burp for manual follow-up (default listener `http://127.0.0.1:9009`; env fallback `VIGOLIUM_BURP_BRIDGE_URL`). See [Using Vigolium with Burp Suite](/getting-started/burp-suite).
 
 ### Bulk replay
 
@@ -361,10 +429,19 @@ vigolium agent --list-templates
 vigolium agent swarm -t https://example.com --discover
 vigolium agent swarm -t https://example.com --discover --focus 'API injection'
 
+# Natural-language positional prompt — preserved as extra instruction context alongside flags
+vigolium agent swarm "focus on the checkout and payment flows" -t https://example.com --discover
+
 # Skill control (force-load attack-vector skills, bypass planner selection)
 vigolium agent swarm -t https://example.com --discover --skill-tag xss,idor
 vigolium agent swarm -t https://example.com --discover --no-skill-filter
+
+# Olium provider/model overrides (same set as `agent autopilot` / `agent query`)
+vigolium agent swarm -t https://example.com --discover --provider anthropic-api-key --model claude-opus-4-7
+vigolium agent swarm -t https://example.com --discover --base-url http://localhost:11434/v1 --llm-api-key "$KEY"
 ```
+
+`agent swarm` accepts the shared olium override flags — `--provider`, `--model`, `--base-url`, `--llm-api-key`, `--oauth-cred`, `--oauth-token` — mirroring `agent autopilot`; each falls back to its `agent.olium.*` config value. A positional `<prompt>` is preserved verbatim as extra instruction context (prepended ahead of `--instruction`) when structured flags are also present.
 
 ### `agent autopilot`: autonomous agentic scan
 
@@ -468,6 +545,8 @@ vigolium agent audit --source ./backend -S
 vigolium agent audit --driver both --source ./backend -S --output-dir ./audit-bundle
 ```
 
+On `agent audit`, `--intensity deep` resolves to the `deep,confirm` mode chain (the modes run back-to-back), matching the `POST /api/agent/run/audit` endpoint; `quick` maps to `lite` and `balanced` to `balanced` (both single-mode).
+
 `-S/--stateless` runs the whole audit into a throwaway temp DB (your main DB is untouched, mirroring `scan -S`) and, on completion, renders a self-contained HTML report from the run's findings to `vigolium-result/vigolium-audit-report.html` (override with `-o/--output`, which supports `gs://` and `{ts}`). `--output-dir <dir>` (stateless-only) additionally bundles that report **and** a copy of each ran driver's raw `vigolium-results/` tree into one folder — a single driver lands flat at `<dir>/vigolium-results/`, multiple are namespaced under `<dir>/<driver>/`. `-S` is rejected with `--interactive`. `--keep-raw` is **on by default** for the CLI (it retains the `<source>/vigolium-results/` copy); `--clean-raw` removes that source copy after the run.
 
 ### `log`: replay an agentic session
@@ -484,12 +563,15 @@ vigolium log --raw                 # Print the raw transcript JSONL verbatim ins
 
 ```bash
 vigolium config ls
+vigolium config ls --show-secrets     # Reveal masked secret values (API keys, tokens) in plaintext
 vigolium config clean
 vigolium init                     # Initialize ~/.vigolium with defaults
 vigolium doctor                   # Diagnose configuration and tool readiness
 vigolium auth                     # Authentication management utilities
 vigolium project                  # Manage multi-tenant projects
 ```
+
+`vigolium config ls` (aliases `list` / `view`) redacts sensitive values — API keys, tokens, credentials — as `[redacted]` by default. Pass `--show-secrets` to reveal them in plaintext; it prints a warning to stderr. The generic `-F/--force` no longer reveals secrets (it only skips confirmation prompts).
 
 <Note>
 This page covers the most common invocations. Every command supports `--help` for the full flag reference, and most commands accept the global flags shown by `vigolium --help`.

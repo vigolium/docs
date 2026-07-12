@@ -406,8 +406,9 @@ vigolium run ext -t https://example.com --ext ./custom-check.js
 |-------|-------------|
 | `deparos`, `discover` | `discovery` |
 | `spitolas` | `spidering` |
-| `dynamic-assessment` | `audit` |
 | `ext` | `extension` |
+| `audit`, `dast`, `assessment` | `dynamic-assessment` |
+| `cve`, `kis`, `known-issues` | `known-issue-scan` |
 
 ---
 
@@ -1105,7 +1106,7 @@ vigolium db clean --orphans
 > Wipe the entire database and start fresh
 ```
 ```bash
-vigolium db clean --force
+vigolium db reset --force
 ```
 
 **Reclaim disk space after deletion:**

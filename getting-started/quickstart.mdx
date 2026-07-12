@@ -144,7 +144,7 @@ cat urls.txt | vigolium scan
 echo "curl -X POST -d 'user=admin' https://example.com/login" | vigolium scan-request
 ```
 
-Supported input modes (`-I`): `urls`, `openapi`, `swagger`, `postman`, `curl`, `burpxml`, `nuclei`, `har`.
+Supported input modes (`-I`): `urls`, `openapi`, `swagger`, `postman`, `curl`, `burpraw`, `burpxml`, `nuclei`, `har`. An unknown `-I` value is rejected with a clear error (no silent fallback).
 
 ## Step 6: Pick specific modules (optional)
 

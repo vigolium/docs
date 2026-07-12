@@ -1,15 +1,15 @@
 ---
 title: "Agent Mode"
-description: "Vigolium ships seven agent subcommands under `vigolium agent` covering autonomous scanning, AI-guided pipelines, a unified source-audit driver, single-shot prompts, and an interactive TUI."
+description: "Vigolium ships seven agent subcommands under `vigolium agent` covering autonomous scanning, AI-guided pipelines, a unified source-audit driver, single-shot prompts, single-finding triage, and an interactive TUI."
 icon: "robot"
 ---
 
 Vigolium ships **seven agent subcommands** under `vigolium agent`. They split into four families:
 
 - **Agentic scan modes**: autonomous or AI-guided vulnerability scanning: `autopilot`, `swarm`
-- **Source audit modes**: multi-phase AI code audit: `audit` (unified driver for the embedded vigolium-audit harness and/or the standalone piolium harness) and `piolium` (direct piolium driver)
+- **Source audit mode**: multi-phase AI code audit: `audit` (unified driver for the embedded vigolium-audit harness and/or the standalone piolium harness, selected with `--driver`)
 - **Single-shot / interactive**: `query`, `olium`
-- **Utility**: `session`
+- **Utility**: `session`, `triage`
 
 The parent `vigolium agent` command itself only supports `--list-templates` and `--list-agents`. All execution requires a subcommand.
 
@@ -24,10 +24,10 @@ Every agent invocation is dispatched through the in-process **olium runtime** (`
 | Run a one-off prompt against code or a target (no scanning loop) | `query` | Single-shot, template-driven, returns structured findings or HTTP records |
 | Hand the agent the wheel for a full autonomous pentest | `autopilot` | One long LLM session with full Bash/Read/Write/Grep/Glob; agent picks strategy |
 | Have the AI **drive the native scanner** on a specific target | `swarm` | Master/worker pipeline: AI plans → native modules execute → optional triage+rescan |
-| Audit source code (secrets, SAST triage, PoC) before or alongside a scan | `audit` | Unified driver dispatcher: drives the embedded vigolium-audit harness, piolium, or both, with per-driver child AgenticScan rows + post-pass findings dedup |
-| Direct piolium harness driver (Pi-native install required) | `piolium` | Skips the dispatcher and runs piolium alone with its own modes |
+| Audit source code (secrets, SAST triage, PoC) before or alongside a scan | `audit` | Unified driver dispatcher: drives the embedded vigolium-audit harness, piolium, or both (`--driver auto\|both\|audit\|piolium`), with per-driver child AgenticScan rows + post-pass findings dedup |
 | Chat with an LLM interactively in a TUI (debug, explore, ad-hoc) | `olium` | Real-time multi-turn chat; not a security scan, general-purpose agent |
 | Review past agent runs | `session` | Lists prior runs, shows raw output and artifacts |
+| Confirm or downgrade a single existing finding with AI | `triage` | Runs the AI triage flow against one finding by id and updates its verdict/severity |
 
 ---
 
@@ -73,13 +73,9 @@ See [Swarm](/agentic-scan/swarm).
 
 See [Agentic Security Audit](/getting-started/agentic-security-audit).
 
-### `piolium`: direct piolium harness driver
-
-- **Use for:** dropping the dispatcher and running piolium alone. Equivalent to `vigolium agent audit --driver piolium`, but exposes piolium-only flags (`longshot`/`smoke` modes, `--plm-*` session passthroughs) without the audit-leg argument parsing.
-- **Modes:** `lite` (4), `balanced` (9), `deep` (17), `revisit` (9), `confirm` (7), `merge` (7), `diff` (1), `longshot` (3), `status`, `smoke`.
-- **Key flags:** `--mode`, `--intensity {quick|balanced|deep}`, `--source <path|git-url>`, `--commit-depth`, `--no-stream`, `--upload-results`, `--pi-provider`, `--pi-model`, plus `--plm-*` passthroughs for piolium's session flags.
-
-See [Agentic Security Audit](/getting-started/agentic-security-audit).
+<Note>
+There is no standalone `vigolium agent piolium` subcommand. Piolium runs only through the audit dispatcher, `vigolium agent audit --driver piolium` (piolium alone), `--driver both` (audit then piolium), or `--driver auto` (piolium as fallback when the `claude`/`codex` CLI is missing). Piolium-only modes (`longshot`, `smoke`) and passthroughs (`--pi-*`, `--plm-*`) are exposed on `agent audit`.
+</Note>
 
 ### `olium`: interactive TUI chat
 
@@ -93,6 +89,12 @@ See [Agentic Security Audit](/getting-started/agentic-security-audit).
 - **Aliases:** `sessions`, `sess`.
 - **Use for:** auditing prior runs, debugging failed scans.
 - **Key flags:** `--mode {query|autopilot|swarm|audit}`, `-n/--limit`, `-o/--offset`, `--tail`, `--full`.
+
+### `triage`: single-finding confirmation
+
+- **Use for:** confirming or downgrading one existing finding with AI, without launching a full scan.
+- **How it works:** `vigolium agent triage [finding-id]` loads the stored finding (and its linked request/response), runs the AI triage flow against it, and updates the finding's verdict/severity in place.
+- **Not for:** discovering new issues, it only re-evaluates a finding you already have.
 
 ---
 
