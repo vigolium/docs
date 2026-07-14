@@ -69,7 +69,7 @@ Agentic scanning uses AI agents to drive or augment the scanning process. Invoke
 | Mode | Command | Description |
 |------|---------|-------------|
 | **Query** | `vigolium agent query` | Single-shot prompt execution. Good for code review, endpoint discovery, secret detection. No network scanning. |
-| **Autopilot** | `vigolium agent autopilot` | One long-running LLM session with full bash/file/web tools plus `report_finding` and `halt_scan`. The agent decides what to scan, runs scans, inspects results, and iterates until it halts. |
+| **Autopilot** | `vigolium agent autopilot` | Autonomous operator with Bash/file/web/browser and first-class Vigolium tools. Legacy mode reports directly; durable modes rotate context, persist resumable state, and can verify candidates before promotion. |
 | **Swarm** | `vigolium agent swarm` | Multi-phase pipeline where native Go handles heavy lifting and AI intervenes at checkpoints, planning attacks, triaging results, and generating custom JS scanner extensions. |
 | **Audit** | `vigolium agent audit` | Unified driver dispatcher. `--driver auto\|both\|audit\|piolium` drives the embedded vigolium-audit harness, the standalone piolium harness, or both side-by-side under one parent scan. |
 | **Piolium** | `vigolium agent audit --driver=piolium` | Direct access to the standalone piolium audit harness (requires a separate `~/.piolium` install). |

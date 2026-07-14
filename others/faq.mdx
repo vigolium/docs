@@ -87,7 +87,7 @@ Answers to the questions that come up most often. For a system-level picture, st
   </Accordion>
   <Accordion title="What's the difference between query, autopilot, swarm, and audit?">
     - **Query**: single-shot prompt; no network scanning. Good for code review, endpoint discovery, secret detection.
-    - **Autopilot**: one long-running LLM session with full tool access that decides what to scan and iterates until it halts.
+    - **Autopilot**: an autonomous operator with full tool access. It can use a legacy conversation or durable, resumable sections with candidate verification.
     - **Swarm**: a multi-phase pipeline where native Go does the heavy lifting and AI intervenes at checkpoints (planning, triage, custom extension generation).
     - **Audit**: a foreground multi-phase source-code audit. `vigolium agent audit` is the unified dispatcher driving the embedded vigolium-audit harness and/or piolium via `--driver auto|both|audit|piolium`.
 

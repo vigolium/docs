@@ -25,8 +25,8 @@ Vigolium's agent mode runs AI-driven security scans on top of the native scanner
 | `query`      | Single-shot prompt (template or inline). Code review, secret hunt, endpoint discovery. | `pkg/cli/agent.go`          |
 | `autopilot`  | Agentic scan: autonomous operator with full tool access.         | `pkg/cli/agent_autopilot.go`|
 | `swarm`      | Agentic scan: 10-phase guided pipeline (plan → extension → scan → triage). | `pkg/cli/agent_swarm.go`    |
+| `triage`     | Confirm or downgrade one existing finding with the AI triager.   | `pkg/cli/agent_triage.go`   |
 | `audit`      | Unified driver dispatcher for source-code audit. `--driver auto\|both\|audit\|piolium` drives the embedded vigolium-audit harness, the standalone piolium harness, or both. | `pkg/cli/agent_audit.go`    |
-| `piolium`    | Direct piolium harness driver (requires a separate `~/.piolium` install). | `pkg/cli/agent_piolium.go`  |
 | `olium`      | Interactive olium TUI or headless prompt.                        | `pkg/cli/agent_olium.go`    |
 | `session`    | List or inspect past agent runs (sessions list / detail view).   | `pkg/cli/agent_session.go`  |
 
@@ -39,7 +39,7 @@ Vigolium's agent mode runs AI-driven security scans on top of the native scanner
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │  CLI                          pkg/cli/agent_*.go                │
-│  query · autopilot · swarm · audit · piolium · olium · session  │
+│  query · autopilot · swarm · triage · audit · olium · session   │
 └───────────────────────────────┬─────────────────────────────────┘
                                 │
 ┌───────────────────────────────▼─────────────────────────────────┐
@@ -92,7 +92,7 @@ Key entry points:
 - `Engine.RunOnOliumEngine(ctx, opts, eng)`: runs against a **shared engine instance**, preserving conversation prefix for prompt-cache hits across phases.
 - `Engine.RunSourceAnalysisParallel(ctx, cfg)`: fan-out source analysis (single explore call → parallel format/extension sub-calls on the same engine).
 
-A global semaphore (`oliumProviderSem`) caps in-flight provider calls; the value comes from `Settings.Agent.Olium.MaxConcurrent` (default 4).
+A global semaphore caps in-flight provider calls; a positive `agent.olium.max_concurrent` is the cap, `0`/unset resolves to the default of 4, and a negative value disables the cap.
 
 ### 2.2 Olium runtime (`pkg/olium/`)
 
@@ -162,7 +162,7 @@ Templates render against `TemplateData` (`pkg/agent/agenttypes/types.go`), which
    └──────────┬──────────┘
               ▼
    ┌─────────────────────┐
-   │ auth (optional)     │  browser-based login (--browser-auth + --browser)
+   │ auth (optional)     │  browser-based login (--browser-auth; browser always on)
    └──────────┬──────────┘
               ▼
    ┌─────────────────────┐
@@ -207,7 +207,7 @@ Phase names prefixed `native-` are pure-Go (no LLM). The pipeline is gated by:
 - intensity preset (`SwarmPresets[Quick|Balanced|Deep]` in `agenttypes/constants.go`)
 - `cfg.SourcePath`: empty source skips source-analysis and code-audit
 - `cfg.Discover`, `cfg.CodeAudit`, `cfg.Triage` toggles
-- checkpoint resume, `--resume <session-dir>` skips already-completed phases
+- checkpoint state for observability; `--start-from` creates a new run with earlier phases marked complete
 
 A parallel **vigolium-audit** subprocess can run in the background (`cfg.Audit != ""`) when source is provided, contributing source-code audit findings without blocking the swarm. Swarm uses the embedded vigolium-audit harness directly; the multi-driver `agent audit` command layers piolium support on top.
 
@@ -256,6 +256,8 @@ If `FollowUpScans` is non-empty and rescan is enabled, the pipeline loops back t
    ┌─────────────────────────────────────────────┐
    │ Context preparation                         │
    │   - load frozen vigolium-audit findings     │
+   │   - import Burp + summarize prior DB data   │
+   │   - distill/index --knowledge-base docs     │
    │   - prepareAutopilotAuth → AuthHeaders      │
    │   - buildAutopilotContextBundle             │
    │     (routes, auth flows, browser decision)  │
@@ -270,16 +272,18 @@ If `FollowUpScans` is non-empty and rescan is enabled, the pipeline loops back t
    │     vigolium scan-url, vigolium findings,   │
    │     vigolium traffic, etc.                  │
    │   bounded by MaxCommands + Timeout          │
+   │   legacy: growing conversation              │
+   │   shadow/enforced: rotating durable sections│
    └─────────────────┬───────────────────────────┘
                      ▼
    ┌─────────────────────────────────────────────┐
    │ Verification                                │
-   │   verifyAutopilotArtifacts → confirmed      │
-   │   findings; degraded flag if warnings       │
+   │   durable candidates → fresh-context grade  │
+   │   enforced: promote confirmed candidates    │
    └─────────────────────────────────────────────┘
 ```
 
-Effort level (`low`/`medium`) is picked from vigolium-audit mode: `balanced`/`deep` vigolium-audit → `medium` effort, else `low`. The operator stream is captured to `<session>/output.md`.
+The default `agent.olium.autopilot_mode: legacy` preserves direct `report_finding` behavior. `shadow` rotates context while mirroring candidates; `enforced` replaces direct reports with `propose_candidate` and promotes only verifier-confirmed claims. Durable runs can continue with `autopilot --resume <agentic-scan-uuid>`.
 
 ### Intensity presets (autopilot)
 
@@ -298,14 +302,22 @@ Every swarm and autopilot run writes a session dir under `agent.sessions_dir` (d
 ```
 <session>/
 ├── checkpoint.json         # swarm: completed phases, record stats, last triage round
-├── plan.json               # serialized SwarmPlan
+├── swarm-plan.json         # serialized SwarmPlan
 ├── session-config.json     # auth session definitions (login flows, token rules)
 ├── extensions/             # compiled JS extensions (sanitized filenames)
 ├── vigolium-audit/         # vigolium-audit subprocess output (audit-state.json + findings)
+├── piolium/                # piolium output (when the audit dispatcher runs it)
 ├── audit-stream.jsonl      # `agent audit` NDJSON stream (when audit driver runs)
-├── master-prompt.md        # rendered prompt sent to master agent (debug)
-├── source-analysis-prompt.md
-├── output.md               # autopilot: agent stream / final transcript
+├── master-output.md        # master-agent output (debug)
+├── source-analysis-output.md
+├── code-audit-output.md
+├── runtime.log             # human-readable runtime/tool log
+├── transcript.jsonl        # autopilot: conversation + section events
+├── transcript-*.jsonl      # swarm/query: per-phase conversations
+├── transcript-verify-*.jsonl # durable candidate verifier transcripts
+├── autopilot/scratchpad.json # durable plan, stop criteria, and notes
+├── knowledge-base-brief.md # when --knowledge-base is supplied
+├── tool-results/           # spilled large tool outputs
 ├── output.txt              # query: raw agent output
 ├── inputs.json             # normalized input records
 └── skills/                 # copied embedded skills (vigolium-scanner, agent-browser)
@@ -337,7 +349,8 @@ agent:
     reasoning_effort: medium
     max_tokens: 1000000
     max_turns: 32
-    max_concurrent: 4              # global cap on in-flight provider calls
+    max_concurrent: 4              # 0/unset = default 4; negative = unbounded
+    autopilot_mode: legacy         # legacy | shadow | enforced
     call_timeout_sec: 600          # per-call deadline; -1 = no timeout
     custom_provider:               # only used when provider == openai-compatible
       base_url: http://localhost:11434/v1    # Ollama default; OpenRouter / LM Studio / vLLM also work
@@ -382,7 +395,8 @@ CLI flags (`--provider`, `--model`, `--oauth-token`, `--llm-api-key`, `--base-ur
 - **Engine** turns a prompt template + DB context into a structured result. One LLM call.
 - **Orchestrator** sequences many engine calls plus native steps (discovery, scan), checkpoints state, and writes a session directory.
 - **Olium** is the agent runtime, it holds conversation state and dispatches to a provider. One olium engine can serve many engine calls cheaply (prompt cache hits).
-- **Phases** are the unit of resumable work. `--only`, `--skip`, `--start-from`, and `--resume` operate on phase names.
+- **Swarm phases** are controlled by `--only`, `--skip`, and `--start-from`; swarm has no public `--resume` flag.
+- **Autopilot resume** takes an AgenticScan UUID and restores durable scratchpad/candidate state; it is not phase-based.
 - **Intensity** is a single knob that hydrates a bundle of toggles (commands, timeout, vigolium-audit mode, discover/audit/triage flags, browser/auth).
 
 ---

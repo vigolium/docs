@@ -171,6 +171,10 @@ The **live bridge** connects Vigolium's CLI and server to Burp in *both* directi
     # One-shot persist of ALL bridge-visible Proxy history into the DB
     vigolium import --burp-bridge-url http://127.0.0.1:9009
 
+    # Import live history before autopilot builds prior context and runs its pre-scan
+    vigolium agent autopilot -t https://example.com \
+      --burp-bridge-url http://127.0.0.1:9009
+
     # Copy the selected Vigolium DB traffic into Burp's Target Site map
     vigolium traffic --burp-bridge-url http://127.0.0.1:9009 --save-to-burp
 

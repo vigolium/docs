@@ -29,7 +29,7 @@ vigolium agent --list-templates
 vigolium doctor
 ```
 
-Default provider is `codex-oauth` (uses `~/.codex/auth.json`). Switch to Anthropic:
+Default provider is `openai-compatible` with `gemma4:latest` at the configured local endpoint. Switch to Anthropic:
 
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-...
@@ -123,7 +123,7 @@ vigolium agent swarm \
 
 ### Enabling Triage
 
-By default, swarm outputs raw findings. Add `--triage` for AI-powered true/false-positive classification with automatic rescan:
+Triage is enabled by the default `balanced` preset and by `deep`; `quick` leaves it off. Add `--triage` explicitly when needed, or use `--triage=false` to disable classification and rescan:
 
 ```bash
 vigolium agent swarm \
@@ -149,7 +149,7 @@ The swarm pipeline runs these phases in order:
 | Phase | Type | Description |
 |-------|------|-------------|
 | `native-normalize` | Native | Parse and normalize input |
-| `auth` | Native | Browser-based login (when `--browser-auth` + `--browser`) |
+| `auth` | Native | Browser-based login (when `--browser-auth`; browser tooling is always available) |
 | `source-analysis` | AI | Route extraction from source code (if `--source`) |
 | `code-audit` | AI | Deep security code audit (if `--code-audit`, on by default with `--source`) |
 | `native-discover` | Native | Discovery + spidering (if `--discover`) |
@@ -165,13 +165,13 @@ Skip or start from a specific phase:
 # Skip code audit
 vigolium agent swarm -t https://example.com --source ./app --skip code-audit
 
-# Resume from the plan phase
+# Start a new run from the plan phase using existing project data
 vigolium agent swarm -t https://example.com --start-from plan
 ```
 
 ## Autopilot: Autonomous AI Pentest
 
-Autopilot is a single long-running olium engine with full tool access (bash, files, web fetch, vigolium CLI). The agent decides what to investigate, reports findings as it confirms them via `report_finding`, and halts on its own via `halt_scan`.
+Autopilot is one autonomous operator with full tool access (Bash, files, web fetch, browser probes, and first-class Vigolium tools). Legacy mode uses `report_finding` directly. Durable modes rotate bounded sections and can gate finding promotion through an independent verifier.
 
 ```bash
 vigolium agent autopilot -t https://example.com
@@ -199,9 +199,9 @@ vigolium agent autopilot -t https://example.com --source ./app --last-commits 5
 
 | Preset | Max commands | Timeout | Vigolium-audit mode | Browser |
 |--------|--------------|---------|-------------|---------|
-| `quick` | 30 | 1h | `lite` | off |
-| `balanced` (default) | 100 | 6h | `balanced` | off |
-| `deep` | 300 | 12h | `deep` | on |
+| `quick` | 150 | 1h | `lite` | on |
+| `balanced` (default) | 500 | 6h | `balanced` | on |
+| `deep` | 1500 | 12h | `deep` | on |
 
 ```bash
 vigolium agent autopilot -t https://example.com --intensity deep
@@ -211,7 +211,22 @@ vigolium agent autopilot -t https://example.com --intensity deep
 
 ```bash
 vigolium agent autopilot -t https://app.example.com --intensity deep \
-  --browser --credentials "admin/admin123"
+  --prompt "log in as admin/admin123, then test protected routes"
+```
+
+### Existing Traffic, App Docs, and Resume
+
+```bash
+# Mine prior project data and import live Burp history first
+vigolium agent autopilot -t https://app.example.com \
+  --burp-bridge-url http://127.0.0.1:9009 --prior-context auto
+
+# Index operator-supplied auth/business documentation
+vigolium agent autopilot -t https://app.example.com --knowledge-base ./app-docs
+
+# Continue a shadow/enforced durable run
+vigolium agent autopilot --resume <agentic-scan-uuid> \
+  --prompt "finish the authorization matrix"
 ```
 
 ### Bounding a CI run
@@ -265,20 +280,20 @@ vigolium log <uuid>
 
 ## Custom Instructions
 
-Append custom guidance to any agent prompt:
+Pass free-text task guidance with `--prompt` (or the positional `[prompt]`):
 
 ```bash
 vigolium agent swarm \
   -t https://example.com \
-  --instruction "Focus on the /api/v2 endpoints. The app uses JWT auth with RS256."
+  --prompt "Focus on the /api/v2 endpoints. The app uses JWT auth with RS256."
 ```
 
-Or load from a file:
+For a whole plan containing prose and raw HTTP request seeds, use `--plan-file`:
 
 ```bash
 vigolium agent swarm \
   -t https://example.com \
-  --instruction-file context.md
+  --plan-file context.md
 ```
 
 ## Dry Run and Prompt Inspection

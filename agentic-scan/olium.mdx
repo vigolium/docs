@@ -25,7 +25,7 @@ A turn-based, tool-using LLM agent written in Go. Components:
 | **Skills** | `pkg/olium/skill/` | SKILL.md workflow files (agentskills.io format) discovered from project, user, and embedded scopes |
 | **TUI** | `pkg/olium/tui/` | Bubble Tea front-end (inline scrollback, slash commands, live tool cards) |
 | **Headless** | `pkg/olium/headless.go` | Non-interactive single-prompt runner for scripts and smoke tests |
-| **Autopilot** | `pkg/olium/autopilot/` | Long-running autonomous scan loop on top of the engine, with budgets, halt signal, and `report_finding` |
+| **Autopilot** | `pkg/olium/autopilot/` | Autonomous scan loop with budgets and a halt signal; durable modes rotate context and can verify candidates before promotion |
 | **Vigolium tools** | `pkg/olium/vigtool/` | Scanner- and record-aware extensions: `run_native_scan`, `run_module`, `query_records`, `replay_request`, `attack_kit`, `list_findings`, etc. |
 | **Auth** | `pkg/olium/auth/` | Codex OAuth credential loading and refresh (handles `~/.codex/auth.json`) |
 
@@ -141,9 +141,10 @@ The `IsReadOnly()` flag is what the engine uses to decide whether to fan out a t
 When the engine runs under `vigolium agent autopilot`, the registry also gets:
 
 - `halt_scan`: model-driven exit. Sets a halt signal; the run loop exits after the current turn.
-- `report_finding`: persists a finding to the database (title, severity, description, remediation, CWE, evidence, confidence, status). Also accepts a `record_uuids` array that links the `http_records` proving the finding (populates `HTTPRecordUUIDs`) — pass a `replay_request` `replay_record_uuid`, a `web_fetch` `record_uuid`, or ids from `query_records`/`inspect_record` instead of pasting large raw request/response text. Soft-warns at 50 calls, hard-caps at 200.
+- `report_finding` (`legacy`/`shadow`): persists a finding to the database and accepts `record_uuids` linking its proving `http_records`. Shadow mode also mirrors a candidate for independent grading. It soft-warns at 50 saved findings and hard-caps at 200.
+- `propose_candidate` (`enforced`): persists a claim and its evidence for a fresh-context skeptic verifier. Only confirmed candidates are promoted to findings.
 - `load_skill`: fetch a skill body by name (registered whenever the skill registry is non-empty).
-- `update_plan` / `remember`: scratchpad plan + notes that survive context eviction (registered unconditionally, seeded from the pipeline's frozen `plan.json` when present).
+- `update_plan` / `remember`: durable scratchpad plan + notes that survive section rotation and resume (registered unconditionally, seeded from the pipeline's frozen plan when present).
 - **Vigtool** (registered when `Repo` is non-nil): scanner- and record-aware tools —
   - Scan / modules: `run_native_scan`, `run_module`, `run_extension`, `list_modules`.
   - Record surface: `query_records`, `inspect_record`, `replay_request`, `send_raw_http`.
@@ -157,7 +158,7 @@ When the engine runs under `vigolium agent autopilot`, the registry also gets:
 A few of these are worth calling out:
 
 - **`attack_kit`** returns a curated starter-payload set per attack class (`xss`, `sqli`, `ssrf`, `cmd-injection`, `path-traversal`, `ssti`, `xxe`, `open-redirect`, `crlf`) — read-only and non-mutating. Its SSRF Redis gopher PoC is a harmless `PING` probe (v0.2.5 changed it from a destructive `FLUSHALL`), so an autonomous agent can't wipe a target's data; intrusive commands are left to explicit operator authorization. Pair it with `replay_request` to actually send payloads.
-- **`replay_request`** sends a mutated stored record and persists the exact sent request + received response as an `olium-replay` `http_record`, returning its UUID as `replay_record_uuid` — pass that to `report_finding` via `record_uuids` as reproducible proof.
+- **`replay_request`** sends a mutated stored record and persists the exact sent request + received response as an `olium-replay` `http_record`, returning its UUID as `replay_record_uuid` — pass that to `report_finding` or `propose_candidate` via `record_uuids` as reproducible proof.
 - **`search_burp_items` / `inspect_burp_item`** are read-only tools (server runs only) that search / inspect the live Burp Target site map or Proxy history over an operator-enabled read-only bridge listener; they never modify Burp.
 
 ---
@@ -246,9 +247,12 @@ agent:
     temperature: 0.0
     max_turns: 32                  # short non-autopilot uses; autopilot uses its own cap (DefaultAutopilotMaxTurns=200)
     cache_size: 1024               # LRU; 0 disables
-    max_concurrent: 4              # global cap on simultaneous provider calls; 0 = unbounded
+    max_concurrent: 4              # default 4 (0/unset); negative = unbounded
     call_timeout_sec: 600          # per-call deadline; negative = no timeout (parent ctx only)
+    autopilot_mode: legacy         # legacy | shadow | enforced
 ```
+
+`autopilot_mode` is `legacy` by default. `shadow` and `enforced` enable durable section rotation; `enforced` additionally gates finding promotion through a fresh-context verifier. A negative `max_concurrent` removes the provider-call cap, while `0` keeps the default cap of 4.
 
 Adjacent config blocks worth knowing:
 
@@ -297,7 +301,7 @@ Token counts on `EventTurnDone` are accumulated by every higher-level caller (au
 |---|---|
 | Chat / debug / explore interactively | `vigolium ol` |
 | Run one prompt from a script and parse stdout | `vigolium ol -p "..."` |
-| Hand the agent the wheel for an autonomous pentest | `vigolium agent autopilot` (uses olium under the hood with budgets + report_finding) |
+| Hand the agent the wheel for an autonomous pentest | `vigolium agent autopilot` (uses olium with budgets plus direct reporting or verified candidates, depending on `autopilot_mode`) |
 | AI-direct the native scanner (plan → modules → triage) | `vigolium agent swarm` |
 | Single-shot template-driven prompt with structured output | `vigolium agent query` |
 

@@ -8,7 +8,7 @@ Vigolium's agent mode runs vulnerability scans with an LLM in the loop. Three su
 
 - **`vigolium agent query`**: one-shot prompt against code or a target. Code review, endpoint discovery, secret hunt. No scanning loop.
 - **`vigolium agent swarm`**: multi-phase pipeline where native Go does the heavy lifting and AI intervenes at checkpoints (planning attacks, triaging results, generating custom JS extensions).
-- **`vigolium agent autopilot`**: one long-running LLM session with full tool access. The agent decides what to scan, runs scans, inspects results, and iterates until it halts.
+- **`vigolium agent autopilot`**: one autonomous operator with full tool access. It can run as a legacy conversation or as durable, resumable sections with candidate verification.
 
 All three dispatch through the in-process **olium** runtime, one unified provider interface, one conversation state. There are no subprocess SDK backends.
 
@@ -46,11 +46,16 @@ vigolium agent autopilot "scan VAmPI source at ~/src/VAmPI on localhost:3005"
 vigolium agent autopilot -t https://example.com --source ~/src/your-app
 
 # Focus on a vulnerability class
-vigolium agent autopilot -t https://example.com --focus "auth bypass and IDOR"
+vigolium agent autopilot -t https://example.com --prompt "focus on auth bypass and IDOR"
 
-# Browser-assisted auth
+# Authenticated scan (browser tooling is always available)
 vigolium agent autopilot -t https://app.example.com --intensity deep \
-  --browser --credentials "admin/admin123"
+  --prompt "log in as admin/admin123, then test every protected route"
+
+# Mine prior project/Burp traffic and supply application docs
+vigolium agent autopilot -t https://app.example.com \
+  --burp-bridge-url http://127.0.0.1:9009 \
+  --knowledge-base ./app-docs
 
 # Pipe a curl command in
 curl -s https://example.com/api/users | vigolium agent autopilot
@@ -60,12 +65,19 @@ curl -s https://example.com/api/users | vigolium agent autopilot
 
 | Preset | Max commands | Timeout | Audit mode (with `--source`) | Browser |
 |--------|:------------:|:-------:|:----------------------------:|:-------:|
-| `quick` | 30 | 1h | `lite` | off |
-| `balanced` (default) | 100 | 6h | `balanced` | off |
-| `deep` | 300 | 12h | `deep` | on |
+| `quick` | 150 | 1h | `lite` | on |
+| `balanced` (default) | 500 | 6h | `balanced` | on |
+| `deep` | 1500 | 12h | `deep` | on |
 
 ```bash
 vigolium agent autopilot -t https://example.com --intensity deep
+```
+
+To enable durable context rotation and verification, set `agent.olium.autopilot_mode: enforced` in `vigolium-configs.yaml`. You can then continue an interrupted run with:
+
+```bash
+vigolium agent autopilot --resume <agentic-scan-uuid> \
+  --prompt "continue with the remaining authorization checks"
 ```
 
 Reach for autopilot when the target is fuzzy, JS-heavy, auth-walled, or you want creative / exploratory testing. See [Autopilot](/agentic-scan/autopilot) for the full flag reference.
@@ -78,19 +90,20 @@ The agent **directs** the native scanner instead of becoming it. A state-machine
 
 ```bash
 # Swarm against a single URL
-vigolium agent swarm -i "https://example.com/api/users?id=1"
+vigolium agent swarm --input "https://example.com/api/users?id=1"
 
 # Against a raw HTTP request file, with triage
-vigolium agent swarm -i ./request.txt --triage
+vigolium agent swarm --input ./request.txt --triage
 
 # Full-scope sweep with discovery + triage
-vigolium agent swarm -i https://example.com --discover --triage
+vigolium agent swarm --input https://example.com --discover --triage
 
 # Source-aware: AI extracts routes, plans modules, generates JS extensions
 vigolium agent swarm -t https://example.com --source ./backend --code-audit
 
 # Target a specific vulnerability class
-vigolium agent swarm -t https://example.com --vuln-type sqli --focus "auth bypass"
+vigolium agent swarm -t https://example.com --vuln-type sqli \
+  --prompt "also test authentication bypass"
 ```
 
 Reach for swarm when you have a known-good request, want bespoke fuzzing tailored to it, or need a verification loop on findings.

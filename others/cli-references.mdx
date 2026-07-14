@@ -427,10 +427,17 @@ vigolium agent --list-templates
 
 ```bash
 vigolium agent swarm -t https://example.com --discover
-vigolium agent swarm -t https://example.com --discover --focus 'API injection'
+vigolium agent swarm -t https://example.com --discover --prompt 'focus on API injection'
 
 # Natural-language positional prompt — preserved as extra instruction context alongside flags
 vigolium agent swarm "focus on the checkout and payment flows" -t https://example.com --discover
+
+# Load prose guidance plus raw HTTP request seeds from one plan file
+vigolium agent swarm -t https://example.com --plan-file ./pentest-plan.md
+
+# Run browser-based login; describe credentials and roles in the prompt
+vigolium agent swarm -t https://example.com --browser-auth \
+  --prompt "log in as admin/admin123, then compare the user role"
 
 # Skill control (force-load attack-vector skills, bypass planner selection)
 vigolium agent swarm -t https://example.com --discover --skill-tag xss,idor
@@ -441,7 +448,7 @@ vigolium agent swarm -t https://example.com --discover --provider anthropic-api-
 vigolium agent swarm -t https://example.com --discover --base-url http://localhost:11434/v1 --llm-api-key "$KEY"
 ```
 
-`agent swarm` accepts the shared olium override flags — `--provider`, `--model`, `--base-url`, `--llm-api-key`, `--oauth-cred`, `--oauth-token` — mirroring `agent autopilot`; each falls back to its `agent.olium.*` config value. A positional `<prompt>` is preserved verbatim as extra instruction context (prepended ahead of `--instruction`) when structured flags are also present.
+`agent swarm` accepts the olium override flags `--provider`, `--model`, `--base-url`, `--llm-api-key`, `--oauth-cred`, and `--oauth-token`; each falls back to `agent.olium.*`. `--prompt` and the positional `[prompt]` are the same task-guidance slot and stay verbatim when structured target/source flags are also present.
 
 ### `agent autopilot`: autonomous agentic scan
 
@@ -466,7 +473,7 @@ vigolium agent autopilot --input "curl -X POST -H 'Content-Type: application/jso
   -d '{\"user\":\"admin\"}' https://example.com/api/login"
 
 # Focus the agent on specific vulnerability classes
-vigolium agent autopilot -t https://example.com --focus "auth bypass and IDOR"
+vigolium agent autopilot -t https://example.com --prompt "focus on auth bypass and IDOR"
 
 # Skill control — force-load skills by name or tag, or skip pre-flight selection
 vigolium agent autopilot -t https://example.com --skill idor-blast-radius
@@ -480,15 +487,27 @@ vigolium agent autopilot -t https://example.com --source ./src --intensity quick
 # Narrow source scope
 vigolium agent autopilot -t https://example.com --source ./src \
   --files "routes/api.js,controllers/auth.js" \
-  --instruction "Focus on the new payment endpoint"
+  --prompt "Focus on the new payment endpoint"
 
 # PR / diff-aware scan
 vigolium agent autopilot -t https://example.com --source ./src --diff "main...feature-branch"
 vigolium agent autopilot -t https://example.com --source ./src --last-commits 3
 
-# Backend / browser / auth
+# Backend and authenticated testing (browser is always available)
 vigolium agent autopilot -t https://example.com --provider anthropic-api-key
-vigolium agent autopilot -t https://example.com --browser --credentials "admin/admin123"
+vigolium agent autopilot -t https://example.com \
+  --prompt "log in as admin/admin123, then test protected routes"
+
+# Mine existing project/Burp traffic and supply application documentation
+vigolium agent autopilot -t https://example.com --prior-context auto
+vigolium agent autopilot -t https://example.com \
+  --burp-bridge-url http://127.0.0.1:9009 --knowledge-base ./app-docs
+
+# Durable-mode resume and explicit debug artifacts
+vigolium agent autopilot --resume <agentic-scan-uuid> \
+  --prompt "continue the remaining checks"
+vigolium agent autopilot -t https://example.com \
+  --session-dir ./debug/run-1 --transcript ./debug/run-1.jsonl
 
 # Limits and previews
 vigolium agent autopilot -t https://example.com --intensity deep --max-duration 4h
@@ -496,6 +515,8 @@ vigolium agent autopilot -t https://example.com --intensity quick --triage
 vigolium agent autopilot -t https://example.com --source ./src --dry-run
 vigolium agent autopilot -t https://example.com --source ./src --show-prompt
 ```
+
+Autopilot and swarm no longer expose CLI flags named `--focus`, `--instruction`, `--instruction-file`, `--browser`, or `--credentials`. Put those details in `--prompt`. The REST agent endpoints keep structured equivalents for API clients.
 
 ### `agent audit`: unified source audit (vigolium-audit + piolium)
 

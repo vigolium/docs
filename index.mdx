@@ -93,7 +93,7 @@ Agentic scanning uses AI agents to drive or augment the scanning process. Invoke
 | Mode | Command | Description |
 |------|---------|-------------|
 | **Query** | `vigolium agent query` | Single-shot prompt execution. Good for code review, endpoint discovery, secret detection. No network scanning. |
-| **Autopilot** | `vigolium agent autopilot` | Autonomous AI-driven pentest. The olium engine discovers endpoints, runs scans, and triages findings on its own, driving bash, file ops, and the vigolium CLI until it calls `halt_scan`. Supports diff-focused runs (`--diff`), `--intensity` preset bundles, and session resume. |
+| **Autopilot** | `vigolium agent autopilot` | Autonomous AI-driven pentest. The olium engine discovers endpoints, runs scans, and triages findings on its own, driving Bash, file ops, and first-class Vigolium tools until it calls `halt_scan`. Supports diff-focused runs (`--diff`), prior/knowledge-base context, intensity presets, and durable-mode resume. |
 | **Swarm** | `vigolium agent swarm` | AI-guided pipeline for targeted single-request or full-scope (`--discover`) scanning. The master agent selects modules, generates custom JS scanner extensions, runs code audit and SAST, executes scans, and triages results, with native Go handling the heavy lifting while AI intervenes at checkpoints. |
 | **Audit** | `vigolium agent audit` | Unified whitebox security audit driver (lite / balanced / deep). Runs the embedded vigolium-audit harness, the standalone piolium harness, or both side-by-side under one parent scan. |
 | **Piolium** | `vigolium agent audit --driver=piolium` | Pi-native whitebox audit driver (separate install). Up to 17 phases at `deep`, the most thorough audit available. |

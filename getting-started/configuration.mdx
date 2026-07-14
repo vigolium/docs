@@ -311,8 +311,9 @@ agent:
     temperature: 0.0
     max_turns: 32                  # tool-loop iteration cap
     cache_size: 1024               # LRU entries; 0 disables
-    max_concurrent: 4              # global cap on simultaneous in-flight provider calls
+    max_concurrent: 4              # 0/unset = default 4; negative = unbounded
     call_timeout_sec: 600          # per-call deadline; -1 = no enforced timeout
+    autopilot_mode: legacy         # legacy | shadow | enforced
 
     # Skills always loaded for autopilot/swarm regardless of planner selection.
     # Empty = built-in default [triage-finding, write-jsext]. The CLI flags
@@ -394,6 +395,8 @@ agent:
     # (anthropic-* → claude, openai-* → codex), overridable per-run with
     # --provider or --agent {claude|codex} on `vigolium agent audit`.
 ```
+
+`autopilot_mode` is opt-in: `legacy` keeps one growing conversation and writes findings directly, `shadow` adds bounded context rotation while mirroring candidates, and `enforced` promotes only fresh-context verifier-confirmed candidates. Only `shadow` and `enforced` support `agent autopilot --resume <agentic-scan-uuid>`.
 
 Provider quick reference:
 

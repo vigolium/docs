@@ -36,7 +36,7 @@ Ten phases run in strict order. Each phase is either **native** (deterministic G
 │                                                                             │
 │  [N] native-normalize ─────────────────────────────── always                │
 │         │                                                                   │
-│  [A] auth ─────────────────────────── if --browser-auth and --browser       │
+│  [A] auth ─────────────────────────── if --browser-auth                     │
 │         │                                                                   │
 │  [A] source-analysis ─────────────── if --source  (4-call wave)             │
 │  [A] code-audit ──────────────────── if --code-audit and --source           │
@@ -123,7 +123,7 @@ Records grow as the pipeline runs: source analysis appends discovered routes, an
 | # | Phase | Type | Purpose | Trigger |
 |---|---|---|---|---|
 | 1 | `native-normalize` | Native | Parse `--input`/stdin/record-uuid into `HttpRequestResponse` | Always |
-| 2 | `auth` | AI/Native | Browser-driven login, writes auth headers/cookies | `--browser-auth` + `--browser` |
+| 2 | `auth` | AI/Native | Browser-driven login, writes auth headers/cookies | `--browser-auth` (browser tooling is always available) |
 | 3 | `source-analysis` | AI | 4-call wave: explore → routes / session / extensions | `--source` |
 | 4 | `code-audit` | AI | Code-level security audit, findings → DB | `--code-audit` (auto with `--source` at balanced/deep) |
 | 5 | `native-discover` | Native | Crawl/spider/JS-scan to discover endpoints | `--discover` |
@@ -133,7 +133,7 @@ Records grow as the pipeline runs: source analysis appends discovered routes, an
 | 9 | `triage` | AI | Verify findings; mark confirmed / FP / rescan | `--triage` |
 | 10 | `native-rescan` | Native | Targeted rescan on triage request (loops) | Triage verdict = "rescan" |
 
-Skipping/resuming is honored via `--skip-phases` and `--start-from`, which read the checkpoint file.
+Phase control is available through `--skip` and `--start-from`. `--start-from` creates a synthetic checkpoint for a new run, marking earlier phases complete; it does not reopen an existing session.
 
 ---
 
@@ -208,7 +208,7 @@ When records are filtered for the prompt, a compact summary table of all endpoin
 
 ## Triage and rescan loop
 
-Triage is **off by default**. Pass `--triage` to enable.
+Triage follows the intensity preset: it is off for `quick` and on for `balanced` (the default) and `deep`. Use `--triage=false` to disable it explicitly, or `--triage` to enable it when another setting would leave it off.
 
 ```
    for round in 1..MaxIterations:
@@ -288,10 +288,11 @@ A swarm run creates a session directory (default `~/.vigolium/agent-sessions/<ru
 ├── auth-{prompt,output}.md
 ├── extensions/*.js            ← validated, persisted
 ├── triage/triage-round-N-{prompt,output}.md
-└── runtime.log                ← tee'd LLM stream; replay with `vigolium log`
+├── transcript-*.jsonl         ← per-phase Pi-compatible conversations
+└── runtime.log                ← human-readable tool/runtime log
 ```
 
-`checkpoint.json` is rewritten after every phase. Combined with `--start-from`, it lets a partial run resume without re-paying for earlier phases.
+`checkpoint.json` is rewritten after every phase for observability and internal recovery. The public CLI has no swarm `--resume` flag. `--start-from <phase>` begins a new run with earlier phases marked complete, so make sure the required database/source inputs already exist.
 
 ---
 
@@ -313,14 +314,18 @@ vigolium agent swarm --target https://app.example.com --discover
 # Use a preset
 vigolium agent swarm --target https://app.example.com --intensity deep
 
-# Start from a specific phase using an existing session
-vigolium agent swarm --resume <run-id> --start-from plan
+# Start a new run at planning, using traffic already in the project DB
+vigolium agent swarm --target https://app.example.com --start-from plan
 
 # Pipe a curl command — input auto-detected
 echo "curl -X POST https://app.example.com/api/login -d '{\"u\":\"a\"}'" | vigolium agent swarm
 
 # Force extension generation even when the master returns none
-vigolium agent swarm -t https://app.example.com --force-extensions
+vigolium agent swarm -t https://app.example.com --with-extensions
+
+# Add verbatim task guidance (also accepts a positional prompt)
+vigolium agent swarm -t https://app.example.com \
+  --prompt "log in as admin/admin123 and focus on payment authorization"
 
 # Render prompts without calling the LLM
 vigolium agent swarm --target https://app.example.com --dry-run --show-prompt
@@ -337,6 +342,8 @@ vigolium agent swarm -t https://app.example.com \
 | `-t, --target` | Target URL for dynamic phases |
 | `--input` | Raw input (curl, HTTP, Burp XML, base64, URL), auto-detected |
 | `--record-uuid` | Use an HTTP record from the database as the seed input |
+| `--prompt` / positional `[prompt]` | Free-text task guidance; credentials and browser intent are extracted from it |
+| `--plan-file` | Prose plus raw HTTP request blocks; cannot be combined with `--input` or a prompt |
 | `--source` | Source-code path (or git URL); enables source analysis + code-audit |
 | `--code-audit` | Force code audit (auto-on with `--source` for balanced/deep) |
 | `--discover` | Run native discovery before planning |
@@ -347,18 +354,21 @@ vigolium agent swarm -t https://app.example.com \
 | `--db-isolate` | Scan into a private temp DB, then merge results into `--db` at the end (SQLite only) |
 | `--max-iterations` | Triage rounds (preset-driven default) |
 | `--master-batch-size` | Records per master-agent batch (default 5) |
-| `--batch-concurrency` | Parallel master batches (default 3) |
+| `--batch-concurrency` | Parallel master batches (`0` = auto, scaled to CPU count) |
 | `--intensity` | `quick` / `balanced` / `deep` preset bundle |
-| `--audit` | `lite` / `balanced` / `deep` / `mock` / `off` (parallel source audit) |
-| `--skip-phases`, `--start-from` | Phase control / resume |
+| `--audit` | Run a parallel source audit in `lite`, `balanced`, or `deep` mode (requires `--source`) |
+| `--skip`, `--start-from` | Skip named phases or start a new run from a validated phase |
 | `--source-analysis-only` | Stop after source analysis |
-| `--force-extensions` | Force the extension agent even when the plan returned none |
+| `--with-extensions` | Force the extension agent even when the plan returned none |
 | `-m, --modules` | Explicit module IDs to merge with the agent's selection |
 | `--vuln-type` | Vulnerability focus (e.g. `sqli`, `xss`, `ssrf`) |
-| `--focus` | Broad strategic focus area hint |
-| `--instruction` / `--instruction-file` | Custom instructions appended to prompts |
+| `--browser-auth` | Run browser-based authentication before discovery; put credentials in the prompt |
+| `--cookie`, `--header`, `--login-curl`, `--auth-config` | Direct authentication/session injection alternatives |
+| `--headed` | Hidden debugging flag that shows browser windows |
 | `--upload-results` | Upload session bundle to cloud storage on completion |
 | `--provider`, `--model`, `--oauth-cred`, `--oauth-token`, `--llm-api-key` | Olium provider overrides |
+
+The CLI no longer exposes `--focus`, `--instruction`, `--instruction-file`, `--browser`, or `--credentials`. Use `--prompt` (or the positional prompt) for broad guidance and login details. Browser tooling is always enabled for swarm. The REST schema retains its structured focus, instruction, browser, and credential fields.
 
 ---
 

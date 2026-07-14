@@ -1,12 +1,12 @@
 ---
 title: "Agent Autopilot"
-description: "The single-loop agentic scan: one long-running olium engine drives tools, reports findings, and halts on its own."
+description: "The autonomous operator: run in legacy mode or opt into durable context rotation, candidate verification, and resumable state."
 icon: "plane"
 ---
 
-`vigolium agent autopilot` is the **single-loop agentic scan**, one long-running LLM session decides what to investigate, drives tools (bash, file I/O, web fetch, vigolium CLI commands), reports findings to the database as it confirms them, and halts on its own when it has nothing productive left to do.
+`vigolium agent autopilot` is the autonomous agentic scan. One operator decides what to investigate, drives tools (Bash, file I/O, web fetch, browser probes, and first-class Vigolium tools), and halts when it has nothing productive left to do.
 
-It is the simplest of the agentic-scan modes, there is no master/worker pipeline, no plan/triage phase split, just one engine running until it calls `halt_scan`.
+The default `legacy` mode keeps one growing conversation. The opt-in `shadow` and `enforced` modes split the run into bounded sections, rebuild each section from durable state, and verify finding candidates in a fresh context. There is still no master/worker phase pipeline; use [Swarm](/agentic-scan/swarm) when you want that structure.
 
 ---
 
@@ -14,11 +14,11 @@ It is the simplest of the agentic-scan modes, there is no master/worker pipeline
 
 Think of it as a security analyst sitting at a terminal:
 
-- The analyst is given a target URL, optionally a source tree, and a focus hint.
+- The analyst is given a target URL, optional source and reference documentation, and task guidance.
 - They have shell access, file-read access, web access, and the vigolium CLI.
-- They poke around, follow leads, write findings to a notebook as they confirm each bug, and stop when there is nothing more worth digging into.
+- They can mine traffic and findings already stored in the project, follow leads, record evidence, and stop when there is nothing more worth digging into.
 
-The autopilot is exactly that, except the analyst is an LLM and the notebook is the vigolium `findings` table.
+The autopilot is exactly that, except the analyst is an LLM and the durable notebook is the project database plus the run's session directory.
 
 ---
 
@@ -31,6 +31,8 @@ The autopilot is exactly that, except the analyst is an LLM and the notebook is 
                   │                                              │
                   │    --input → curl/HTTP/Burp/url normalize    │
                   │    --source → resolve git URL/diff/local     │
+                  │    --knowledge-base → compact doc brief      │
+                  │    --prior-context → existing project data   │
                   │    --provider/model → olium.ResolveProvider  │
                   └──────────────────────────────────────────────┘
                                        │
@@ -48,8 +50,9 @@ The autopilot is exactly that, except the analyst is an LLM and the notebook is 
                   │ 3. autopilot.Run (pkg/olium/autopilot)       │
                   │    build system prompt + initial user prompt │
                   │    register tools: builtins + halt_scan +    │
-                  │      report_finding + load_skill             │
-                  │    engine.New + engine.Run(ctx, initial)     │
+                  │      finding tool + load_skill               │
+                  │    legacy: one growing conversation          │
+                  │    durable: reconstructed sections           │
                   └──────────────────────────────────────────────┘
                                        │
                        ┌───────────────┴───────────────┐
@@ -63,17 +66,42 @@ The autopilot is exactly that, except the analyst is an LLM and the notebook is 
                                               │ load_skill,     │
                                               │ halt_scan,      │
                                               │ report_finding  │
+                                              │ or propose_…    │
                                               └─────────────────┘
                                        │
                                        ▼
                   ┌──────────────────────────────────────────────┐
-                  │ 4. Halt → finalize                           │
+                  │ 4. Halt → verify → finalize                  │
                   │    halt_scan called OR ctx done OR max turns │
+                  │    durable candidates get fresh-context      │
+                  │      verification before promotion           │
                   │    UPDATE AgenticScan: status, duration,     │
                   │    finding_count, error_message              │
                   │    print summary, remove run.pid             │
                   └──────────────────────────────────────────────┘
 ```
+
+---
+
+## Execution modes
+
+Set `agent.olium.autopilot_mode` in `vigolium-configs.yaml`:
+
+| Mode | Context behavior | Finding behavior |
+|---|---|---|
+| `legacy` (default) | One growing conversation. No section state is written. | `report_finding` writes directly to the findings table. |
+| `shadow` | Rotates through bounded sections and persists section state. | Findings still land directly, while mirrored candidates are independently graded for comparison. |
+| `enforced` | Rotates through bounded sections and persists section state. | `propose_candidate` replaces `report_finding`; only verifier-confirmed candidates are promoted. |
+
+```yaml
+agent:
+  olium:
+    autopilot_mode: enforced
+```
+
+Durable sections rotate after 40 turns or 12 consecutive turns without progress. A new section resets the engine and reconstructs a concise brief from the scratchpad, previous closing note, candidate ledger, and recent actions. Section lifecycle events are appended to `transcript.jsonl`, and rows are stored in `agent_sections` and `agent_finding_candidates`.
+
+Use `shadow` first when you want to compare verifier decisions without changing which findings land. Use `enforced` when you want verification to gate finding creation.
 
 ---
 
@@ -89,12 +117,12 @@ vigolium agent autopilot -t http://localhost:3000 --source ~/projects/my-app
 # Tighter scope with intensity preset
 vigolium agent autopilot -t https://example.com --intensity quick
 
-# Deep pentest with browser-assisted auth
+# Authenticated deep pentest (browser tooling is always available)
 vigolium agent autopilot -t https://app.example.com --intensity deep \
-  --browser --credentials "admin/admin123"
+  --prompt "log in as admin/admin123, then test IDOR and privilege escalation"
 
-# Focus a specific area
-vigolium agent autopilot -t https://api.example.com --focus "auth bypass"
+# Focus a specific area with explicit task guidance
+vigolium agent autopilot -t https://api.example.com --prompt "focus on auth bypass"
 
 # Pipe a curl command — target auto-derived
 echo "curl -X POST https://example.com/api/login -d '{\"user\":\"admin\"}'" \
@@ -117,10 +145,28 @@ vigolium agent autopilot -t https://example.com \
 # Natural-language prompt (parsed by AI to extract target/source/focus)
 vigolium agent autopilot "scan VAmPI source at ~/src/VAmPI on localhost:3005"
 
+# Mine existing project traffic and findings (auto is the default)
+vigolium agent autopilot -t https://example.com --prior-context auto
+
+# Pull live Burp history before building the prior-context brief
+vigolium agent autopilot -t https://example.com \
+  --burp-bridge-url http://127.0.0.1:9009
+
+# Add app documentation without flooding the operator context
+vigolium agent autopilot -t https://example.com --knowledge-base ./app-docs
+
+# Resume the same durable run identity and state
+vigolium agent autopilot --resume <agentic-scan-uuid> \
+  --prompt "finish the remaining authorization checks"
+
+# Pin and export debug artifacts
+vigolium agent autopilot -t https://example.com \
+  --session-dir ./debug/run-1 --transcript ./debug/run-1.jsonl
+
 # Dry-run: preview the rendered system prompt
 vigolium agent autopilot -t https://example.com --dry-run
 
-# # CI scan with quick intensity
+# CI scan with quick intensity
 vigolium agent autopilot -t https://staging.example.com \
   --intensity quick --upload-results
 ```
@@ -132,18 +178,16 @@ vigolium agent autopilot -t https://staging.example.com \
 | `-t, --target` |, | Target URL (derived from `--input` if omitted) |
 | `--input` |, | Raw input (curl, raw HTTP, Burp XML, base64, URL). Reads stdin if piped |
 | `--record-uuid` |, | Use an HTTP record from the database as the seed input |
+| `--prompt` / positional `[prompt]` |, | Free-text task guidance. With explicit target/source flags it stays verbatim; otherwise the intent parser also derives structured fields from it. |
+| `--plan-file` |, | Prose plus raw HTTP request blocks. Owns task guidance and seed input, so it cannot be combined with `--input`, `--record-uuid`, or a prompt. |
+| `--burp-bridge-url` | `$VIGOLIUM_BURP_BRIDGE_URL` | Import live Burp Proxy history into the project before prior context and pre-scan are built. |
+| `--prior-context` | `auto` | Existing project traffic/findings briefing: `auto` (bounded table), `summary` (one-line pointer), or `off`. |
+| `--knowledge-base` |, | Markdown/text file or directory describing auth, roles, and business logic. Adds a distilled brief plus on-demand document index. |
+| `--knowledge-base-raw` | false | Skip KB distillation and use the deterministic document index only. |
 | `--source` |, | Path to application source code (or git URL, auto-cloned). Auto-runs vigolium-audit. |
 | `--files` |, | Specific files to include (relative to `--source`) |
-| `--focus` |, | Focus area hint (e.g. `"auth bypass"`, `"API injection"`) |
-| `--instruction` / `--instruction-file` |, | Custom instruction appended to prompt |
-| `--intensity` | `balanced` | Preset bundle: `quick` / `balanced` / `deep`. Sets the command budget (quick=150, balanced=500, deep=1500 turns), audit mode, browser, and pre-scan strategy |
-| `--audit` | `lite` (with `--source`) | Vigolium-audit mode: `lite` / `balanced` / `deep` / `mock` / `off` |
-| `--browser` | false | Enable agent-browser for browser-based interactions |
-| `--credentials` |, | Credentials for auth preflight (e.g. `"admin/admin123"`) |
-| `--auth-required` | false | Require auth/session preparation before the operator starts |
-| `--requires-browser` | false | Require browser-assisted auth instead of HTTP-only preflight |
-| `--browser-start-url` |, | Explicit browser/login start URL |
-| `--focus-routes` |, | Protected/browser-focused routes to prioritize |
+| `--intensity` | `balanced` | Preset bundle: `quick` / `balanced` / `deep`. Sets the turn budget (quick=150, balanced=500, deep=1500), audit mode, browser, and pre-scan strategy |
+| `--audit` | intensity preset (`balanced` by default) | Vigolium-audit mode: `lite` / `balanced` / `deep` / `mock` / `off` |
 | `--diff` |, | Focus on changed code (PR URL, `main...branch`, `HEAD~N`) |
 | `--last-commits` |, | Shorthand for `--diff HEAD~N` |
 | `--max-duration` | 6h | Wall-clock cap (intensity preset sets this — quick=1h, balanced=6h, deep=12h) |
@@ -152,16 +196,23 @@ vigolium agent autopilot -t https://staging.example.com \
 | `--skill-tag` |, | Force-load every skill carrying one of these tags (e.g. `xss,idor`) |
 | `--no-skill-filter` | false | Load the full skill set; skip the pre-flight skill selection |
 | `--db-isolate` | false | Scan into a private temporary database, then merge results into `--db` at the end (lets parallel runs share one DB; SQLite only) |
-| `--plan-file` |, | Plan file mixing free-text guidance + raw HTTP request(s); owns the instruction + seed input (mutually exclusive with `--input`/`--instruction`/`--instruction-file`) |
 | `--piolium` |, | Run piolium audit instead of vigolium-audit when `--source` is set (`lite`/`balanced`/`deep`/`longshot`/…); empty auto-picks piolium when `pi` is installed |
 | `--no-prescan` | false | Skip the native pre-scan that seeds http_records before the operator (target-only runs; no-op with `--source`) |
+| `--no-preflight-discovery` | false | Skip pre-flight discovery and OpenAPI/Swagger ingestion. |
+| `--no-post-halt-verify` | false | Accept `halt_scan` without the route-gap probe and possible operator re-entry. |
+| `--resume` |, | Resume a durable run by AgenticScan UUID; restores its run identity/state and skips audit and pre-scan preparation. |
+| `--session-dir` | generated | Pin the directory for `transcript.jsonl`, `runtime.log`, scratchpad, and tool results. |
+| `--transcript` |, | Copy the completed transcript to another path while retaining the in-session copy. |
+| `--headed` | false | Hidden debugging flag that shows browser windows for pre-scan, probes, and browser subprocesses. |
 | `--upload-results` | false | Upload session bundle to cloud storage on completion |
 | `--provider` | *(config)* | Olium provider override |
 | `--model` | *(config)* | Model id override |
 | `--oauth-cred` / `--oauth-token` / `--llm-api-key` | *(config)* | Provider credential overrides |
-| `--system` |, | Extra text appended to the built-in system prompt |
+| `--system-prompt` / `--system-prompt-file` |, | Fully replace the built-in autopilot system prompt; the file takes precedence. |
 | `--dry-run` | false | Render prompt without launching agent |
 | `--show-prompt` | false | Print rendered prompt to stderr before executing |
+
+The CLI no longer exposes `--focus`, `--instruction`, `--instruction-file`, `--browser`, `--credentials`, or the other auth-intent flags. Put that information in `--prompt` (or the positional prompt). Browser tooling is always available, and the intent parser extracts login details and browser requirements. The REST API keeps its structured `focus`, `instruction`, `browser`, and credential fields for programmatic callers.
 
 ---
 
@@ -188,6 +239,8 @@ POST /api/agent/run/autopilot
 
 `EffectiveSourcePath()` accepts either `source` or the legacy `repo_path` JSON field. The server resolves provider/model from `agent.olium.*` by default; pass `api_key`, `oauth_token`, `oauth_cred_file`, or `oauth_cred_json` on the same request to override per call. Returns `202 Accepted` with `{agentic_scan_uuid, status}`. Set `stream: true` for an SSE response.
 
+The REST schema still exposes structured `focus`, `instruction`, `browser`, and authentication fields. CLI-only orchestration flags added in v0.3.1—`--resume`, `--knowledge-base`, `--prior-context`, `--burp-bridge-url`, `--session-dir`, and `--transcript`—are not request fields on this endpoint.
+
 ---
 
 ## What the agent actually has access to
@@ -206,8 +259,9 @@ The autopilot is **not** restricted to the vigolium CLI. The engine ships a gene
 | `web_fetch`      | Under autopilot the capture variant persists an `http_record` per fetch (`http` mode returns a `record_uuid`; `browser` mode captures every XHR/fetch), so it is **not** read-only and runs serial — it is not part of the parallel fan-out. |
 | `load_skill`     | Pulls a skill body by name (skills are indexed in the system prompt). |
 | `halt_scan`      | Autopilot-only. Sets `HaltSignal`, engine exits naturally next turn.  |
-| `report_finding` | Autopilot-only. Writes a `Finding` row scoped to the AgenticScan UUID. Accepts a `record_uuids[]` array linking the proving `http_records` (populates `HTTPRecordUUIDs`). |
-| `update_plan` / `remember` | Autopilot-only. Scratchpad plan + notes that survive context eviction. |
+| `report_finding` | Legacy/shadow modes. Writes a `Finding` row scoped to the AgenticScan UUID. Accepts `record_uuids[]` linking the proving `http_records`; shadow mode also mirrors a candidate for independent grading. |
+| `propose_candidate` | Enforced mode only. Persists the claim and evidence for a fresh-context verifier; only confirmed candidates are promoted to findings. |
+| `update_plan` / `remember` | Autopilot-only. Durable scratchpad plan and notes that survive section rotation and resume. |
 
 When a project database is wired (always the case for a real autopilot run) the agent also gets **first-class vigolium tools** from `pkg/olium/vigtool/`, so it doesn't have to shell out to the CLI for common scanner actions:
 
@@ -278,23 +332,25 @@ The autopilot exits in one of four ways:
 3. **Max turns**: turn count hits `MaxCommands`. Engine emits an `EventError`; autopilot returns a non-nil error.
 4. **Context cancelled**: timeout or SIGINT/SIGTERM. Engine teardown cancels in-flight tools.
 
-A separate **finding rate-limit** lives inside `report_finding`:
+A separate **finding rate-limit** lives inside `report_finding` in legacy/shadow mode:
 
 - soft warning at 50 findings (still saved)
 - hard cap at 200 (rejected with an `IsError` result that nudges the model toward `halt_scan`)
 
 ---
 
-## Findings persistence
+## Findings and candidate persistence
 
-Every successful `report_finding` call writes a row via `repo.SaveFindingDirect`. Key fields:
+In `legacy` mode, every successful `report_finding` call writes a finding directly. `shadow` keeps that behavior and mirrors a candidate. In `enforced` mode, the operator writes only a candidate; the post-run verifier promotes confirmed candidates.
+
+Promoted and directly reported findings share these fields:
 
 - `ProjectUUID`, `ScanUUID`, `AgenticScanUUID`, propagate the project/scan scope so `vigolium finding` and `vigolium agent sessions` can join back.
 - `ModuleID = "olium-autopilot"`, `ModuleType = "ai-agent"`, `FindingSource = "autopilot"`, distinguishes agent-originated findings from scanner-module findings.
 - `FindingHash`: SHA-256 over (title, severity, source_file, url, description-fingerprint), or over an explicit `dedup_key` if the model supplies one. The DB's `ON CONFLICT` handler squashes duplicates.
 - `HTTPRecordUUIDs`: the `record_uuids` array the model passes to link the `http_records` that prove the finding (from `replay_request`'s `replay_record_uuid`, `web_fetch`'s `record_uuid`, or `query_records`/`inspect_record`), so the evidence exchange survives the session and `vigolium finding --with-records` can rehydrate it.
 
-Because the autopilot writes findings as it confirms them, partial results survive a crash or timeout, the parent `AgenticScan` row is just updated to `status=failed` with the error message, but everything saved before that point stays in the DB.
+Persisted findings, candidates, sections, records, and scratchpad state survive a crash or timeout. A failed run updates the parent `AgenticScan` status but does not discard the work already saved. Use `--resume` in `shadow` or `enforced` mode to continue the same run.
 
 ---
 
@@ -304,12 +360,18 @@ For each run, autopilot creates a UUID-named directory under `agent.sessions_dir
 
 ```
 ~/.vigolium/agent-sessions/{run-uuid}/
-  ├── run.pid          # pgid + start time; cleared on exit
-  ├── runtime.log      # tee of stdout (assistant text stream)
-  └── vigolium-audit/  # vigolium-audit subprocess output (when --source is provided)
+  ├── run.pid                   # pgid + start time; cleared on exit
+  ├── runtime.log               # human-readable run/tool log
+  ├── transcript.jsonl          # full Pi-compatible conversation + section events
+  ├── autopilot/
+  │   └── scratchpad.json       # durable plan, stop criteria, and notes
+  ├── tool-results/             # large tool outputs kept out of the prompt
+  ├── knowledge-base-brief.md   # distilled/indexed operator docs, when supplied
+  ├── transcript-verify-*.jsonl # fresh-context verifier transcripts, durable modes
+  └── vigolium-audit/           # source-audit preparation, when --source is provided
 ```
 
-The run UUID matches the `AgenticScan.uuid` row, so `vigolium agent sessions` and `vigolium log <uuid>` both work without extra plumbing. Stale dirs older than 48h are swept on startup; orphan PID files (from SIGKILL'd runs) are cleared via `agent.CleanupOrphanedProcesses`.
+The run UUID matches the `AgenticScan.uuid` row, so `vigolium agent sessions` and `vigolium log <uuid>` both work without extra plumbing. Use `--session-dir` to pin this directory and `--transcript <path>` to copy the transcript after the run. Stale dirs older than 48h are swept on startup; orphan PID files are cleared during process cleanup.
 
 ---
 
@@ -322,6 +384,41 @@ When `--source` is set, three things change:
 3. **Skill scope**: embedded skills + `~/.vigolium/skills/` are indexed in the system prompt; scan-specific skills like `audit-auth` and `triage-finding` are loadable via `load_skill`.
 
 Vigolium-audit also runs first (foreground) when `--source` is set, freezing its findings into `vigolium-audit/` for the operator to consult.
+
+---
+
+## Prior project context and Burp
+
+`--prior-context auto` is the default. Before this run's pre-scan, Vigolium summarizes data already in the active project: totals, up to 20 distinct endpoints, and up to 10 open findings. Larger projects get a pointer telling the operator to use `query_records` and `list_findings` for the rest, so prompt cost stays bounded.
+
+- `auto`: include the bounded endpoint/finding tables when prior data exists.
+- `summary`: include totals and a one-line tool pointer.
+- `off`: do not front-load prior project data.
+
+Pass `--burp-bridge-url http://127.0.0.1:9009` (or set `VIGOLIUM_BURP_BRIDGE_URL`) to import live Burp Proxy history before the brief is built. That makes black-box runs start from captured operator traffic instead of a cold target.
+
+---
+
+## Knowledge base
+
+`--knowledge-base <file|dir>` supplies application documentation such as authentication flows, roles, privilege tiers, and business rules. Vigolium indexes `.md`, `.markdown`, `.mdx`, `.txt`, `.rst`, and `.adoc` files while skipping binary/vendor trees.
+
+The default path uses one bounded, tool-less LLM call to produce a compact briefing. The opening prompt receives that summary plus an authoritative path index; full documents stay on disk for `read_file` and `grep` on demand. Distillation failure is non-fatal and falls back to the deterministic index. The result is cached as `knowledge-base-brief.md` for provenance and resume reuse.
+
+Use `--knowledge-base-raw` to skip the distillation call and include only the deterministic index. This is useful for offline or reproducible runs.
+
+---
+
+## Resume
+
+`--resume <agentic-scan-uuid>` is available only when `agent.olium.autopilot_mode` resolves to `shadow` or `enforced`. It:
+
+- reuses the original AgenticScan UUID, project, target, source path, and session directory;
+- restores the scratchpad and candidate ledger;
+- marks any section left running by a crash as interrupted; and
+- skips native pre-scan, pre-flight discovery, and source-audit preparation.
+
+The original free-text prompt is not replayed. Add a new `--prompt` if the resumed pass needs extra direction. Resume requires the original database and session artifacts to remain available.
 
 ---
 
@@ -343,10 +440,10 @@ GET  /api/agent/sessions/:id/logs  # tail runtime.log (SSE supported)
 GET  /api/agent/sessions/:id/artifacts  # browse session directory
 ```
 
-The HTTP request body mirrors the CLI flags. The handler resolves provider/source the same way the CLI does, then enters `autopilot.Run` on a goroutine; the run UUID is returned immediately.
+The HTTP request body covers the core target, source, focus, auth, intensity, and audit controls, but it does not expose every CLI-only preparation/debugging flag. The handler resolves provider/source, enters `autopilot.Run` on a goroutine, and returns the run UUID immediately.
 
 ---
 
 ## TL;DR
 
-Autopilot is a single LLM agent on a leash made of `MaxCommands` turns and `Timeout` wall-clock. It gets shell, files, and the web; vigolium-specific behavior is encoded entirely in the system prompt, two custom tools (`halt_scan`, `report_finding`), and the optional skills under `~/.vigolium/skills/`. Findings are written as it goes; the run ends when the model halts itself, hits the turn cap, or gets cancelled.
+Autopilot is one autonomous operator bounded by `MaxCommands` and wall-clock time. Legacy mode keeps one conversation and reports findings directly. Durable modes rotate context through persisted sections, support `--resume`, and can require a fresh-context verifier before a candidate becomes a finding. Use `--prior-context`, `--burp-bridge-url`, and `--knowledge-base` to start the operator with the evidence and application intent it would otherwise need to rediscover.

@@ -95,7 +95,7 @@ module.exports = {
 | `vigolium.agent` | AI integration | `ask`, `generatePayloads`, `analyzeResponse`, `confirmFinding` |
 | `vigolium.config` | Extension variables | Read-only access to `extensions.variables` |
 
-Full TypeScript definitions: [`pkg/jsext/vigolium.d.ts`](../../pkg/jsext/vigolium.d.ts)
+Full TypeScript definitions: [`pkg/jsext/vigolium.d.ts`](https://github.com/vigolium/vigolium/blob/main/pkg/jsext/vigolium.d.ts)
 
 ### Setup
 
@@ -655,8 +655,9 @@ agent:
     reasoning_effort: medium       # codex providers only
     max_tokens: 1000000
     max_turns: 32
-    max_concurrent: 4              # global cap on simultaneous provider calls
+    max_concurrent: 4              # 0/unset = default 4; negative = unbounded
     call_timeout_sec: 600
+    autopilot_mode: legacy         # legacy | shadow | enforced
 ```
 
 Override per-run from any agent subcommand:
@@ -675,7 +676,7 @@ vigolium ol --provider openai-api-key --llm-api-key "$OPENAI_API_KEY"
 
 ### Tool registry
 
-The olium engine exposes eight built-in tools to the model: `bash`, `read_file`, `write_file`, `edit_file`, `ls`, `grep`, `glob`, `web_fetch`. Autopilot adds two security-specific tools: `halt_scan` (model-driven exit) and `report_finding` (DB-backed finding ingestion). See [Olium Agent](/agentic-scan/olium) for the full tool reference.
+The olium engine exposes eight built-in tools to the model: `bash`, `read_file`, `write_file`, `edit_file`, `ls`, `grep`, `glob`, `web_fetch`. Autopilot adds `halt_scan`, durable scratchpad tools, and a mode-dependent finding tool: `report_finding` in `legacy`/`shadow`, or verifier-gated `propose_candidate` in `enforced`. See [Olium Agent](/agentic-scan/olium) for the full tool reference.
 
 ### LLM config (for JS extensions)
 
@@ -689,6 +690,7 @@ The `vigolium.agent.*` APIs available to JavaScript extensions dispatch through 
 - **Single in-process runtime**: no subprocess startup overhead, prompt caching is reused across phases that share an engine (Anthropic + Codex providers only).
 - **Per-invocation overrides**: every CLI subcommand exposes `--provider`, `--model`, `--oauth-cred`, `--oauth-token`, `--llm-api-key`.
 - **Global concurrency cap**: `max_concurrent` keeps tier-1 plans from hitting 429s under fan-out.
+- **Durable autopilot**: `autopilot_mode: shadow` rotates context while preserving direct reports; `enforced` promotes only independently verified candidates. `legacy` remains the default.
 
 ### Cons
 

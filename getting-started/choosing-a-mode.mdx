@@ -136,13 +136,13 @@ Guided multi-phase scanning where the agent's job is to **generate tailored payl
 
 ```bash
 # Swarm against a single URL
-vigolium agent swarm -i "https://example.com/api/users?id=1"
+vigolium agent swarm --input "https://example.com/api/users?id=1"
 
 # Against a raw HTTP request file
-vigolium agent swarm -i ./request.txt --triage
+vigolium agent swarm --input ./request.txt --triage
 
 # Add discovery + triage for a fuller pipeline
-vigolium agent swarm -i https://example.com --discover --triage
+vigolium agent swarm --input https://example.com --discover --triage
 ```
 
 **When to pick it**
@@ -165,7 +165,7 @@ See [Swarm](/agentic-scan/swarm).
 | **Native via Burp** | One-shot `scan-url` / `scan-request`, active modules only. | Active + passive, all insertion points. | Active + passive + heavy mutation strategy and longer timeouts. |
 | **Vigolium Audit** | **3 phases**, recon, triage, quick scan. CI-friendly. | **9 phases**, adds deep-dive, exploit-design, validation. | **12 phases**, full audit including secondary review and cross-file analysis. |
 | **Piolium Audit** | **4 phases**, quick triage. | **9 phases**, standard audit. | **17 phases**, exhaustive: recon, primary, longshot, revisit, confirm, merge, diff. |
-| **Autopilot** | Short max-duration cap, conservative module budget, fewer turns. Smoke-test territory. | Default turn / duration budget. Real-browser pilot mode on. | Larger turn budget, JS-extension generation enabled, runs vigolium-audit in the background if `--source` is provided. |
+| **Autopilot** | Short max-duration cap, conservative module budget, fewer turns. Smoke-test territory. | Default turn / duration budget. | Larger turn budget, JS-extension generation enabled, runs vigolium-audit in the background if `--source` is provided. Browser tooling is available at every intensity. |
 | **Swarm** | Single-pass payload generation, no discover, no triage. | Generates + triages payloads; one feedback round. | Full multi-round generate / triage / refine across every insertion point. |
 
 ### Rule of thumb

@@ -22,7 +22,7 @@ Every agent invocation is dispatched through the in-process **olium runtime** (`
 | You want to... | Use | Why |
 |---|---|---|
 | Run a one-off prompt against code or a target (no scanning loop) | `query` | Single-shot, template-driven, returns structured findings or HTTP records |
-| Hand the agent the wheel for a full autonomous pentest | `autopilot` | One long LLM session with full Bash/Read/Write/Grep/Glob; agent picks strategy |
+| Hand the agent the wheel for a full autonomous pentest | `autopilot` | Autonomous operator with full tools; optionally rotate context and verify candidates in durable mode |
 | Have the AI **drive the native scanner** on a specific target | `swarm` | Master/worker pipeline: AI plans → native modules execute → optional triage+rescan |
 | Audit source code (secrets, SAST triage, PoC) before or alongside a scan | `audit` | Unified driver dispatcher: drives the embedded vigolium-audit harness, piolium, or both (`--driver auto\|both\|audit\|piolium`), with per-driver child AgenticScan rows + post-pass findings dedup |
 | Chat with an LLM interactively in a TUI (debug, explore, ad-hoc) | `olium` | Real-time multi-turn chat; not a security scan, general-purpose agent |
@@ -42,8 +42,8 @@ Every agent invocation is dispatched through the in-process **olium runtime** (`
 ### `autopilot`: autonomous agentic scan
 
 - **Use for:** pentest-style engagements where you want the agent to be creative and decide what to do.
-- **How it works:** one long-running LLM session with full CLI tool access until the agent calls `halt_scan` or hits limits. When `--source` is provided, vigolium-audit runs first to prepare a frozen whitebox context bundle.
-- **Key flags:** `-t/--target`, `--input` (curl/raw HTTP/Burp XML/URL/stdin), `--source` (auto-runs vigolium-audit), `--focus`, `--max-duration`, `--intensity {quick|balanced|deep}` (sets the command budget, audit mode, browser, and pre-scan strategy), `--audit` (`lite|balanced|deep|off`), `--triage`, `--plan-file`, `--browser`, `--credentials`, `--diff`, `--last-commits`, `--upload-results`.
+- **How it works:** one autonomous operator runs until it calls `halt_scan` or hits limits. `legacy` keeps one conversation; `shadow`/`enforced` rotate bounded sections and persist resumable state. When `--source` is provided, vigolium-audit runs first to prepare a frozen whitebox context bundle.
+- **Key flags:** `[prompt]`/`--prompt`, `-t/--target`, `--input`, `--burp-bridge-url`, `--prior-context {auto|summary|off}`, `--knowledge-base`, `--plan-file`, `--source`, `--max-duration`, `--intensity {quick|balanced|deep}`, `--audit {lite|balanced|deep|off}`, `--resume`, `--session-dir`, `--transcript`, `--triage`, `--diff`, and `--last-commits`.
 
 See [Autopilot](/agentic-scan/autopilot).
 
@@ -51,7 +51,7 @@ See [Autopilot](/agentic-scan/autopilot).
 
 - **Use for:** target-specific scanning when you want structure (planning → native scan → triage), source-aware route discovery, or verification loops.
 - **How it works:** 10-phase pipeline, normalize → auth (opt) → source-analysis (opt) → code-audit (opt) → discover (opt) → plan (AI) → extension → native scan → triage (opt) → rescan (opt).
-- **Key flags:** `-t/--target` (required with `--source`), `--input`, `--record-uuid`, `--source`, `--discover`, `--code-audit`, `--triage`, `--max-iterations`, `-m/--modules`, `--vuln-type`, `--focus`, `--audit {lite|balanced|deep|off}`, `--intensity`, `--only`/`--skip`/`--start-from`, `--force-extensions`.
+- **Key flags:** `[prompt]`/`--prompt`, `-t/--target` (required with `--source`), `--input`, `--plan-file`, `--record-uuid`, `--source`, `--discover`, `--code-audit`, `--triage`, `--max-iterations`, `-m/--modules`, `--vuln-type`, `--audit {lite|balanced|deep}`, `--intensity`, `--only`/`--skip`/`--start-from`, and `--with-extensions`.
 
 See [Swarm](/agentic-scan/swarm).
 
@@ -112,10 +112,12 @@ If you have **source code** and a **target URL**, both work; `swarm --source --t
 ## Cross-cutting
 
 - **Session dir:** `~/.vigolium/agent-sessions/` (override via `agent.sessions_dir` in `vigolium-configs.yaml`).
+- **Durable autopilot:** set `agent.olium.autopilot_mode` to `shadow` or `enforced`; `legacy` remains the default.
 - **Prompt templates:** `~/.vigolium/prompts/` or embedded under `public/presets/prompts/`.
 - **Output schemas:** `findings`, `http_records`, `attack_plan`, `triage_result`, `source_analysis`.
 - **Engine:** every agent run is dispatched through the in-process olium runtime (`pkg/olium/`). Provider selection lives at `agent.olium.provider` in `vigolium-configs.yaml`, see [How It Works](/agentic-scan/how-it-works) for the provider list.
 - **Source flag:** `--source` is the canonical source-code flag across all modes; the legacy `--repo`/`--repo-url`/`--source-url` flags have been removed.
+- **Task guidance:** autopilot and swarm use `--prompt` or the positional prompt. Their former CLI flags `--focus`, `--instruction`, `--instruction-file`, `--browser`, and `--credentials` are removed; put focus and login details in the prompt. Structured equivalents remain available in the REST API.
 
 ---
 

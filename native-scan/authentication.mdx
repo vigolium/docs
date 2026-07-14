@@ -583,7 +583,7 @@ Agent modes (`swarm`, `autopilot`) can auto-generate session configs from source
 
 When running agent swarm with `--source`, the source-analysis phase discovers authentication flows in the codebase and produces a `session-config.json` and `auth-config.yaml` in the session directory. This config is then fed into subsequent scan phases automatically.
 
-Swarm accepts a pre-built bundle via its own `--auth-config` flag (it skips browser/CLI auth synthesis and uses the file verbatim). Autopilot does not take a pre-built file; it prepares auth from a preflight driven by `--credentials` (plus `--auth-required` / `--requires-browser`):
+Swarm accepts a pre-built bundle via its own `--auth-config` flag (it skips browser/CLI auth synthesis and uses the file verbatim). Autopilot does not take a pre-built file. For both autopilot and swarm, put credentials, roles, login URL, and browser requirements in `--prompt` (or the positional prompt); browser tooling is always available and the intent parser extracts the auth signals:
 
 ```bash
 # Swarm with a pre-built auth-config bundle
@@ -591,12 +591,13 @@ vigolium agent swarm \
   --target https://app.com \
   --auth-config ./auth-config.json
 
-# Autopilot prepares auth from credentials during a preflight
+# Autopilot prepares auth from the task prompt during preflight
 vigolium agent autopilot \
   --target https://app.com \
-  --auth-required \
-  --credentials "admin/admin123, user/user123"
+  --prompt "Log in with admin/admin123 and user/user123. Compare both roles for IDOR."
 ```
+
+The REST agent endpoints still accept structured `credentials`, `credential_sets`, `auth_required`, `requires_browser`, `browser_start_url`, and `focus_routes` fields. Their removal applies to the autopilot/swarm CLI flags only.
 
 ## Examples
 

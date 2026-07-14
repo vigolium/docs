@@ -727,7 +727,8 @@ vigolium agent autopilot -t https://example.com
 > Autonomous scan focused on auth bypass, with source code for context
 ```
 ```bash
-vigolium agent autopilot -t https://api.example.com --source ./src --focus "auth bypass"
+vigolium agent autopilot -t https://api.example.com --source ./src \
+  --prompt "focus on auth bypass"
 ```
 
 **Custom limits (lighter intensity, shorter wall-clock):**
@@ -751,7 +752,23 @@ vigolium agent autopilot -t https://example.com --dry-run
 > Use my own system prompt for autopilot
 ```
 ```bash
-vigolium agent autopilot -t https://example.com --system my-system-prompt.md
+vigolium agent autopilot -t https://example.com --system-prompt-file my-system-prompt.md
+```
+
+**Start from project traffic, Burp history, and app docs:**
+```
+> Use the traffic we already captured and the application's role documentation
+```
+```bash
+vigolium agent autopilot -t https://example.com \
+  --burp-bridge-url http://127.0.0.1:9009 \
+  --prior-context auto --knowledge-base ./app-docs
+```
+
+**Resume a durable run:**
+```bash
+vigolium agent autopilot --resume <agentic-scan-uuid> \
+  --prompt "finish the remaining privilege-boundary checks"
 ```
 
 **Use a different olium provider:**
@@ -763,11 +780,11 @@ vigolium agent autopilot -t https://example.com --provider google-vertex --model
 ```
 
 **Autopilot security model:**
-- Yolo-mode bash — autopilot runs the model's `bash` calls without an approval prompt. The model decides when to invoke `vigolium scan-url`, `vigolium finding`, etc. (they're shell commands, not first-class tools).
+- Yolo-mode Bash — autopilot runs the model's `bash` calls without an approval prompt. Common scanner, record, replay, finding, OAST, auth-session, and Burp operations are also first-class tools; the model can still shell out for uncovered CLI operations.
 - The engine only hard-rejects catastrophic patterns (`rm -rf /`, `dd` to block devices, fork bombs, `mkfs` against real devices). There is no `vigolium`-only command allowlist.
 - Per-tool timeout: 5 minutes (`ToolTimeout`).
 - Intensity-driven defaults: quick=150 / balanced=500 / deep=1500 commands (`MaxCommands`), browser enabled at every intensity.
-- `report_finding` soft-warns at 50 findings and hard-caps at 200, nudging the agent toward `halt_scan`.
+- In legacy/shadow mode, `report_finding` soft-warns at 50 findings and hard-caps at 200. In enforced mode, `propose_candidate` routes claims through fresh-context verification before promotion.
 - Run autopilot in a disposable container or VM scoped to in-scope targets — see [Security Warning](/others/security-warning).
 
 #### Agent Swarm (AI-Guided Multi-Phase Scan)
@@ -798,7 +815,8 @@ The swarm runs ten phases in order (most are conditional — see [Swarm](/agenti
 > Swarm scan focused on SQL injection, with source code
 ```
 ```bash
-vigolium agent swarm --discover -t https://example.com --focus "SQL injection" --source ./src
+vigolium agent swarm --discover -t https://example.com \
+  --prompt "focus on SQL injection" --source ./src
 ```
 
 **Control rescan iterations:**
@@ -814,7 +832,7 @@ vigolium agent swarm --discover -t https://example.com --max-iterations 3
 > I already have traffic in the database, start from planning
 ```
 ```bash
-vigolium agent swarm --discover -t https://example.com --skip discover --start-from plan
+vigolium agent swarm -t https://example.com --start-from plan
 ```
 
 **Skip triage (just discover -> plan -> scan):**
@@ -855,7 +873,8 @@ vigolium agent swarm --discover -t https://example.com --source ./src \
 > Run swarm with Gemini
 ```
 ```bash
-vigolium agent swarm --discover -t https://example.com --agent gemini
+vigolium agent swarm --discover -t https://example.com \
+  --provider google-vertex --model gemini-2.5-pro
 ```
 
 ---
@@ -1522,7 +1541,7 @@ These are examples of natural language prompts you can give to Claude Code or Co
 | "Scan my OpenAPI spec with auth" | `vigolium scan -I openapi -i spec.yaml -t <url> --spec-header "Authorization: Bearer ..."` |
 | "Only run XSS modules" | `vigolium scan -t <url> --module-tag xss` |
 | "Review my code for security issues" | `vigolium agent query --prompt-template security-code-review --source ./src` |
-| "Autonomous scan focused on injection" | `vigolium agent autopilot -t <url> --focus "injection"` |
+| "Autonomous scan focused on injection" | `vigolium agent autopilot -t <url> --prompt "focus on injection"` |
 | "Run the full AI pipeline" | `vigolium agent swarm --discover -t <url>` |
 | "Show me all critical findings" | `vigolium finding --severity critical` |
 | "Export results as HTML report" | `vigolium export --format html -o report.html` |

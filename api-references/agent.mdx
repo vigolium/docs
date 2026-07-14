@@ -87,6 +87,10 @@ curl -s -X POST http://localhost:9002/api/agent/run/query \
 
 Launches an AI agent that autonomously discovers, scans, and triages vulnerabilities using vigolium CLI commands. When `source` is provided, vigolium-audit runs first, native context and planning artifacts are prepared, and then the autonomous operator session starts.
 
+<Note>
+  The HTTP schema intentionally keeps structured `focus`, `instruction`, browser, and credential fields. v0.3.1 CLI preparation/debugging flags such as `--resume`, `--prior-context`, `--knowledge-base`, `--burp-bridge-url`, `--session-dir`, and `--transcript` are not fields on this endpoint.
+</Note>
+
 **Request body:**
 
 | Field              | Type     | Required | Description                                                    |
@@ -189,7 +193,7 @@ curl -s -X POST http://localhost:9002/api/agent/run/autopilot \
 Launches an AI-guided multi-phase vulnerability swarm. The master agent analyzes inputs, selects scanner modules, generates custom JS extensions, executes scans, and optionally triages results. The swarm phases are:
 
 1. **Normalize**: Parse and normalize inputs (native, no AI)
-2. **Auth**: Browser-based login (native, optional, requires `--browser-auth` + `--browser`)
+2. **Auth**: Browser-based login (native, optional; the API uses `auth: true`, and browser tooling is enabled by the intensity/config path)
 3. **Source Analysis**: AI agents extract routes, auth flows, and extensions from source code *(conditional, requires `source`)*
 4. **Code Audit**: AI security code audit *(conditional, requires `code_audit: true`)*
 5. **Discovery**: Content discovery and spidering *(conditional, requires `discover` flag)*
@@ -235,7 +239,7 @@ AI agents are called at phases 3, 4, 6, and 9. When inputs exceed `master_batch_
 | `module_names`         | string[] | No       | Explicit module IDs to use                                             |
 | `only_phase`           | string   | No       | Isolate a single phase                                                 |
 | `skip_phases`          | string[] | No       | Skip specific phases                                                   |
-| `start_from`           | string   | No       | Resume from a specific phase                                           |
+| `start_from`           | string   | No       | Start a new run at a specific phase, marking earlier phases complete   |
 | `max_iterations`       | int      | No       | Max triage→rescan rounds (default depends on intensity)                |
 | `discover`             | bool     | No       | Run discovery+spidering before master agent planning                   |
 | `code_audit`           | bool     | No       | Enable AI security code audit phase (requires `source`)                |
