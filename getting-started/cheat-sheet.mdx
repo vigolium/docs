@@ -292,6 +292,29 @@ printf 'POST /api/login HTTP/1.1\r\nHost: example.com\r\nContent-Type: applicati
 pbpaste | vigolium scan-url -j
 ```
 
+### Fuzz one request with a custom payload set
+
+Where `scan-request` runs opinionated, confirmation-backed **modules**, `vigolium fuzz` is a low-level **primitive**: it injects a payload set into an exact position of one request and streams raw response signals (status, size, words, lines, time, reflection, baseline-delta) with match/exclude gating — no findings, no verdicts. It's built to be driven by a coding agent. Reach for it when you need a custom wordlist, an exact insertion point, or wordlist-scale discovery the modules can't express; reach for `scan-request -m ...` when you want a confirmed detection.
+
+```bash
+# Wordlist into a FUZZ marker, keep only 200s (builtin lists: fuzz, dir-short/long, file-short/long)
+vigolium fuzz 'https://example.com/api/FUZZ' -w dir-short --match-status-code 200
+
+# A built-in payload class into one parameter (classes: xss, sqli, ssti, ssrf, lfi, cmdi, xxe, …)
+vigolium fuzz 'https://example.com/item?id=1' --point URL_PARAM:id --class sqli,xss
+
+# Raw request on stdin, inline payloads, drop 404s and auto-calibrated catch-all noise
+cat req.txt | vigolium fuzz -p "' OR 1=1--" -p '<svg/onload=alert(1)>' --exclude-status-code 404
+
+# Agent handle: JSONL to stderr, ONE summary object (ranked anomalies + a ready confirm query) to stdout
+vigolium fuzz 'https://example.com/api?id=FUZZ' -w ~/wordlists/ids.txt -j
+
+# CI/agent gate: exit non-zero (3) if anything matches
+vigolium fuzz 'https://example.com/admin/FUZZ' -w dir-short --match-status-code 200,301 --fail-on-match
+```
+
+See the [Fuzz CLI reference](/others/cli-references#fuzz) for the full flag set (positions, matchers, calibration, and sending payloads through Burp's engine).
+
 ---
 
 ## 9. Target one vulnerability class or technology
@@ -662,6 +685,7 @@ What the extension can do:
 | **Forward everything** through Burp Proxy automatically | **Bridge → Proxy Interception → Turn ON** (pair with **In-scope only** + filter rules) |
 | **Snapshot the whole Target Site map** into Vigolium | **Bridge → Target Site Map Snapshot** (`Ctrl+Alt+S`, or auto every N minutes) |
 | **Bidirectional live bridge** — read Burp history from the CLI, or push Vigolium traffic back into Burp's Site map | Enable **Bridge → Enable live bridge** (loopback `http://127.0.0.1:9009`), then drive it from the CLI |
+| **Send exact bytes through Burp's engine**, or stage traffic into Repeater / Organizer | `replay` / `fuzz` / `finding` with `--send-via-burp`, `--to-repeater`, `--to-organizer`, or `--push-to-burp` (all need `--burp-bridge-url`) |
 
 Once the loopback bridge is enabled in Burp, drive it from Vigolium with the `--burp-bridge-url` flag (export `VIGOLIUM_BURP_BRIDGE_URL` only if you'd rather not repeat the flag):
 
@@ -677,6 +701,12 @@ vigolium traffic --burp-bridge-url http://127.0.0.1:9009 --save-to-burp
 
 # Save a mutated replay + its fresh response straight into Burp's Site map
 vigolium replay --finding-id 42 --burp-bridge-url http://127.0.0.1:9009 --save-to-burp
+
+# Send a replay through Burp's OWN HTTP engine — exact bytes (--http-mode http1 for desync)
+vigolium replay -i req.txt --burp-bridge-url http://127.0.0.1:9009 --send-via-burp --http-mode http1
+
+# Push a finding's evidence request+response into Burp's Organizer for manual confirmation
+vigolium finding xss --burp-bridge-url http://127.0.0.1:9009 --push-to-burp
 ```
 
 <Callout icon="circle-info" color="#3B82F6" iconType="regular">
@@ -746,7 +776,7 @@ Output-shaping flags on `finding` / `traffic` / `db ls`:
 
 ## 22. Show how to exploit a finding
 
-Once a finding is confirmed, pull the exact request that triggered it, then re-fire it (mutating the payload) to build a reproducible proof-of-concept. Start by fetching the finding with full, decoded bodies so you have the complete request to work from:
+Once a finding is confirmed, pull the exact request that triggered it, then re-fire it — verbatim, or with an iterated payload — to build a reproducible proof-of-concept. Start by fetching the finding with full, decoded bodies so you have the complete request to work from:
 
 ```bash
 # Self-contained bundle with COMPLETE bodies — everything needed to write an exploit.
@@ -757,15 +787,18 @@ vigolium finding --id 42 --json --with-records --full-body
 vigolium finding --id 42 --markdown --full-body > finding-42.md
 ```
 
-Reproduce and iterate the payload by replaying the finding's linked record. `vigolium replay --finding-id` re-sends the request behind a finding, and `-m/--mutate` lets you change one insertion point at a time to prove exploitability:
+Reproduce the finding by replaying its linked record: `vigolium replay --finding-id` re-sends the exact request behind a finding. To iterate a payload at one insertion point, drive [`vigolium fuzz`](#fuzz-one-request-with-a-custom-payload-set); to override the exact bytes, use `--raw-request`/`--raw-request-file`:
 
 ```bash
 # Re-fire the exact request that produced finding 42, human-readable summary.
 vigolium replay --finding-id 42 --pretty
 
-# Prove the injection: mutate one insertion point with your payload.
-vigolium replay --finding-id 42 --pretty \
-  -m "id=,type=query,payload=1 OR 1=1--"
+# Prove the injection: iterate one insertion point with a payload class or wordlist.
+# (Grab the linked record UUID from `vigolium finding --id 42 --json --with-records`.)
+vigolium fuzz -u <record-uuid> --point URL_PARAM:id --class sqli
+
+# Override the reproduction request's exact bytes (e.g. a hand-built PoC).
+vigolium replay --finding-id 42 --pretty --raw-request-file exploit.txt
 
 # Send the reproduction through Burp so you can inspect/step it manually.
 vigolium replay --finding-id 42 --proxy http://127.0.0.1:8080
@@ -778,7 +811,7 @@ vigolium replay --finding-id 42 --pretty \
 If you mirrored traffic to disk ([section 1](#1-mirror-ingested-traffic-findings-to-a-live-filesystem-tree)) or used `--format fs`, each `<id>.req` file is **directly replayable**: its leading `@target <scheme>://<authority>` line names the destination, so strip line 1 to get raw HTTP you can hand to `curl`, an agent, or feed back into `vigolium replay --raw-request-file <file>` (pass the target from that first line with `-t`).
 
 <Callout icon="circle-info" color="#3B82F6" iconType="regular">
-  With the [`vigolium-scanner` skill](#21-triage-findings-with-a-coding-agent-claude-codex) installed, you can ask your agent in plain language — *"confirm finding 42 is exploitable and give me a PoC"* — and it will run the `finding` + `replay` commands above, mutate the payload, and compare responses for you. `-m/--mutate` accepts `name=…,type=…,payload=…` (or `name:type:payload`) and is repeatable; `--raw-request`/`-i` replace the whole request when you need full control. Only test targets you are authorized to assess.
+  With the [`vigolium-scanner` skill](#21-triage-findings-with-a-coding-agent-claude-codex) installed, you can ask your agent in plain language — *"confirm finding 42 is exploitable and give me a PoC"* — and it will run the `finding`, `fuzz`, and `replay` commands above, iterate the payload, and compare responses for you. Use `vigolium fuzz` for payload / insertion-point work; use `--raw-request`/`--raw-request-file`/`-i` to replace the whole request when you need full control. Only test targets you are authorized to assess.
 </Callout>
 
 ---

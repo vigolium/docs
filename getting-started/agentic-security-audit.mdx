@@ -79,6 +79,7 @@ vigolium agent audit --source ~/src/your-app --mode balanced --agent codex
 | `lite` | 3 | CI/PR gates, routine triage. Quick recon, secrets scan, fast SAST. |
 | `balanced` (default) | 9 | Daily regression scans. Adds intelligence, knowledge-base, deep probe, FP review, PoC. |
 | `deep` | 12 | Pre-release / compliance audits. Adds commit archaeology, patch bypass, adversarial debate, cold verification, variant hunting. |
+| `knowledge-base` | 3 | Build **only** the reusable application model + attack surface (auth model, roles, unauthenticated surface, SBOM) — no SAST, findings, or PoCs. Run before a scan, or chain it as `--modes knowledge-base,deep`. Audit-only. |
 | `revisit` | 10 | Second offensive pass on the same code. Reuses prior KB; surfaces findings round one missed. |
 | `confirm` / `merge` | 7 | Boot-and-verify existing findings (`confirm`) or normalize results from multiple inputs (`merge`). |
 | `diff` | 1 | Incremental audit limited to changes since the last audited commit. |
@@ -89,6 +90,10 @@ vigolium agent audit --source ~/src/your-app --mode balanced --agent codex
 | `smoke` | — | Piolium-only smoke test. |
 
 Run `vigolium agent audit --list-modes` to print the full mode graph and time estimates for the embedded audit binary.
+
+<Note>
+  **`knowledge-base` is a prep mode, not a scan.** It writes a reusable application model (`knowledge-base-report.md`, `unauthenticated-surface.md`, `sbom.json`) under `vigolium-results/attack-surface/` and reports **no findings**. Use it to front-load context once — then run `lite`/`balanced`/`deep` against the same source (or chain it in one run with `--modes knowledge-base,deep`) so the scan reuses that model instead of rebuilding it.
+</Note>
 
 ---
 

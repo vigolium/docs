@@ -263,6 +263,17 @@ vigolium db reset --force                          # delete + recreate the DB fi
 
 **Live Burp bridge.** With a running Burp Suite exposing the loopback bridge (default listener `http://127.0.0.1:9009`, from the [`burp-vigolium`](https://github.com/vigolium/burp-vigolium) extension; env fallback `VIGOLIUM_BURP_BRIDGE_URL`), `vigolium traffic --burp-bridge-url <url>` merges Burp's live Proxy history into the traffic view. Add `--save-to-vigolium-db` to persist those bridge rows into the DB (the current page, or every match with `--all`), or `--save-to-burp` to copy DB traffic **into** Burp's Target Site map (the two `--save-to-*` flags are mutually exclusive). See [Using Vigolium with Burp Suite](/getting-started/burp-suite) for bridge setup.
 
+**Push findings to Burp.** `vigolium finding --push-to-burp` (paired with `--burp-bridge-url`) hands the selected finding(s)' evidence request+response to Burp's Organizer — severity-coloured, one item per finding — for manual confirmation. `--to-repeater` opens the finding's request in a Repeater tab instead (Burp caps Repeater at ~30 tabs/min, so prefer `--push-to-burp` for a large selection), and `--send-via-burp` re-issues the request through Burp's engine to capture a fresh response (with `--http-mode auto|http1|http2|http2_ignore_alpn`). These honour the usual `finding` selectors (`--severity`, `--min-severity`, a fuzzy term, `--finding-id`).
+
+```bash
+# Push all XSS findings' evidence into Burp's Organizer for manual confirmation
+vigolium finding xss --push-to-burp --burp-bridge-url http://127.0.0.1:9009
+
+# Open one finding in a Repeater tab and re-issue it through Burp for a fresh response
+vigolium finding --finding-id 42 --to-repeater --send-via-burp \
+                 --burp-bridge-url http://127.0.0.1:9009
+```
+
 **Cleanup safety.** A bare `vigolium db clean` with no selector is **rejected** — narrow the delete with a filter (`--scan-uuid`, `--host`, `--before`, `--status`, `--severity`, `--search`, `--orphans`, `--findings-only`, `--table`), use `db clean --all --force` to empty the data tables, or `vigolium db reset --force` to delete and recreate the SQLite database file from scratch (it VACUUMs automatically; without `--force` on a TTY it prompts for interactive confirmation).
 
 ### Import
@@ -299,14 +310,17 @@ A **SQLite database input** (detected by its magic header, any extension) is a l
 
 ## Replay
 
-Re-send stored traffic — with or without a mutation — to confirm a finding, fuzz a parameter, or push a whole corpus back through a proxy. The banner is suppressed so bulk output stays pipe-clean.
+Re-send stored traffic — verbatim, or with an exact-byte override — to confirm a finding or push a whole corpus back through a proxy. For payload / insertion-point fuzzing, reach for [`vigolium fuzz`](#fuzz) instead (`replay`'s `-m/--mutate` was removed). The banner is suppressed so bulk output stays pipe-clean.
 
 ```bash
-# Confirm a stored record with a SQLi payload (baseline vs. mutated diff)
-vigolium replay --record-uuid abc12345 -m 'name=id,payload=1 OR 1=1'
+# Re-send a stored record and diff the fresh response against the baseline
+vigolium replay --record-uuid abc12345
 
-# Replay a finding's stored evidence with an XSS payload
-vigolium replay --finding-id 42 -m 'name=q,payload=<svg/onload=alert(1)>'
+# Re-fire the exact request behind a finding (human-readable summary)
+vigolium replay --finding-id 42 --pretty
+
+# Send exact bytes verbatim — a hand-edited raw request overrides the resolved baseline
+vigolium replay --record-uuid abc12345 --raw-request-file exact.txt
 
 # Replay a curl command verbatim (auto-baseline by re-sending)
 vigolium replay -i "curl -X POST https://example.com/api/login -d 'u=admin'"
@@ -317,37 +331,104 @@ vigolium replay --session-id login --record-uuid <action-uuid>
 
 # Confirm against a different environment than the baseline
 vigolium replay --record-uuid abc12345 --target https://staging.example.com \
-                 -m 'name=user,payload=admin' -H 'X-Forwarded-For: 127.0.0.1'
+                 -H 'X-Forwarded-For: 127.0.0.1'
 
 # Merge headers from a saved auth session (from `vigolium auth list`)
 vigolium replay --record-uuid abc12345 --target https://staging.example.com \
                  --auth-session my-session
 
-# Save a mutated replay + its fresh response back into Burp's Target Site map
-vigolium replay --record-uuid abc12345 -m 'name=id,payload=1 OR 1=1' \
+# Save a replayed request + its fresh response back into Burp's Target Site map
+vigolium replay --record-uuid abc12345 \
                  --burp-bridge-url http://127.0.0.1:9009 --save-to-burp
+
+# Send the exact bytes through Burp's OWN HTTP engine (not Go's client) — force HTTP/1 for desync
+vigolium replay -i req.txt --burp-bridge-url http://127.0.0.1:9009 \
+                 --send-via-burp --http-mode http1
+
+# Stage the request in a Burp Repeater tab, or store request+response in the Organizer
+vigolium replay --record-uuid abc12345 --burp-bridge-url http://127.0.0.1:9009 --to-repeater
+vigolium replay --record-uuid abc12345 --burp-bridge-url http://127.0.0.1:9009 \
+                 --to-organizer --notes 'IDOR candidate' --highlight orange
 ```
+
+**Exact-byte override.** `--raw-request <string>` sends those exact bytes instead of the resolved baseline — for a hand-crafted smuggling prefix, a deliberate `Content-Length`, or an unusual method; `--raw-request-file <path>` reads the same from a file (the two are mutually exclusive). `-i/--input` (curl / raw HTTP / Burp) likewise replaces the whole request. For wordlist-scale payload injection at an exact position, use [`vigolium fuzz`](#fuzz).
 
 `--save-to-burp` (paired with `--burp-bridge-url`) adds each replayed request and its fresh response straight into Burp's Target Site map — without proxying it twice — so a confirmed exploit lands back in Burp for manual follow-up (default listener `http://127.0.0.1:9009`; env fallback `VIGOLIUM_BURP_BRIDGE_URL`). See [Using Vigolium with Burp Suite](/getting-started/burp-suite).
 
+**Send through Burp's engine.** `--send-via-burp` routes the send through Burp's own HTTP stack so the exact bytes reach the wire — a deliberate `Content-Length`, a smuggling prefix, or an unusual method is preserved instead of being normalised by Go's client. Pick the wire protocol with `--http-mode auto|http1|http2|http2_ignore_alpn` (default `auto`; use `http1` for request smuggling / desync so `auto` doesn't renegotiate HTTP/2 and reframe the request). Independently, `--to-repeater` (with `--repeater-tab <name>`, default `vigolium`) stages the request in a Burp Repeater tab, and `--to-organizer` (with `--notes` and `--highlight`) stores the request + response pair in Burp's Organizer. All require `--burp-bridge-url`; without them the send path is unchanged. See [Send traffic through Burp's engine](/getting-started/burp-suite#send-traffic-through-burps-engine).
+
 ### Bulk replay
 
-Pass `--all` (or any of `--host` / `--method` / `--status` / `--path` / `--source` / `--search` / `--body`) to replay **every matching stored record** through the mutation/diff engine, streaming one JSONL object per record with per-record error isolation.
+A positional `vigolium replay <term>` does a broad fuzzy match over stored traffic (URL, path, host, method, content-type, source, and the raw request/response) — exactly like `vigolium traffic <term>` — and switches replay into "iterate **every matching stored record**" mode. Passing `--all` or any selector flag does the same. Each matched record is re-sent verbatim through the diff engine, streaming one JSONL object per record with per-record error isolation.
 
 ```bash
-# Replay ALL stored traffic through Burp (JSONL out, 5 at a time)
+# Replay every stored request whose text matches "admin" through a proxy (5 at a time)
+vigolium replay admin --proxy http://127.0.0.1:8080 -c 5
+
+# Replay ALL stored traffic through a proxy (JSONL out)
 vigolium replay --all --proxy http://127.0.0.1:8080 -c 5
+
+# Traffic-style selectors: POST records containing "token" but not "logout"
+vigolium replay --host api.example.com --method POST --search token \
+                 --exclude-search logout --proxy http://127.0.0.1:8080 -c 5
+
+# Date range + ordering: JSON 200s since a date, oldest-sent first
+vigolium replay --status 200 --body 'application/json' --from 2026-07-21 \
+                 --sort sent_at --asc -c 5
 
 # Replay every record from a standalone export (project scoping off)
 vigolium replay -S --db scan.sqlite --all --proxy http://127.0.0.1:8080 -c 5
-
-# Fuzz an 'id' param across every matching GET record
-vigolium replay --method GET --host api.example.com -m 'name=id,payload=1 OR 1=1'
 ```
 
-- `--all` lifts the default `-n/--limit` cap (100); narrow the set with the filter flags instead. Without `-m/--mutate`, each record is re-sent verbatim.
+The selection surface mirrors `vigolium traffic`:
+
+- **Match:** a positional term, repeatable `--search` (AND-combined; matches URL/path **and** the raw request/response), `--host`, `--method` (repeatable), `--status` (repeatable), `--path`, `--source`, `--body`.
+- **Exclude:** repeatable `--exclude-search` and `--exclude-body` drop matching records.
+- **Range & order:** `--from` / `--to` (`YYYY-MM-DD` or RFC3339), `--sort uuid|created_at|sent_at|method|status|time` (default `created_at`), `--asc` (default: newest-first), `--offset <n>` for pagination.
+- `--all` lifts the default `-n/--limit` cap (100); narrow the set with the selectors instead. Each record is re-sent verbatim — payload / insertion-point fuzzing lives in [`vigolium fuzz`](#fuzz).
 - Throttle with `-c/--concurrency` (default 10); cap the set with `-n/--limit` (default 100, lifted by `--all`).
+- Combine with `--proxy`, `--save-to-burp`, or `--send-via-burp` as with single-record replay.
 - `-S/--stateless --db <file>` reads baselines from a standalone `.sqlite`/`.jsonl` export with project scoping off — it never writes to your project DB.
+
+## Fuzz
+
+`vigolium fuzz` injects a caller-supplied payload set into chosen positions of **one** request and streams per-payload response signals (status, size, words, lines, time, reflection, baseline-delta) with match/exclude gating and auto-calibration against the target's catch-all. It is a low-level **primitive**, not a scanner: it sends exactly the payloads you give it at exactly the positions you pick and makes **no vulnerability decision** — it emits raw signals, not findings. The intelligence comes from the caller (typically a coding agent). For confirmation-backed detection of known classes, use the module scanner instead: `vigolium scan-request -i req.txt -m xss,sqli -j`.
+
+```bash
+# Fuzz a wordlist into a FUZZ marker; keep only 200s
+vigolium fuzz 'https://acme.test/api/FUZZ' -w dir-short --match-status-code 200
+
+# Inject a built-in payload class into one parameter; anomalies vs the calibrated baseline
+vigolium fuzz 'https://acme.test/item?id=1' --point URL_PARAM:id --class sqli,xss
+
+# Fuzz from a raw request on stdin with inline payloads; drop 404s
+cat req.txt | vigolium fuzz -p "' OR 1=1--" -p '<svg/onload=alert(1)>' --exclude-status-code 404
+
+# Fuzz a stored record (by UUID) as the baseline request
+vigolium fuzz -u <record-uuid> --fuzz params -w fuzz
+
+# Agent handle: stream JSONL to stderr, print ONE summary object to stdout
+vigolium fuzz 'https://acme.test/api?id=FUZZ' -w ~/wordlists/ids.txt -j
+
+# CI/agent gate: exit non-zero (3) if any result matches
+vigolium fuzz 'https://acme.test/admin/FUZZ' -w dir-short --match-status-code 200,301 --fail-on-match
+```
+
+**Source** (one of): a positional URL (with `-X`/`-H`/`-d` to build the request), `-i/--input` (curl, raw HTTP, Burp XML, base64, URL, or `-` for stdin), `-u/--record-uuid` (a stored HTTP record), or a request piped on stdin. `-t/--target` overrides the scheme/host/port the request is actually sent to.
+
+**Positions** (what to fuzz): a literal `FUZZ` marker anywhere in the request (request line, path, header, or body) wins if present; otherwise `--fuzz method|path|params|param-name|headers|cookies|all` (default: all discovered insertion points), `--point TYPE:name` (e.g. `URL_PARAM:id`, repeatable), or `--fuzz-header <name>` (repeatable). The marker keyword is configurable with `--keyword`.
+
+**Payloads** (combine freely): `--class` selects a built-in vulnerability class — `xss`, `sqli`, `ssti`, `ssrf`, `lfi`, `path_traversal`, `xxe`, `cmdi`, `open_redirect`, `crlf` (aliases like `traversal`, `rce`, `sql`, `template` accepted); `-w/--wordlist` takes a builtin name (`fuzz`, `dir-short`, `dir-long`, `file-short`, `file-long`) **or** a file path (repeatable); `-p/--payload` adds an inline literal (repeatable).
+
+**Matchers & excludes.** Matchers **keep** a response (OR-combined; empty keeps all): `--match-status-code` (accepts `all`), `--match-size`, `--match-words`, `--match-lines`, `--match-regex`, `--match-time` (ms). Each has an `--exclude-*` counterpart that **drops** a response. Auto-calibration (on by default) probes the target's wildcard/catch-all and suppresses matches identical to it — suppressed results carry `"calibrated":true`; disable it with `--no-calibrate`.
+
+**Output.** Default is JSONL (one object per send) to stdout — matched-only unless `--all-results`; `--pretty` renders a human-readable table, `-o/--output` writes to a file. Under `-j/--json`, the JSONL streams to **stderr** and a single summary object prints to stdout: `{target, sent, matched, calibrated, baseline, top_results (ranked anomalies), query (a ready scan-request confirmation)}` — a handle a coding agent can act on directly. `--fail-on-match` exits `3` when any result matches, for CI/agent gating. Throttle with `-c/--concurrency` (default 10) and `--delay <ms>`; `--timeout` sets the per-request timeout and `--no-redirects` stops following 30x. Honors `HTTP_PROXY`/`HTTPS_PROXY` for Burp inspection.
+
+**Send through Burp's engine.** `--send-via-burp` (with `--burp-bridge-url`) routes every payload through Burp's own HTTP stack so exact bytes hit the wire — the way to fuzz malformed/smuggling requests (pair with `--http-mode http1`); `--matches-to-organizer` pushes each matched request into Burp's Organizer for triage. See [Send traffic through Burp's engine](/getting-started/burp-suite#send-traffic-through-burps-engine).
+
+<Note>
+  `replay`'s `-m/--mutate` flag was **removed** — `replay` now re-sends stored traffic (verbatim, or with an exact-byte `--raw-request` override) and confirms, while `fuzz` owns wordlist-scale payload injection at an exact position. (The `pkg/replay` library and the agent's in-process `replay_request` tool still apply mutations.)
+</Note>
 
 ## Strategies & Phases
 
@@ -584,7 +665,21 @@ vigolium log --raw                 # Print the raw transcript JSONL verbatim ins
 
 ```bash
 vigolium config ls
+vigolium config ls server             # Filter by a key prefix
+vigolium config ls '*burp*'           # Filter keys by glob
+vigolium config view 'notify.*'       # Print a subtree
 vigolium config ls --show-secrets     # Reveal masked secret values (API keys, tokens) in plaintext
+
+# Set individual keys by dotted path — missing nested sections are created automatically
+vigolium config set server.enable_burp_bridge true
+vigolium config set server.burp_bridge_url http://127.0.0.1:9009
+vigolium config set notify.enabled true
+vigolium config set notify.provider telegram
+vigolium config set notify.severities high,critical      # coerced to a list
+vigolium config set notify.telegram.bot_token <bot-token>
+vigolium config set notify.telegram.chat_id <chat-id>
+vigolium config set database.driver postgres
+
 vigolium config clean
 vigolium init                     # Initialize ~/.vigolium with defaults
 vigolium doctor                   # Diagnose configuration and tool readiness
@@ -592,7 +687,9 @@ vigolium auth                     # Authentication management utilities
 vigolium project                  # Manage multi-tenant projects
 ```
 
-`vigolium config ls` (aliases `list` / `view`) redacts sensitive values — API keys, tokens, credentials — as `[redacted]` by default. Pass `--show-secrets` to reveal them in plaintext; it prints a warning to stderr. The generic `-F/--force` no longer reveals secrets (it only skips confirmation prompts).
+`vigolium config ls` (aliases `list` / `view`) redacts sensitive values — API keys, tokens, credentials — as `[redacted]` by default. Pass `--show-secrets` to reveal them in plaintext; it prints a warning to stderr. The generic `-F/--force` no longer reveals secrets (it only skips confirmation prompts). Both accept an optional key prefix or glob (`config ls server`, `config view 'notify.*'`) to print just a subtree.
+
+`vigolium config set <key> <value>` takes a dotted path and **creates missing intermediate sections**, so a previously-unset nested key — `notify.telegram.bot_token`, `server.burp_bridge_url`, `server.enable_burp_bridge` — can be set directly instead of failing with *"key not found"*. The value is coerced to the field's declared type (bool / int / float / comma-separated list), and the key is validated against the config schema so a typo is rejected up front.
 
 <Note>
 This page covers the most common invocations. Every command supports `--help` for the full flag reference, and most commands accept the global flags shown by `vigolium --help`.
