@@ -68,7 +68,7 @@ vigolium replay -S --db scan.sqlite --all --proxy http://127.0.0.1:8080 -c 5
 ```
 
 <Callout icon="circle-info" color="#3B82F6" iconType="regular">
-  `--all` lifts the default `-n/--limit` cap (100). You can narrow the bulk set instead of `--all` with `--host`, `--method`, `--status`, `--path`, `--source`, `--search`, or `--body`. `-S/--stateless` reads records from a `.jsonl` export **or** a standalone `.sqlite` with project scoping off, it never writes to your project DB.
+  `--all` lifts the default `-n/--limit` cap (100). Instead of `--all` you can narrow the bulk set with a positional fuzzy term (`vigolium replay admin`) or the full `traffic`-style selectors — `--search`/`--exclude-search`, `--host`, `--method`, `--status`, `--path`, `--source`, `--body`/`--exclude-body`, `--from`/`--to`, and `--sort`/`--asc`/`--offset` (see [Bulk replay](/others/cli-references#bulk-replay)). `-S/--stateless` reads records from a `.jsonl` export **or** a standalone `.sqlite` with project scoping off, it never writes to your project DB.
 </Callout>
 
 ---
