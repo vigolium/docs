@@ -332,10 +332,10 @@ vigolium scan -t https://example.com --list-modules
 vigolium module ls
 
 # Run specific modules only
-vigolium scan -t https://example.com -m xss-reflected,sqli-error
+vigolium scan -t https://example.com -m xss-light-url-params,sqli-error-based
 
 # Run a single module
-vigolium scan-url https://example.com/search?q=test -m xss-reflected
+vigolium scan-url https://example.com/search?q=test -m xss-light-url-params
 ```
 
 <Note>
@@ -354,7 +354,7 @@ vigolium scan -t https://example.com --module-tag spring
 vigolium scan -t https://example.com --module-tag rails --module-tag django
 
 # Combine with -m (results are merged as a union)
-vigolium scan -t https://example.com -m xss-reflected --module-tag spring
+vigolium scan -t https://example.com -m xss-light-url-params --module-tag spring
 ```
 
 Tags are matched with OR logic, a module runs if it matches *any* of the specified tags. When both `-m` and `--module-tag` are provided, the results are merged (union).
@@ -447,11 +447,11 @@ Recognized value types include: integer, UUID, email, JWT, boolean, path, sequen
 
 ## Project Scoping
 
-Use `--project-id` (with a UUID) or `--project-name` (with a name) to scope all scan data to a specific project for multi-tenant isolation:
+Use `--project-uuid` (with a UUID) or `--project-name` (with a name) to scope all scan data to a specific project for multi-tenant isolation. Both are global flags, so they work on every command, not just `scan`:
 
 ```bash
 # Scan within a project
-vigolium scan -t https://example.com --project-id a1b2c3d4-...
+vigolium scan -t https://example.com --project-uuid a1b2c3d4-...
 
 # Or set the environment variable for your session
 eval $(vigolium project use a1b2c3d4-...)
@@ -480,12 +480,12 @@ vigolium scan
 # Scan with proxy (Burp, ZAP)
 vigolium scan -t https://example.com --proxy http://127.0.0.1:8080
 
-# Scan with custom scan ID for grouping
-vigolium scan -t https://example.com --scan-id "sprint-42"
+# Pin the scan UUID (sync results across nodes, or group several runs)
+vigolium scan -t https://example.com --scan-uuid 6f1c2b90-8b1e-4a6c-9d2f-5c7a1e3b9d40
 
 # Verbose output with traffic dump
 vigolium scan -t https://example.com -v --dump-traffic
 
 # Scan only Spring-related modules within a project
-vigolium scan -t https://example.com --module-tag spring --project-id a1b2c3d4-...
+vigolium scan -t https://example.com --module-tag spring --project-uuid a1b2c3d4-...
 ```

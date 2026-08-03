@@ -16,7 +16,7 @@ Server startup, authentication, and general endpoints. The following routes are 
 | GET | `/health` | Health check |
 | GET | `/server-info` | Server info (uptime, queue depth, totals) |
 | GET | `/swagger/*` | Swagger UI |
-| GET | `/metrics` | Prometheus metrics (response gated by `--enable-metrics`) |
+| GET | `/metrics` | Prometheus metrics (response gated by `server.enable_metrics`) |
 | POST | `/api/auth/login` | File-based login → bearer token |
 | GET | `/api/info` | App info / build metadata |
 | GET | `/api/user/info` | Current user |

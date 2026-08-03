@@ -157,38 +157,64 @@ The **live bridge** connects Vigolium's CLI and server to Burp in *both* directi
     export VIGOLIUM_BURP_BRIDGE_URL="http://127.0.0.1:9009"   # optional fallback — the --burp-bridge-url flag overrides it
     ```
   </Step>
-  <Step title="Read and write traffic across the bridge">
-    ```bash
-    # Merge live Burp Proxy history into the local traffic view
-    vigolium traffic --burp-bridge-url http://127.0.0.1:9009
-
-    # Merge live Burp rows into GET /api/http-records while the server runs
-    vigolium server --burp-bridge-url http://127.0.0.1:9009
-
-    # Persist the traffic selected by the active filters into Vigolium's DB
-    vigolium traffic --burp-bridge-url http://127.0.0.1:9009 --save-to-vigolium-db   # add --all for every match
-
-    # One-shot persist of ALL bridge-visible Proxy history into the DB
-    vigolium import --burp-bridge-url http://127.0.0.1:9009
-
-    # Import live history before autopilot builds prior context and runs its pre-scan
-    vigolium agent autopilot -t https://example.com \
-      --burp-bridge-url http://127.0.0.1:9009
-
-    # Copy the selected Vigolium DB traffic into Burp's Target Site map
-    vigolium traffic --burp-bridge-url http://127.0.0.1:9009 --save-to-burp
-
-    # Save a mutated replay + its fresh response straight into Burp's Site map
-    vigolium replay --record-uuid <uuid> --burp-bridge-url http://127.0.0.1:9009 --save-to-burp
-    ```
-
-    If you exported `VIGOLIUM_BURP_BRIDGE_URL`, drop the `--burp-bridge-url` flag from each command.
-  </Step>
 </Steps>
 
-Live rows are labelled `source: burp`, and the usual traffic filters, sorting, pagination, and JSON output all continue to apply. Bridge imports are idempotent — new requests are inserted, changed responses refresh the existing row, and unchanged traffic is skipped.
+Every command below takes `--burp-bridge-url http://127.0.0.1:9009`; if you exported `VIGOLIUM_BURP_BRIDGE_URL`, drop the flag.
 
-Unlike `vigolium traffic --save-to-vigolium-db` (which persists only the currently selected page), `vigolium import --burp-bridge-url` is a one-shot bulk import of *all* Proxy history the bridge exposes. Because the bridge is an import source in its own right, `--burp-bridge-url` cannot be combined with a path argument or `--glob-db` in the same `import` invocation.
+### Read live Burp history
+
+Merge Burp's Proxy history into a Vigolium traffic view without persisting anything. Live rows are labelled `source: burp`, and the usual filters, sorting, pagination, and JSON output all apply:
+
+```bash
+# Browse Burp's live history alongside your database records
+vigolium traffic --burp-bridge-url http://127.0.0.1:9009
+
+# Only the live Burp portion of the merged view
+vigolium traffic --burp-bridge-url http://127.0.0.1:9009 --source burp
+```
+
+Point a running server at the listener to do the same for the API and Web UI — `GET /api/http-records` then returns Burp's live rows merged with stored ones:
+
+```bash
+vigolium server --burp-bridge-url http://127.0.0.1:9009
+```
+
+### Persist Burp traffic into the database
+
+Two ways in, depending on how much you want:
+
+```bash
+# The traffic your active filters selected (add --all for every match, not just this page)
+vigolium traffic --burp-bridge-url http://127.0.0.1:9009 --save-to-vigolium-db
+
+# One-shot bulk import of ALL Proxy history the bridge exposes
+vigolium import --burp-bridge-url http://127.0.0.1:9009
+```
+
+Bridge imports are **idempotent**: new requests are inserted, changed responses refresh the existing row, and unchanged traffic is skipped. Because the bridge is an import source in its own right, `--burp-bridge-url` can't be combined with a path argument or `--glob-db` in the same `import` invocation.
+
+### Push Vigolium traffic back into Burp
+
+The reverse direction — copy stored records into Burp's **Target Site map** so you can work them by hand:
+
+```bash
+# Copy the DB traffic your filters selected into Burp's Site map
+vigolium traffic --burp-bridge-url http://127.0.0.1:9009 --save-to-burp
+
+# Send a replayed request + its fresh response straight into the Site map
+vigolium replay --record-uuid <uuid> --burp-bridge-url http://127.0.0.1:9009 --save-to-burp
+```
+
+`--save-to-burp` and `--save-to-vigolium-db` are mutually exclusive — pick a direction per command.
+
+### Seed an agentic scan from Burp
+
+Autopilot can pull live history across the bridge **before** it builds its prior-context brief and runs the pre-scan, so the agent starts from the traffic you already browsed instead of rediscovering it:
+
+```bash
+vigolium agent autopilot -t https://example.com \
+  --burp-bridge-url http://127.0.0.1:9009
+```
 
 <Callout icon="shield-halved" color="#00b368" iconType="regular">
   The bridge listener is **disabled by default** and requires no credentials because it only binds to a validated loopback address, rejects unexpected `Host`/`Origin` headers, and uses temporary result references that expire when the listener restarts or the extension unloads. Disabling the setting or unloading the extension stops the listener immediately.
@@ -204,54 +230,98 @@ All of these flags require `--burp-bridge-url` (the same loopback listener as ab
   Requires a **`burp-vigolium`** build that exposes the `/api/burp-bridge/{send,repeater,organizer}` endpoints (the installed version is shown in the extension's **Settings** view). If a target is out of scope and Burp is set to "in-scope only", the send returns a clean error instead of silently dropping.
 </Callout>
 
+### Send exact bytes with `--send-via-burp`
+
+Go's HTTP client normalises what you hand it: it recomputes `Content-Length`, re-frames the request, and rejects some malformed constructions outright. That's fine for ordinary traffic and fatal for the attacks that depend on the malformation. `--send-via-burp` hands the raw bytes to Burp's stack instead, so what you assembled is what reaches the wire:
+
 ```bash
-# Replay a stored record through Burp's engine — exact bytes, no Go-client normalisation
+# Replay a stored record through Burp's engine
 vigolium replay --record-uuid abc12345 \
                  --burp-bridge-url http://127.0.0.1:9009 --send-via-burp
 
-# Send a hand-crafted raw request byte-for-byte through Burp's engine
+# Send a hand-crafted raw request byte-for-byte
 vigolium replay --raw-request-file exact.txt \
                  --burp-bridge-url http://127.0.0.1:9009 --send-via-burp
+```
 
-# Request smuggling / desync: force HTTP/1 so 'auto' doesn't renegotiate HTTP/2 and reframe the bytes
+A target-side failure is reported per request and doesn't abort a batch, so one dead host won't kill a fuzzing loop.
+
+### Choose the wire protocol with `--http-mode`
+
+`auto` (the default) negotiates normally, which can renegotiate HTTP/2 and re-frame your request. For request smuggling and desync work, pin HTTP/1 so the framing you wrote survives:
+
+```bash
 vigolium replay -i req.txt --burp-bridge-url http://127.0.0.1:9009 \
                  --send-via-burp --http-mode http1
+```
 
-# Also open the request in a Burp Repeater tab (named 'vigolium' by default)
+Accepted values: `auto`, `http1`, `http2`, `http2_ignore_alpn`. `--send-timeout` bounds a single send (max 2 minutes; the bridge's own 30s default otherwise) on `replay` and `fuzz`.
+
+### Stage a request in Repeater
+
+`--to-repeater` opens the request in a Burp **Repeater** tab, ready for manual iteration. `--repeater-tab <name>` names the tab (default `vigolium`):
+
+```bash
+# Replay a record and open it in a tab named 'desync'
 vigolium replay --record-uuid abc12345 --burp-bridge-url http://127.0.0.1:9009 \
                  --to-repeater --repeater-tab desync
 
-# Store the request + its response in Burp's Organizer with a note and highlight colour
+# Open a finding's request, re-issued through Burp so the tab holds a fresh response
+vigolium finding --id 42 --to-repeater --send-via-burp \
+                 --burp-bridge-url http://127.0.0.1:9009
+```
+
+<Callout icon="triangle-exclamation" color="#f59e0b" iconType="regular">
+  Burp caps Repeater at roughly **30 tabs per minute**. For a large selection, prefer the Organizer (`--push-to-burp`, one item per finding) over `--to-repeater`.
+</Callout>
+
+### Store an exchange in the Organizer
+
+`--to-organizer` stores the request **and** its response as a Burp **Organizer** item — the right destination for a batch you want to triage later, since it has no tab-rate limit:
+
+```bash
 vigolium replay --record-uuid abc12345 --burp-bridge-url http://127.0.0.1:9009 \
                  --to-organizer --notes 'IDOR candidate' --highlight orange
+```
 
-# Fuzz every payload through Burp, and push each matched anomaly into the Organizer
+`--notes` accepts up to 200 characters. `--highlight` accepts `none`, `red`, `orange`, `yellow`, `green`, `cyan`, `blue`, `pink`, `magenta`, or `gray`.
+
+### Push fuzz matches to the Organizer
+
+Fuzz through Burp's engine and let every **matched** anomaly land in the Organizer automatically — Burp re-issues each one, so the stored item carries its own response:
+
+```bash
 vigolium fuzz 'https://acme.test/api?id=FUZZ' -w ~/wordlists/ids.txt \
               --match-status-code 200 \
               --burp-bridge-url http://127.0.0.1:9009 --send-via-burp --matches-to-organizer
+```
 
-# Hand a finding's evidence request+response to Burp's Organizer for manual confirmation
+Only results that survive your matchers and excludes are pushed, so tighten `--match-*` / `--exclude-*` before pointing a big wordlist at it. See [`vigolium fuzz`](/others/cli-references#fuzz) for the full matcher set.
+
+### Push findings to the Organizer
+
+`--push-to-burp` hands a finding's evidence request and response to the Organizer, colour-coded by severity, one item per finding. It honours the usual `finding` selectors — a fuzzy term, `--id`, `--severity`, `--min-severity`:
+
+```bash
+# Every XSS finding's evidence, into the Organizer
 vigolium finding xss --push-to-burp --burp-bridge-url http://127.0.0.1:9009
 
-# Open a finding in a Repeater tab and re-issue it through Burp to capture a fresh response
-vigolium finding --finding-id 42 --to-repeater --send-via-burp \
+# High-and-above, re-issued through Burp to capture fresh responses
+vigolium finding --min-severity high --push-to-burp --send-via-burp \
                  --burp-bridge-url http://127.0.0.1:9009
 ```
+
+### Flag reference
 
 | Flag | Commands | What it does |
 |------|----------|--------------|
 | `--send-via-burp` | `replay`, `fuzz`, `finding` | Issue the request through Burp's HTTP stack (exact bytes preserved) instead of Go's client |
 | `--http-mode` | `replay`, `fuzz`, `finding` | Wire protocol for `--send-via-burp`: `auto` (default), `http1`, `http2`, `http2_ignore_alpn`. Use `http1` for request smuggling / desync |
+| `--send-timeout` | `replay`, `fuzz` | Per-request response timeout, max 2 minutes (bridge default 30s) |
 | `--to-repeater` | `replay`, `finding` | Stage the request in a Burp Repeater tab (`--repeater-tab <name>` on `replay`, default `vigolium`) |
 | `--to-organizer` | `replay` | Store the request + response in Burp's Organizer (`--notes <=200 chars>`, `--highlight <colour>`) |
 | `--matches-to-organizer` | `fuzz` | Push each **matched** result's request into Burp's Organizer (Burp re-issues it) for triage |
 | `--push-to-burp` | `finding` | Push the selected finding(s)' evidence request+response into Burp's Organizer, severity-coloured |
-
-<Callout icon="triangle-exclamation" color="#f59e0b" iconType="regular">
-  Burp caps Repeater at ~30 tabs/minute. For a large batch of findings prefer `--push-to-burp` (Organizer, one item per finding) over `--to-repeater`.
-</Callout>
-
-`--highlight` accepts `none`, `red`, `orange`, `yellow`, `green`, `cyan`, `blue`, `pink`, `magenta`, or `gray`. A per-request send timeout is available via `--send-timeout` on `replay` and `fuzz` (capped at 2 minutes; the bridge's 30s default otherwise).
 
 ## Under the hood
 

@@ -347,6 +347,9 @@ vigolium agent swarm -t https://app.example.com \
 | `--source` | Source-code path (or git URL); enables source analysis + code-audit |
 | `--code-audit` | Force code audit (auto-on with `--source` for balanced/deep) |
 | `--discover` | Run native discovery before planning |
+| `--all-records` | Plan from every HTTP record already in the active project |
+| `--records-from` | Filter project records by spec — `host=`, `status=`, `method=`, `path=`, `since=` (comma-separated) |
+| `--max-plan-records` | Cap on records sent to the plan agent, one slot per URL prefix (intensity sets it: quick 10, balanced 25, deep 50; `0` = no limit) |
 | `--triage` | Enable verify-and-rescan loop |
 | `--skill` | Force-load these skills by name into triage, bypassing planner selection (repeatable or comma-separated) |
 | `--skill-tag` | Force-load every skill carrying one of these tags into triage (e.g. `xss,idor`) |
@@ -367,6 +370,11 @@ vigolium agent swarm -t https://app.example.com \
 | `--headed` | Hidden debugging flag that shows browser windows |
 | `--upload-results` | Upload session bundle to cloud storage on completion |
 | `--provider`, `--model`, `--oauth-cred`, `--oauth-token`, `--llm-api-key` | Olium provider overrides |
+| `--gcp-project`, `--gcp-location` | GCP project / region for the Vertex providers (else `$GOOGLE_CLOUD_PROJECT` / `$GOOGLE_CLOUD_LOCATION`, then config, then `us-central1`) |
+| `--probe-concurrency`, `--probe-timeout`, `--max-probe-body` | Probing stage limits (defaults: 10 parallel, 10s per request, 2 MB body) |
+| `--sub-agent-concurrency` | Parallel source-analysis sub-agents — routes, auth, extensions (default 3) |
+| `--max-master-retries` | Master-agent retries on a parse failure (default 3) |
+| `--disable-guardrail` | Skip the prompt-safety classifier on the natural-language prompt |
 
 The CLI no longer exposes `--focus`, `--instruction`, `--instruction-file`, `--browser`, or `--credentials`. Use `--prompt` (or the positional prompt) for broad guidance and login details. Browser tooling is always enabled for swarm. The REST schema retains its structured focus, instruction, browser, and credential fields.
 

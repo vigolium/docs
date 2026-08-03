@@ -21,6 +21,31 @@ The global `--soft-fail` flag forces an exit code of `0` even when a command fai
 vigolium scan -t https://example.com --soft-fail
 ```
 
+### Global flags
+
+These work on every command (run `vigolium --help` for the authoritative list):
+
+| Flag | What it does |
+|---|---|
+| `-j, --json` | Machine-readable JSON for agent / programmatic use (compact bodies; pairs with `--fields` / `--compact` / `--full-body`) |
+| `-v, --verbose` / `--debug` | Verbose logging / debug-level logging (debug also prints outgoing HTTP request lines) |
+| `--silent` | Suppress everything except findings |
+| `--dump-traffic` | Print every request/response pair to stderr, Burp-style (bypasses the logger) |
+| `--log-file <path>` | Write all log output to a file, in JSON |
+| `--no-color` | Disable ANSI colour everywhere (also honoured via `NO_COLOR`) |
+| `--width <n>` | Maximum column width for table output (default `70`) |
+| `--ci-output-format` | CI-friendly output: JSONL findings only, no colour, no banners |
+| `--config <path>` / `--db <path>` | Override the config file / SQLite database path |
+| `--project-uuid` / `--project-name` | Scope every operation to a project (see [Projects](/others/projects)) |
+| `--scan-uuid <uuid>` | Pin the scan UUID for this session — use it to sync results across nodes |
+| `--proxy <url>` | Route all requests through an HTTP/SOCKS5 proxy |
+| `--format <list>` | Output format(s): `console`, `jsonl`, `html`, `sqlite`, `fs` |
+| `--ext <file>` / `--ext-dir <dir>` | Load a JavaScript extension / override the extension directory |
+| `--mem-limit <size>` | Soft heap ceiling (`GOMEMLIMIT`) for scans: empty = auto (⅓ of RAM, scaled down by `-P/--parallel`), `off`, or an explicit `6GiB` / `50%`. An existing `GOMEMLIMIT` env var wins. |
+| `--force` | Skip confirmation prompts |
+| `--skip-dependency-check` | Skip the first-run dependency check (chromium, nuclei templates) and stamp `~/.vigolium/initialized` |
+| `--soft-fail` | Always exit `0` (see above) |
+
 <Note>
 Mistype a long flag and Vigolium suggests the nearest match instead of a bare "unknown flag" error — e.g. `--module` yields `unknown flag: --module. Did you mean --modules? (run 'vigolium scan --help' for all flags)`. Added in v0.3.0.
 </Note>
@@ -51,7 +76,7 @@ vigolium scan -t https://example.com --only dynamic-assessment
 vigolium scan -t https://example.com --skip discovery,spidering
 
 # Module selection
-vigolium scan -t https://example.com -m xss-reflected,sqli-error
+vigolium scan -t https://example.com -m xss-light-url-params,sqli-error-based
 vigolium scan -t https://example.com --module-tag spring --module-tag injection
 
 # Output and reporting
@@ -96,6 +121,24 @@ The repeatable "opaque" flags — `-H/--header`, `--auth`, `--auth-file`, `-t/--
 **Speed control — WAF-aware pacing.** The per-host rate limiter now **proactively pre-throttles** a host the first time earlier-phase traffic fingerprints it behind a recognized CDN/WAF edge (CloudFront, Cloudflare, Akamai, Imperva/Incapsula, Sucuri, or Azure Front Door — detected from headers on ordinary 200s), dropping that host's concurrency to `MaxPerHost/4` and ramping back up on healthy responses. This keeps an aggressive active phase from bursting the edge into a rate-based block that would hide findings. A one-time-per-host `[waf-pacing-armed]` notice prints the drop (e.g. `40→10`) to stderr and the session log. `--no-waf-pacing` disables this **proactive** pacing; the **reactive** back-off after a *confirmed* WAF block still applies. It's a Speed Control flag, available on `scan` / `scan-url` / `scan-request` / `run` / `ingest`.
 
 **Discovery — alternate-port sweep.** `--port-sweep-ports` overrides the alternate HTTP(S) ports swept on the CLI target hosts (comma-separated). The sweep runs when `--intensity deep` is set or `--follow-subdomains` is on, so a host reachable on `8080`/`8443` (or any port you list) is discovered and scanned alongside the standard `80`/`443`.
+
+### Less common scan flags
+
+Available on `scan` / `run` (and, where relevant, `scan-url` / `scan-request`):
+
+| Flag | What it does |
+|---|---|
+| `--stats` | Print live progress stats while scanning |
+| `-a, --advanced-options k=v` | Module-specific options, repeatable — e.g. `-a xss.dom=true` |
+| `--no-clustering` | Disable deduplication of identical concurrent HTTP requests |
+| `--stream` | Process targets as a stream, without buffering or deduplication |
+| `--no-prefix-breaker` | Disable the per-prefix circuit breaker that stops discovery recursing into trap directories |
+| `--known-issue-scan-exclude-tags` | Nuclei template tags to **exclude** (the inverse of `--known-issue-scan-tags`) |
+| `--report-url <url>` | URL behind the "Raw Report URL" button in HTML reports (overrides `VIGOLIUM_REPORT_SHARED_URL`) |
+| `--input-read-timeout <dur>` | Timeout for reading input from stdin or a file (default `3m`) |
+| `--spec-default <value>` | Fallback value for required OpenAPI parameters that ship no example (default `1`) |
+| `--required-only` | Parse only required fields from the input format, ignoring optional ones |
+| `--skip-format-validation` | Skip validation of the input file's format |
 
 ### Parallel & isolated scans
 
@@ -189,9 +232,22 @@ vigolium server --ingest-proxy-port 9003 --proxy-mitm --proxy-insecure   # skip 
 
 # Export the MITM CA certificate and exit (generates it if needed)
 vigolium server --export-ca ./vigolium-ca.pem
+
+# Narrowed deployments
+vigolium server --view-only                                  # Read-only: no scanning, ingestion, agent, or write endpoints
+vigolium server --no-agent                                   # Disable every agent endpoint (and warm-session pooling)
+vigolium server --no-swagger                                 # Disable the Swagger UI and API spec endpoint
+vigolium server --demo-only                                  # Expose only the demo read allowlist
+vigolium server --alternative-ingest-key k1 --alternative-ingest-key k2   # Extra ingestion-only API keys
 ```
 
 See [Transparent Proxy](/server-mode/proxy) for the full MITM workflow.
+
+**Narrowing the exposed surface.** `--view-only` is the strictest: the server answers reads and nothing else — scanning, ingestion, agent runs, and every write endpoint are refused. `--no-agent` keeps the scanner and ingestion but removes all `/api/agent/*` routes plus agent subprocess warm-session pooling (`--disable-warm-session` turns off only the pooling, keeping the endpoints). `--no-swagger` drops the Swagger UI and the spec route. `--demo-only` exposes just a read allowlist — `GET /api/findings[/:id]`, `/api/http-records[/:uuid]`, `/api/modules`, `/api/stats`, `/api/extensions[/:name|/docs]` — for a public demo instance. `--alternative-ingest-key` (repeatable) adds extra API keys accepted **only** on the ingestion endpoints, so a collector can push traffic without holding the main key.
+
+<Note>
+  `--catchup-threads` and `--disable-catchup` are deprecated no-ops kept for compatibility — catch-up scanning is disabled. They still appear in `--help` and in older examples.
+</Note>
 
 `--burp-bridge-url <url>` points the server at a running Burp Suite's loopback **live bridge** (default listener `http://127.0.0.1:9009`, exposed by the [`burp-vigolium`](https://github.com/vigolium/burp-vigolium) extension) and merges Burp's live Proxy rows into `GET /api/http-records` — labelled `source: burp` — for the UI and API. The flag also reads the `VIGOLIUM_BURP_BRIDGE_URL` env var as a fallback. See [Using Vigolium with Burp Suite](/getting-started/burp-suite) for bridge setup.
 
@@ -261,16 +317,35 @@ vigolium db reset --force                          # delete + recreate the DB fi
 
 **Exclude filters.** `--exclude-search` / `--exclude-header` / `--exclude-body` (on `finding` and `traffic`) are the inverse of `--search` / `--header` / `--body`: they **drop** any row where the term appears. `--exclude-search` is repeatable, and a row is dropped if **any** term matches (contrast `--search`, whose repeated terms AND-narrow the kept set).
 
+**Source, risk & remark filters.** `--finding-source` (on `finding` and `db list`) filters findings by where they came from — `dynamic-assessment`, `spa`, `agent`, `oast`, `source-tools`, or `extension`. On `db list`, `--min-risk <n>` keeps only records whose risk score is at or above `n`, and `--remark <text>` matches text in a record's remarks.
+
+```bash
+vigolium finding --finding-source agent          # only findings an agent run produced
+vigolium finding --finding-source oast           # only out-of-band callback confirmations
+vigolium db ls --min-risk 70                     # high-risk records first
+vigolium db ls --remark 'admin panel'
+```
+
+**Interactive TUI.** `finding`, `traffic`, `log ls`, `project list`, and `agent session` all take `--tui` to open an interactive browser (arrow keys navigate, enter opens details, `c` copies the id). `--no-tui` forces it off — an escape hatch for scripts, in case the TUI ever becomes the default for a command.
+
+**Importing findings.** `vigolium finding load` ingests findings from JSON, JSONL, or markdown-wrapped agent output, auto-detecting the shape (an agent `{"findings": [...]}` envelope, a single finding object, `ResultEvent` JSONL, or raw database findings). It reads a positional path, `--finding-file <path>`, or stdin, and `--scan-uuid` associates the import with a scan:
+
+```bash
+vigolium finding load findings.jsonl
+vigolium agent query --prompt-template review | vigolium finding load
+vigolium finding load --finding-file agent-output.json --scan-uuid 6f1c2b90-8b1e-4a6c-9d2f-5c7a1e3b9d40
+```
+
 **Live Burp bridge.** With a running Burp Suite exposing the loopback bridge (default listener `http://127.0.0.1:9009`, from the [`burp-vigolium`](https://github.com/vigolium/burp-vigolium) extension; env fallback `VIGOLIUM_BURP_BRIDGE_URL`), `vigolium traffic --burp-bridge-url <url>` merges Burp's live Proxy history into the traffic view. Add `--save-to-vigolium-db` to persist those bridge rows into the DB (the current page, or every match with `--all`), or `--save-to-burp` to copy DB traffic **into** Burp's Target Site map (the two `--save-to-*` flags are mutually exclusive). See [Using Vigolium with Burp Suite](/getting-started/burp-suite) for bridge setup.
 
-**Push findings to Burp.** `vigolium finding --push-to-burp` (paired with `--burp-bridge-url`) hands the selected finding(s)' evidence request+response to Burp's Organizer — severity-coloured, one item per finding — for manual confirmation. `--to-repeater` opens the finding's request in a Repeater tab instead (Burp caps Repeater at ~30 tabs/min, so prefer `--push-to-burp` for a large selection), and `--send-via-burp` re-issues the request through Burp's engine to capture a fresh response (with `--http-mode auto|http1|http2|http2_ignore_alpn`). These honour the usual `finding` selectors (`--severity`, `--min-severity`, a fuzzy term, `--finding-id`).
+**Push findings to Burp.** `vigolium finding --push-to-burp` (paired with `--burp-bridge-url`) hands the selected finding(s)' evidence request+response to Burp's Organizer — severity-coloured, one item per finding — for manual confirmation. `--to-repeater` opens the finding's request in a Repeater tab instead (Burp caps Repeater at ~30 tabs/min, so prefer `--push-to-burp` for a large selection), and `--send-via-burp` re-issues the request through Burp's engine to capture a fresh response (with `--http-mode auto|http1|http2|http2_ignore_alpn`). These honour the usual `finding` selectors (`--severity`, `--min-severity`, a fuzzy term, `--id`).
 
 ```bash
 # Push all XSS findings' evidence into Burp's Organizer for manual confirmation
 vigolium finding xss --push-to-burp --burp-bridge-url http://127.0.0.1:9009
 
 # Open one finding in a Repeater tab and re-issue it through Burp for a fresh response
-vigolium finding --finding-id 42 --to-repeater --send-via-burp \
+vigolium finding --id 42 --to-repeater --send-via-burp \
                  --burp-bridge-url http://127.0.0.1:9009
 ```
 
@@ -306,6 +381,8 @@ vigolium import --burp-bridge-url http://127.0.0.1:9009
 
 `--burp-bridge-url <url>` turns `import` into a one-shot persist of **all** of a running Burp's live Proxy history into the database (default listener `http://127.0.0.1:9009`; env fallback `VIGOLIUM_BURP_BRIDGE_URL`). It's an import *source*, so it cannot be combined with path arguments or `--glob-db`. See [Using Vigolium with Burp Suite](/getting-started/burp-suite).
 
+**Report metadata.** When `import` / `export` render an HTML report, three flags fill in header fields the source data can't supply: `--report-url <url>` sets the target of the report's "Raw Report URL" button (overriding `VIGOLIUM_REPORT_SHARED_URL`; also available on `scan` / `run`), `--report-duration "10h42m5s"` states the scan duration, and `--report-generated-at 2026-08-01T03:00:00Z` stamps the generation time. `import --upload` pushes the artifact to cloud storage, with `--upload-key` overriding the default `imports/<basename>-<ts>.<ext>` object key.
+
 A **SQLite database input** (detected by its magic header, any extension) is a lossless, idempotent SQLite→SQLite merge: HTTP records, findings, scans, agentic scans, OAST interactions, and projects are deduped on their natural keys, and each row keeps its original project. Re-importing the same database adds nothing the second time. The destination is the `--db` target (or the configured default database when `--db` is omitted). Add `-j/--json` to print a per-table merge summary (rows inserted vs. skipped). This pairs with `scan -S --format sqlite`: fan out per-host `.sqlite` files, then merge them back into one queryable DB.
 
 ## Replay
@@ -328,6 +405,7 @@ vigolium replay -i "curl -X POST https://example.com/api/login -d 'u=admin'"
 # Multi-step auth via a persistent cookie jar
 vigolium replay --session-id login -i curl-login.sh
 vigolium replay --session-id login --record-uuid <action-uuid>
+vigolium replay --record-uuid <uuid> --no-cookies   # send with no cookies (overrides --session-id)
 
 # Confirm against a different environment than the baseline
 vigolium replay --record-uuid abc12345 --target https://staging.example.com \
@@ -414,13 +492,13 @@ vigolium fuzz 'https://acme.test/api?id=FUZZ' -w ~/wordlists/ids.txt -j
 vigolium fuzz 'https://acme.test/admin/FUZZ' -w dir-short --match-status-code 200,301 --fail-on-match
 ```
 
-**Source** (one of): a positional URL (with `-X`/`-H`/`-d` to build the request), `-i/--input` (curl, raw HTTP, Burp XML, base64, URL, or `-` for stdin), `-u/--record-uuid` (a stored HTTP record), or a request piped on stdin. `-t/--target` overrides the scheme/host/port the request is actually sent to.
+**Source** (one of): a positional URL (with `-X/--request`, `-H/--header`, and `-d/--data` to build the method, headers, and body), `-i/--input` (curl, raw HTTP, Burp XML, base64, URL, or `-` for stdin; `--input-file` reads that same value from a file), `-u/--record-uuid` (a stored HTTP record), or a request piped on stdin. `-t/--target` overrides the scheme/host/port the request is actually sent to.
 
 **Positions** (what to fuzz): a literal `FUZZ` marker anywhere in the request (request line, path, header, or body) wins if present; otherwise `--fuzz method|path|params|param-name|headers|cookies|all` (default: all discovered insertion points), `--point TYPE:name` (e.g. `URL_PARAM:id`, repeatable), or `--fuzz-header <name>` (repeatable). The marker keyword is configurable with `--keyword`.
 
 **Payloads** (combine freely): `--class` selects a built-in vulnerability class — `xss`, `sqli`, `ssti`, `ssrf`, `lfi`, `path_traversal`, `xxe`, `cmdi`, `open_redirect`, `crlf` (aliases like `traversal`, `rce`, `sql`, `template` accepted); `-w/--wordlist` takes a builtin name (`fuzz`, `dir-short`, `dir-long`, `file-short`, `file-long`) **or** a file path (repeatable); `-p/--payload` adds an inline literal (repeatable).
 
-**Matchers & excludes.** Matchers **keep** a response (OR-combined; empty keeps all): `--match-status-code` (accepts `all`), `--match-size`, `--match-words`, `--match-lines`, `--match-regex`, `--match-time` (ms). Each has an `--exclude-*` counterpart that **drops** a response. Auto-calibration (on by default) probes the target's wildcard/catch-all and suppresses matches identical to it — suppressed results carry `"calibrated":true`; disable it with `--no-calibrate`.
+**Matchers & excludes.** Matchers **keep** a response (OR-combined; empty keeps all): `--match-status-code` (accepts `all`), `--match-size`, `--match-words`, `--match-lines`, `--match-regex`, `--match-time` (ms). Each has an `--exclude-*` counterpart that **drops** a response — `--exclude-status-code`, `--exclude-size`, `--exclude-words`, `--exclude-lines`, `--exclude-regex`, `--exclude-time`. Auto-calibration (on by default) probes the target's wildcard/catch-all and suppresses matches identical to it — suppressed results carry `"calibrated":true`; disable it with `--no-calibrate`.
 
 **Output.** Default is JSONL (one object per send) to stdout — matched-only unless `--all-results`; `--pretty` renders a human-readable table, `-o/--output` writes to a file. Under `-j/--json`, the JSONL streams to **stderr** and a single summary object prints to stdout: `{target, sent, matched, calibrated, baseline, top_results (ranked anomalies), query (a ready scan-request confirmation)}` — a handle a coding agent can act on directly. `--fail-on-match` exits `3` when any result matches, for CI/agent gating. Throttle with `-c/--concurrency` (default 10) and `--delay <ms>`; `--timeout` sets the per-request timeout and `--no-redirects` stops following 30x. Honors `HTTP_PROXY`/`HTTPS_PROXY` for Burp inspection.
 
@@ -435,9 +513,8 @@ vigolium fuzz 'https://acme.test/admin/FUZZ' -w dir-short --match-status-code 20
 Inspect scanning strategy presets and the phases that make up a scan.
 
 ```bash
-vigolium strategy
-vigolium strategy ls
-vigolium phase
+vigolium strategy          # strategies, intensities, phases, and agent modes
+vigolium phase             # alias for `vigolium strategy`
 ```
 
 ## Modules
@@ -446,11 +523,18 @@ Manage the active and passive scanner modules.
 
 ```bash
 vigolium module ls
-vigolium module ls xss             # Search by keyword
+vigolium module ls xss             # Search by keyword (matches id, name, description, or tag)
+vigolium module ls --type active   # Active or passive only
+vigolium module ls --list-enabled  # Only modules currently enabled in your config
+vigolium module ls --tags          # Dump every unique module tag
+vigolium module ls xss -v          # Long descriptions + confirmation criteria
 vigolium module enable xss
+vigolium module enable sqli-error-based --id   # Exact module ID instead of fuzzy match
 vigolium module disable sqli
 vigolium scan -M                   # List all modules from the scan command
 ```
+
+Module IDs carry no `active-` / `passive-` prefix — the id in `vigolium module ls` is exactly what `-m` / `--module-id` expects. See the [Scanner Modules Reference](/native-scan/modules-reference) for the full table.
 
 ## Skills
 
@@ -463,6 +547,8 @@ vigolium skills install                           # Install vigolium-scanner for
 vigolium skills install --agent codex --scope global   # --agent claude|codex|agents, --scope project|global
 vigolium skills install --all                     # Install every bundled skill
 vigolium skills install --dir ./.claude/skills    # Override the destination directory
+vigolium skills --third-party-skills              # Also list vendored third-party skills (e.g. agent-browser)
+vigolium skills install --all --third-party-skills   # ...and include them in --all
 ```
 
 ## Extensions
@@ -479,7 +565,14 @@ vigolium ext example js-active-insertion   # Print a single example by its catal
 vigolium ext example --lang yaml           # Restrict to one language
 vigolium ext eval 'vigolium.log("hello")'
 vigolium ext eval --ext-file script.js
+
+# Run ad-hoc JavaScript against the full vigolium.* API
+echo 'vigolium.log(vigolium.payloads("xss").length)' | vigolium js
+vigolium js --code 'vigolium.log("hello")'
+vigolium js --code-file script.js --target https://example.com --timeout 60s
 ```
+
+`vigolium js` executes a script with the whole `vigolium.*` API in scope. It reads stdin by default; `--code` takes an inline string and `--code-file` a `.js`/`.ts` path. `--target` seeds the `TARGET` variable, `--timeout` bounds execution (default `30s`), and `--format json|text` picks the output shape.
 
 ## Scope
 
@@ -504,6 +597,17 @@ vigolium agent query --agent-label code-review --prompt-file custom-prompt.md
 vigolium agent --list-templates
 ```
 
+### `agent triage`: confirm or retire one finding
+
+```bash
+vigolium agent triage 42                      # triage finding id 42
+vigolium agent triage 42 --max-duration 10m
+vigolium agent triage 42 --dry-run            # render the prompt, don't call the agent or write
+vigolium agent triage 42 --show-prompt -v     # print the prompt, show per-tool result previews
+```
+
+Picks one stored finding and asks an agent whether it's real. The agent reads the finding's description and captured request/response, may re-probe the live target with its HTTP tool, and writes back a verdict plus reasoning. A `false_positive` verdict **downgrades the finding's severity to `info`** and appends the reasoning to its description, so the original detection context survives. `--max-duration` defaults to `5m` (`0` = no limit). It takes the same olium provider overrides as the other agent subcommands.
+
 ### `agent swarm`: AI-guided multi-phase scan
 
 ```bash
@@ -527,9 +631,18 @@ vigolium agent swarm -t https://example.com --discover --no-skill-filter
 # Olium provider/model overrides (same set as `agent autopilot` / `agent query`)
 vigolium agent swarm -t https://example.com --discover --provider anthropic-api-key --model claude-opus-4-7
 vigolium agent swarm -t https://example.com --discover --base-url http://localhost:11434/v1 --llm-api-key "$KEY"
+
+# Plan from traffic already in the project DB instead of discovering
+vigolium agent swarm -t https://example.com --all-records
+vigolium agent swarm -t https://example.com \
+  --records-from "host=example.com,status=200,method=POST,path=/api,since=2026-07-01"
 ```
 
-`agent swarm` accepts the olium override flags `--provider`, `--model`, `--base-url`, `--llm-api-key`, `--oauth-cred`, and `--oauth-token`; each falls back to `agent.olium.*`. `--prompt` and the positional `[prompt]` are the same task-guidance slot and stay verbatim when structured target/source flags are also present.
+`agent swarm` accepts the olium override flags `--provider`, `--model`, `--base-url`, `--llm-api-key`, `--oauth-cred`, and `--oauth-token`; each falls back to `agent.olium.*`. For the Vertex providers, `--gcp-project` and `--gcp-location` set the GCP project and region (falling back to `$GOOGLE_CLOUD_PROJECT` / `$GOOGLE_CLOUD_LOCATION`, then `agent.olium.google_cloud_*`, then `us-central1`). `--prompt` and the positional `[prompt]` are the same task-guidance slot and stay verbatim when structured target/source flags are also present.
+
+**Choosing the input records.** Without `--discover`, swarm plans from the traffic it's given: `--all-records` uses every HTTP record in the active project, and `--records-from` filters them by a spec string (`host=`, `status=`, `method=`, `path=`, `since=`, comma-separated). `--max-plan-records` caps how many reach the plan agent — it selects the most interesting with one slot per URL prefix, and `--intensity` overrides the default (quick `10`, balanced `25`, deep `50`; `0` = no limit).
+
+**Tuning the run.** `--probe-concurrency` (default 10), `--probe-timeout` (default 10s), and `--max-probe-body` (default 2 MB) bound the probing stage; `--sub-agent-concurrency` (default 3) caps parallel source-analysis sub-agents (routes, auth, extensions); `--max-master-retries` (default 3) is how many times a master-agent parse failure is retried. `--disable-guardrail` skips the prompt-safety classifier on the natural-language prompt — use it only when a known-good prompt is being refused.
 
 ### `agent autopilot`: autonomous agentic scan
 
@@ -599,6 +712,10 @@ vigolium agent autopilot -t https://example.com --source ./src --show-prompt
 
 Autopilot and swarm no longer expose CLI flags named `--focus`, `--instruction`, `--instruction-file`, `--browser`, or `--credentials`. Put those details in `--prompt`. The REST agent endpoints keep structured equivalents for API clients.
 
+**Knowledge base.** `--knowledge-base <file|dir>` front-loads operator-supplied docs about the app. Prose (markdown / txt / rst) is LLM-distilled into a compact brief plus a document index, with the full documents left on disk for the agent to read on demand. **HTTP-traffic exports found in the same path — HAR, Burp XML, curl, OpenAPI/Swagger, Postman, URL lists, raw HTTP — are auto-detected, parsed, and ingested into the project database as normal traffic** (`source=knowledge-base`), with a sample folded into the brief. So a knowledge base can seed the agent with real requests, not just prose. `--knowledge-base-no-traffic` turns that off and treats every file as prose; `--knowledge-base-raw` skips the LLM distillation and inlines the deterministic index only (offline / reproducible runs). Both are no-ops without `--knowledge-base`.
+
+**Other autopilot controls.** `--disable-guardrail` skips the prompt-safety classifier on the natural-language prompt (only when a known-good prompt is being refused). `--post-halt-gap-threshold <n>` sets how many new `(method, URL)` routes the post-halt probe must turn up before the agent is re-entered (`0` = the built-in default of 5).
+
 ### `agent audit`: unified source audit (vigolium-audit + piolium)
 
 Runs the vigolium-audit harness and/or piolium against a single source tree under one AgenticScan, with per-driver session subdirs and a post-pass findings dedup. `vigolium-audit` is the embedded harness name; the CLI driver value is `audit`.
@@ -651,6 +768,20 @@ On `agent audit`, `--intensity deep` resolves to the `deep,confirm` mode chain (
 
 `-S/--stateless` runs the whole audit into a throwaway temp DB (your main DB is untouched, mirroring `scan -S`) and, on completion, renders a self-contained HTML report from the run's findings to `vigolium-result/vigolium-audit-report.html` (override with `-o/--output`, which supports `gs://` and `{ts}`). `--output-dir <dir>` (stateless-only) additionally bundles that report **and** a copy of each ran driver's raw `vigolium-results/` tree into one folder — a single driver lands flat at `<dir>/vigolium-results/`, multiple are namespaced under `<dir>/<driver>/`. `-S` is rejected with `--interactive`. `--keep-raw` is **on by default** for the CLI (it retains the `<source>/vigolium-results/` copy); `--clean-raw` removes that source copy after the run.
 
+**Bring-your-own-key (audit leg).** Three mutually exclusive flags supply credentials for the run without touching your config; each accepts a literal value, `$ENV_NAME`, or `@path`:
+
+```bash
+vigolium agent audit --source ./backend --api-key '$ANTHROPIC_API_KEY'
+vigolium agent audit --source ./backend --oauth-token @~/.claude/setup-token
+vigolium agent audit --source ./backend --agent codex --oauth-cred-file '$CODEX_AUTH'
+```
+
+- `--api-key` — API key for the resolved agent (claude → `ANTHROPIC_API_KEY`, codex → `OPENAI_API_KEY`). Empty inherits `agent.olium.*`.
+- `--oauth-token` — Anthropic OAuth bearer token, Claude only (produced by `claude setup-token`).
+- `--oauth-cred-file` — OAuth credential **file** (Codex `~/.codex/auth.json` shape). For piolium runs it's staged under the pi agent dir with backup-and-restore.
+
+**Run controls.** `--show-thinking` renders the agent's internal thinking blocks in the live stream (off by default — they're verbose). `--preflight-timeout <dur>` bounds the per-driver preflight check (default `30s`, applies to both `pi` and `claude`). The piolium retry knobs are `--plm-phase-retries`, `--plm-command-retries`, and `--plm-longshot-timeout` (per-file kill timer in ms, longshot mode); `0` on any of them means "use piolium's own default".
+
 ### `log`: replay an agentic session
 
 Every olium agent run (autopilot, swarm, query, `olium`) writes a Pi-compatible `transcript.jsonl`. Replay it as a rendered conversation, or dump the raw JSONL:
@@ -659,6 +790,7 @@ Every olium agent run (autopilot, swarm, query, `olium`) writes a Pi-compatible 
 vigolium log                       # Replay the most recent agentic session
 vigolium log <session-id>          # Replay a specific session
 vigolium log --raw                 # Print the raw transcript JSONL verbatim instead of the rendered replay
+vigolium log --strip-ansi > run.txt   # Strip ANSI colour codes (for piping into a file or another tool)
 ```
 
 ## Configuration

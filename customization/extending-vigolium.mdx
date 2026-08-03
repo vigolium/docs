@@ -278,18 +278,18 @@ Respond with JSON: {"findings": [...]}
 |---|---|---|
 | `SourceCode` | Gathered from `--source`/`--files` | Concatenated source code |
 | `Language` | Auto-detected | Primary language (Go, Python, JS, etc.) |
-| `Framework` | `--framework` flag | Framework hint |
+| `Framework` | Auto-detected (empty unless the engine identifies one) | Framework hint |
 | `FilePath` | Gathered | Primary file path |
 | `SourcePath` | `--source` flag | Source code root path |
 | `TargetURL` | `--target` flag | Target URL |
 | `Hostname` | Derived from target | Hostname for DB lookups |
-| `Endpoints` | `--endpoints` flag | Pre-discovered endpoints |
+| `Endpoints` | Populated by the calling mode (swarm/autopilot plan input) | Pre-discovered endpoints |
 | `PreviousFindings` | Database (JSON) | Prior findings for context |
 | `DiscoveredEndpoints` | Database (JSON) | HTTP records from DB |
 | `ModuleList` | Module registry (JSON) | Available scanner modules |
 | `ScanStats` | Database (JSON) | Aggregate scan statistics |
 | `AvailableCommands` | Hardcoded reference | CLI commands the agent can invoke |
-| `Extra` | `--extra` flag | Custom key-value pairs |
+| `Extra` | Filled in by the calling mode (e.g. `agent triage`) | Custom key-value pairs |
 
 Only variables listed in the frontmatter `variables` array trigger database queries, keeping prompts fast.
 

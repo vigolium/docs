@@ -10,10 +10,10 @@ Vigolium supports project-based data isolation. Every scan record, finding, scop
 
 | Concept | Meaning |
 |---------|---------|
-| **Project** | A named container for all scan data. Has a UUID, name, description, optional access-control lists, and an optional per-project config overlay. |
+| **Project** | A named container for all scan data. Has a UUID, name, description, optional owner, and an optional per-project config overlay. |
 | **Default project** | A built-in project (`00000000-0000-0000-0000-000000000001`) created during `vigolium init`. All data belongs to it unless you specify otherwise. |
 | **Project config** | An optional YAML overlay at `~/.vigolium/projects/<uuid>/config.yaml` that merges on top of the global config. |
-| **Access control** | `allowed_domains` (email-domain patterns like `@acme.com`) and `allowed_emails` (exact addresses) that gate who can access the project. See [Access Control](#access-control). |
+| **Scoping** | The `--project-uuid` / `--project-name` flags and the `VIGOLIUM_PROJECT_UUID` env var scope CLI operations; the `X-Project-UUID` header scopes server API operations. |
 
 ## Managing Projects from the CLI
 
@@ -58,20 +58,6 @@ vigolium project config
 vigolium project config a1b2c3d4-...
 ```
 
-### Manage project access
-
-```bash
-# Add allowed domains and emails (auto-detected by format)
-vigolium project allow a1b2c3d4-... @acme.com @partner.io alice@external.com
-# ✓ Added 2 domain(s) and 1 email(s) to project my-engagement
-
-# @-prefixed values go to domains, the rest to emails
-vigolium project allow a1b2c3d4-... @newdomain.io bob@contractor.com
-
-# Remove entries from both lists
-vigolium project remove-access a1b2c3d4-... @partner.io alice@external.com
-```
-
 ### Delete a project
 
 ```bash
@@ -90,7 +76,7 @@ vigolium project delete a1b2c3d4-... --keep-config -F
 Deletion removes all scan data scoped to the project (scans, HTTP records, findings, scopes, OAST interactions). By default the project's config directory (`~/.vigolium/projects/<uuid>/`) is removed too; `--keep-config` leaves it in place.
 
 <Callout icon="lock" color="#f59e0b" iconType="regular">
-  Set `VIGOLIUM_PROJECT_READONLY=true` to disable all mutating project commands (`create`, `allow`, `remove-access`) from the CLI. Read-only commands (`list`, `use`, `config`) still work. Useful in production or shared environments where projects should only be managed through the REST API.
+  Set `VIGOLIUM_PROJECT_READONLY=true` to disable the mutating project commands (`create`, `delete`) from the CLI. Read-only commands (`list`, `use`, `config`) still work. Useful in production or shared environments where projects should only be managed through the REST API.
 </Callout>
 
 ## Scoping Operations to a Project
@@ -169,41 +155,42 @@ dynamic-assessment:
 
 See [Configuration](/getting-started/configuration) for the full set of config sections.
 
-## Access Control
+## Scoping and the Projects API
 
-Projects can restrict access by email domain or exact email address using the `allowed_domains` and `allowed_emails` fields.
+A project is a data boundary, not an authentication boundary — Vigolium does not gate project access per user. Authentication is the server's own API key / bearer token (see [Authentication](/api-references/authentication)); anyone holding it can address any project. Run separate servers, or separate databases, when engagements must not share an operator.
 
-### How it works
+### Selecting the active project
 
-When a request includes both `X-Project-UUID` and `X-User-Email` headers, the server checks access in this order:
+| Surface | How |
+|---|---|
+| CLI (one command) | `--project-uuid <uuid>` or `--project-name <name>` |
+| CLI (a session) | `eval $(vigolium project use <uuid>)`, which exports `VIGOLIUM_PROJECT_UUID` |
+| REST API | the `X-Project-UUID` request header |
 
-1. If `allowed_emails` is non-empty → the user's email must match exactly (case-insensitive).
-2. Otherwise, if `allowed_domains` is non-empty → the user's email domain (e.g. `@acme.com`) must match.
-3. If both lists are empty → the project is open to anyone.
-4. If `X-User-Email` is not sent → the check is skipped entirely.
-
-Denied requests receive a `403 Forbidden` response.
+Omit all three and operations land in the default project.
 
 ### Managing via API
 
 ```bash
-# Set access lists on create
+# List projects
+curl -s http://localhost:9002/api/projects -H "Authorization: Bearer $VIGOLIUM_API_KEY"
+
+# Create (admin scope) — name is required; uuid/description/owner_uuid are optional
 curl -X POST http://localhost:9002/api/projects \
-  -H "Content-Type: application/json" \
-  -d '{"name":"restricted","allowed_domains":["@acme.com"],"allowed_emails":["alice@ext.com"]}'
+  -H "Authorization: Bearer $VIGOLIUM_API_KEY" -H "Content-Type: application/json" \
+  -d '{"name":"client-engagement","description":"Q3 external assessment"}'
 
-# Update access lists
+# Read one project, or its aggregate stats
+curl -s http://localhost:9002/api/projects/a1b2c3d4-... -H "Authorization: Bearer $VIGOLIUM_API_KEY"
+curl -s http://localhost:9002/api/projects/a1b2c3d4-.../stats -H "Authorization: Bearer $VIGOLIUM_API_KEY"
+
+# Update (admin scope) — name, description, owner_uuid
 curl -X PUT http://localhost:9002/api/projects/a1b2c3d4-... \
-  -H "Content-Type: application/json" \
-  -d '{"allowed_domains":["@acme.com","@partner.io"]}'
+  -H "Authorization: Bearer $VIGOLIUM_API_KEY" -H "Content-Type: application/json" \
+  -d '{"description":"handed over to the blue team"}'
 
-# Clear restrictions (project becomes open)
-curl -X PUT http://localhost:9002/api/projects/a1b2c3d4-... \
-  -H "Content-Type: application/json" \
-  -d '{"allowed_domains":[],"allowed_emails":[]}'
-
-# Domain-to-project mapping (for frontend middleware)
-curl http://localhost:9002/api/projects/domain-map
+# Delete (admin scope) — removes the project and everything tied to it
+curl -X DELETE http://localhost:9002/api/projects/a1b2c3d4-... -H "Authorization: Bearer $VIGOLIUM_API_KEY"
 ```
 
 See the [Projects API](/api-references/projects) for the full endpoint reference.

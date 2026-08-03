@@ -128,7 +128,7 @@ vigolium import ./audit-output/ --format html -o report.html --report-title "My 
 ```
 
 <Callout icon="circle-info" color="#3B82F6" iconType="regular">
-  Imported findings are scoped to the active project (`--project` / `VIGOLIUM_PROJECT`). `import` initializes the schema on a fresh `--db` path, so it's safe as the first command against a brand-new database. Supported JSONL types are `http_record` and `finding`; other envelope types are counted and skipped.
+  Imported findings are scoped to the active project (`--project-uuid` / `VIGOLIUM_PROJECT_UUID`). `import` initializes the schema on a fresh `--db` path, so it's safe as the first command against a brand-new database. Supported JSONL types are `http_record` and `finding`; other envelope types are counted and skipped.
 </Callout>
 
 ### Merging a standalone SQLite database

@@ -27,7 +27,7 @@ Built-in defaults
 - **Default project**: `00000000-0000-0000-0000-000000000001`, created during `vigolium init`. Used whenever no project is selected.
 - **Selection precedence**: `--project-uuid` > `--project-name` > `VIGOLIUM_PROJECT_UUID` > `VIGOLIUM_PROJECT` (legacy) > default. On the server, the `X-Project-UUID` request header plays the same role.
 - **Project config** is a partial YAML overlay (same shape as a scanning profile) at `~/.vigolium/projects/<uuid>/config.yaml`; only the keys it sets are overridden.
-- **Access control**: `allowed_emails` / `allowed_domains` on the project row gate server requests that carry `X-User-Email`, exact-email list wins, else domain list, else open; a missing email header skips the check; denial is `403`. `VIGOLIUM_PROJECT_READONLY=true` disables all mutating `project` CLI subcommands.
+- **Access control**: a project is a data boundary, not an auth boundary — the server's API key authenticates, `X-Project-UUID` selects, and any authenticated caller can address any project. Isolate engagements with separate servers or databases. `VIGOLIUM_PROJECT_READONLY=true` disables the mutating `project` CLI subcommands.
 
 ### Tables carrying `project_uuid`
 

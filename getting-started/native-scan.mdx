@@ -61,8 +61,8 @@ vigolium scan-url -m sqli -m xss "https://example.com/search?q=test"
 # Filter by tag
 vigolium scan-url --module-tag injection https://example.com/api/data
 
-# Skip passive analysis and insertion-point fuzzing for the fastest result
-vigolium scan-url --no-passive --no-insertion-points https://example.com/api/data
+# Skip passive analysis for the fastest result
+vigolium scan-url --no-passive https://example.com/api/data
 ```
 
 Run a discovery/spider phase *before* the scan (these promote `scan-url` to the full pipeline and require a database, pass `--db`):

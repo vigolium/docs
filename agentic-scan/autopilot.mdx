@@ -184,6 +184,7 @@ vigolium agent autopilot -t https://staging.example.com \
 | `--prior-context` | `auto` | Existing project traffic/findings briefing: `auto` (bounded table), `summary` (one-line pointer), or `off`. |
 | `--knowledge-base` |, | Markdown/text file or directory describing auth, roles, and business logic. Adds a distilled brief plus on-demand document index. |
 | `--knowledge-base-raw` | false | Skip KB distillation and use the deterministic document index only. |
+| `--knowledge-base-no-traffic` | false | Treat every knowledge-base file as prose. By default, HTTP-traffic exports found there (HAR, Burp XML, curl, OpenAPI/Swagger, Postman, URL lists, raw HTTP) are parsed and ingested as project traffic. |
 | `--source` |, | Path to application source code (or git URL, auto-cloned). Auto-runs vigolium-audit. |
 | `--files` |, | Specific files to include (relative to `--source`) |
 | `--intensity` | `balanced` | Preset bundle: `quick` / `balanced` / `deep`. Sets the turn budget (quick=150, balanced=500, deep=1500), audit mode, browser, and pre-scan strategy |
@@ -211,6 +212,8 @@ vigolium agent autopilot -t https://staging.example.com \
 | `--system-prompt` / `--system-prompt-file` |, | Fully replace the built-in autopilot system prompt; the file takes precedence. |
 | `--dry-run` | false | Render prompt without launching agent |
 | `--show-prompt` | false | Print rendered prompt to stderr before executing |
+| `--disable-guardrail` | false | Skip the prompt-safety classifier on the natural-language prompt (use only when a known-good prompt is refused) |
+| `--post-halt-gap-threshold` | 5 | New `(method, URL)` routes the post-halt probe must find before the agent is re-entered (`0` = built-in default) |
 
 The CLI no longer exposes `--focus`, `--instruction`, `--instruction-file`, `--browser`, `--credentials`, or the other auth-intent flags. Put that information in `--prompt` (or the positional prompt). Browser tooling is always available, and the intent parser extracts login details and browser requirements. The REST API keeps its structured `focus`, `instruction`, `browser`, and credential fields for programmatic callers.
 
@@ -406,6 +409,8 @@ Pass `--burp-bridge-url http://127.0.0.1:9009` (or set `VIGOLIUM_BURP_BRIDGE_URL
 The default path uses one bounded, tool-less LLM call to produce a compact briefing. The opening prompt receives that summary plus an authoritative path index; full documents stay on disk for `read_file` and `grep` on demand. Distillation failure is non-fatal and falls back to the deterministic index. The result is cached as `knowledge-base-brief.md` for provenance and resume reuse.
 
 Use `--knowledge-base-raw` to skip the distillation call and include only the deterministic index. This is useful for offline or reproducible runs.
+
+**Traffic files in a knowledge base are ingested, not summarised.** If the path also holds HTTP-traffic exports — HAR, Burp XML, curl commands, OpenAPI/Swagger, Postman collections, URL lists, or raw HTTP — they are auto-detected, parsed, and written into the project database as normal traffic with `source=knowledge-base`, and a sample is folded into the brief. The operator then sees them as real records it can replay and scan, not as prose it has to interpret. Pass `--knowledge-base-no-traffic` to disable that and treat every file as documentation instead.
 
 ---
 

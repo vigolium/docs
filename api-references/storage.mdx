@@ -199,6 +199,34 @@ Results are uploaded to:
 
 The `storage_url` field on the Scan / AgenticScan DB record is updated with the `gs://` URL after upload.
 
+### Managing objects with `vigolium storage`
+
+The `storage` subcommands operate on the active project's bucket prefix:
+
+```bash
+vigolium storage ls                                  # list objects for the active project
+vigolium storage ls --prefix ugc/ --tree             # limit to a key prefix, render as a tree
+vigolium storage upload ./source.tar.gz              # → ugc/source.tar.gz
+vigolium storage upload ./report.html --key reports/latest.html --content-type text/html
+vigolium storage download ugc/source.tar.gz -o ./source.tar.gz
+vigolium storage results <scan-uuid>                 # fetch a scan's result bundle
+vigolium storage presign --key ugc/source.tar.gz --method PUT --expiry 24h
+vigolium storage rm ugc/old.tar.gz ugc/older.tar.gz
+```
+
+| Flag | Command | What it does |
+|---|---|---|
+| `--prefix <key>` | `ls` | Limit results to keys under this prefix |
+| `--tree` | `ls` | Render objects as a directory tree instead of a flat list |
+| `--key <key>` | `upload`, `presign` | Object key (`upload` defaults to `ugc/<basename>`; required on `presign`) |
+| `--content-type <ct>` | `upload` | Content-Type to set on the uploaded object |
+| `--method GET\|PUT` | `presign` | Direction of the presigned URL (default `GET`) |
+| `--expiry <dur>` | `presign` | URL validity — `30m`, `1h`, `24h` (default `1h`) |
+| `-o, --output <path>` | `download`, `results` | Write to this file instead of stdout / the default name |
+| `--json` | `ls`, `presign` | Machine-readable output |
+
+`vigolium import` can also read straight from storage (`vigolium import gs://<project-uuid>/imports/scan.tar.gz`), and `--upload-key` overrides where an `import --upload` lands (default `imports/<basename>-<ts>.<ext>`).
+
 ---
 
 ## POST /api/storage/upload-source

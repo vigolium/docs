@@ -132,7 +132,7 @@ curl -s http://localhost:9002/swagger/doc.json | jq .info
 
 ## GET /metrics, Prometheus Metrics
 
-Returns Prometheus-formatted metrics. The route is always registered and unauthenticated; the handler gates the response on the `EnableMetrics` server flag (CLI `--enable-metrics` / config `server.enable_metrics`).
+Returns Prometheus-formatted metrics. The route is always registered and unauthenticated; the handler gates the response on the `server.enable_metrics` config key (on by default; there is no CLI flag for it).
 
 ```bash
 curl -s http://localhost:9002/metrics

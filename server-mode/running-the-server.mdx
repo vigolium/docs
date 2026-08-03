@@ -38,6 +38,36 @@ vigolium server --burp-bridge-url http://127.0.0.1:9009
 
 The server listens on `0.0.0.0:9002` by default.
 
+## Narrowing the Exposed Surface
+
+For shared, public, or demo deployments, these flags remove whole classes of endpoint rather than relying on auth alone:
+
+```bash
+vigolium server --view-only          # reads only — no scanning, ingestion, agent, or write endpoints
+vigolium server --no-agent           # drop every /api/agent/* route (and warm-session pooling)
+vigolium server --no-swagger         # drop the Swagger UI and the API spec endpoint
+vigolium server --demo-only          # expose only the demo read allowlist
+```
+
+| Flag | Effect |
+|---|---|
+| `--view-only` | Read-only mode: scanning, ingestion, agent runs, and every write endpoint are disabled |
+| `--no-agent` | Disables all agent endpoints **and** agent subprocess warm-session pooling |
+| `--disable-warm-session` | Keeps agent endpoints but turns off warm-session pooling only |
+| `--no-swagger` | Disables the Swagger UI and the API spec endpoint (config: `server.disable_swagger`) |
+| `--demo-only` | Exposes only `GET /api/findings[/:id]`, `/api/http-records[/:uuid]`, `/api/modules`, `/api/stats`, `/api/extensions[/:name\|/docs]` |
+| `--alternative-ingest-key <key>` | Extra API key accepted **only** on the ingestion endpoints (repeatable) |
+
+`--alternative-ingest-key` is how a collector (a Burp extension, a CI job, a proxy sidecar) pushes traffic without holding the main API key — issue it a dedicated ingest-only key and rotate it independently:
+
+```bash
+vigolium server --alternative-ingest-key collector-key-1 --alternative-ingest-key ci-key-2
+```
+
+<Note>
+  `--catchup-threads` and `--disable-catchup` still appear in `--help` but are deprecated no-ops — catch-up scanning is disabled.
+</Note>
+
 ## Live Filesystem Mirror
 
 `vigolium server --mirror-fs <dir>` (config `server.mirror_fs_path`) mirrors every saved HTTP record and finding to a flat filesystem tree **as it is persisted**, in addition to the database. This lets an external tool or coding agent read ingested Burp/proxy traffic as plain files in real time:

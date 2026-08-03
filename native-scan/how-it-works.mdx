@@ -899,6 +899,16 @@ Each hook uses a `VMPool` (`sync.Pool` of Sobek VMs), VMs are reused across conc
 
 Out-of-band callback detection for blind vulnerabilities (SSRF, XXE, etc.). The OAST service generates unique callback URLs per module/parameter/request, and is flushed at the end of the scan with a grace period to catch late callbacks.
 
+### Endpoint Volatility Gate
+
+Every differential oracle in the scanner — blind SQLi, path normalization, IDOR, header trust, and the diff-based behavior probes — assumes the endpoint is a *function of the request*: send the same bytes twice, get the same page twice. A host behind a load balancer that round-robins between mismatched backends breaks that assumption, and the resulting "difference" is the pool, not the payload.
+
+`modkit.EndpointVolatile` closes it. Before a diff-based module reports, the gate re-samples the **unmodified** request and drops the finding when the two samples disagree. It's memoized per record, and runs only at report time, so a scan pays for it once per endpoint that was about to produce a finding, not once per probe. Ten modules gate on it as of v0.3.5; any new differential oracle should too.
+
+<Callout icon="circle-info" color="#3B82F6" iconType="regular">
+  This is why a parked host serving one of two default server pages at random no longer produces High findings with no application behind them. It also means a genuinely non-deterministic endpoint (randomized content, per-request A/B) will suppress diff-based findings — deliberately, since no body comparison can be trusted there.
+</Callout>
+
 ### Deduplication and Finding Grouping
 
 Three levels of deduplication prevent noise and redundancy:

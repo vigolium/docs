@@ -21,7 +21,7 @@ If no config file is found, built-in defaults are used.
 Settings are resolved from highest to lowest precedence:
 
 1. **CLI flags** -e.g. `--concurrency 100`, `--rate-limit 50`
-2. **Environment variables** -e.g. `VIGOLIUM_API_KEY`, `VIGOLIUM_PROJECT`
+2. **Environment variables** -e.g. `VIGOLIUM_API_KEY`, `VIGOLIUM_PROJECT_UUID`
 3. **Scanning profile** -loaded via `--scanning-profile <name>` (from `~/.vigolium/profiles/`)
 4. **Project-level config** -per-project overlay at `~/.vigolium/projects/<uuid>/config.yaml`
 5. **Main config file** -`~/.vigolium/vigolium-configs.yaml`
@@ -34,7 +34,7 @@ Higher-precedence sources override lower ones. Within the config file, environme
 | Variable | Purpose |
 |---|---|
 | `VIGOLIUM_API_KEY` | API key for the REST server and ingestor client authentication |
-| `VIGOLIUM_PROJECT` | Default project UUID for CLI operations (equivalent to `--project`) |
+| `VIGOLIUM_PROJECT_UUID` | Default project UUID for CLI operations (equivalent to `--project-uuid`; `VIGOLIUM_PROJECT` is a legacy alias) |
 | `VIGOLIUM_PROXY` | HTTP/SOCKS proxy URL, used when `--proxy` is not set |
 | `VIGOLIUM_HOME` | Base directory for Vigolium data (used by the installer; defaults to `~/.vigolium`) |
 
@@ -88,6 +88,19 @@ scanning_strategy:
     known_issue_scan: true
     dynamic-assessment: true
     external_harvesting: false
+
+  # Alternate-port sweep on the target hosts (runs at deep intensity or with
+  # --follow-subdomains; CLI override: --port-sweep-ports)
+  port_sweep:
+    ports: [3000, 5000, 8000, 8008, 8080, 8081, 8082, 8083, 8088, 8888, 9000, 8443, 9443]
+    concurrency: 50
+    dial_timeout_ms: 1500
+    http_timeout_ms: 4000
+    honeypot_ratio: 0.7          # drop a host when this share of swept ports answer (a port-spoofing honeypot)
+
+  scan_logs:
+    persist_logs: false          # write a per-scan session log (browse with `vigolium log`)
+    sessions_dir: ~/.vigolium/native-sessions/
 ```
 
 Available strategies and their default phases:
@@ -178,8 +191,62 @@ discovery:
     max_consecutive_errors: 0
     max_consecutive_waf_blocks: 0
     observed_max_items: 4000
-    disable_kingfisher: false
+    disable_secret_scan: false     # turn off in-process secret scanning during discovery
+
+    prefix_breaker:                # circuit-breaker that stops recursing into trap directories
+      enabled: true                # omit = on (CLI: --no-prefix-breaker)
+      min_samples: 0               # 0 = engine default for each of these
+      trip_ratio: 0
+      prefix_segments: 0
+      length_bucket: 0
+
+  # Post-discovery cleanup of stored records: status retention + reflected-URL-robust dedup
+  deparos_dedup:
+    enabled: true                  # omit = on
+    drop_client_errors: true       # a fuzzed path the server 4xx-rejects is not a discovered resource
+    keep_one_per_host: [401, 403, 429]   # collapsed to one representative per host, not dropped
+    keep_per_path: [405, 415, 422]       # every distinct path kept — each is a real endpoint, wrong method/payload
+    per_path_cap: 100              # cap on distinct keep_per_path paths per (host, status); negative = unbounded
+    normalize_reflected: true      # collapse records differing only by an echoed URL or per-request token
+
+  # Targeted re-spider of rich/SPA routes discovery turned up, after dedup
+  respider:
+    enabled: true                  # omit = on
+    max_seeds_per_host: 3
+    max_seeds_total: 10
+    per_seed_max_duration: 45s
+    per_seed_max_states: 25
+    max_depth: 3
+    step_max_duration: 5m          # wall-clock cap for the whole step
+
+  # Embedded JavaScript intelligence engine (jstangle)
+  jstangle:
+    enabled: true
+    replay_mode: exact             # how harvested requests are reconstructed
+    replay_safety: read-only       # read-only = never replay state-changing methods
+    source_maps: true
+    asset_graph: true              # follow imported chunks to find more endpoints
+    protocol_handshake: false
+    worker_count: 0                # 0 = scale to CPU count
+    memory_budget_mb: 768
+    cache_mb: 128
+    job_timeout: 60s
+    max_requests_per_file: 500
+    max_asset_depth: 4
+    max_assets_per_parent: 64
+    max_assets_per_host: 512
+    max_assets_total: 2048
+    normal_input_mb: 1             # inputs above this skip the expensive passes
+    max_ast_input_mb: 4
+    hard_input_mb: 10              # inputs above this are skipped entirely
+    max_ast_nodes: 500000
+    worker_max_jobs: 100
+    worker_max_rss_mb: 1024
 ```
+
+<Note>
+  `discovery.engine.disable_kingfisher` is gone — secret scanning is in-process Go now (no external `kingfisher` binary). The replacement key is `disable_secret_scan`.
+</Note>
 
 ### `spidering`
 
@@ -283,8 +350,12 @@ server:
   agent_heavy_max: 5               # max concurrent autopilot/swarm runs via API
   agent_light_max: 10              # max concurrent query/chat runs via API
   agent_queue_timeout: 30s         # wait for an agent slot before returning 429
-  license: ""                      # optional license tag surfaced in /server-info
+  disable_swagger: false           # drop the Swagger UI + spec endpoint (CLI: --no-swagger)
+  users_file: ~/.vigolium/users.json   # file-based logins for POST /api/auth/login
+  license: open-source             # license tag surfaced in /server-info
 ```
+
+The narrowing flags — `--view-only`, `--no-agent`, `--demo-only`, `--alternative-ingest-key`, `--disable-warm-session` — are CLI-only; see [Narrowing the Exposed Surface](/server-mode/running-the-server#narrowing-the-exposed-surface).
 
 ### `agent`
 
@@ -462,7 +533,21 @@ known_issue_scan:
   # URLs / feature flags). Add your own template-ID → severity entries.
   severity_overrides:
     config-json-exposure-fuzz: medium   # critical | high | medium | low | info
+
+  # Collapse many findings of the same module into one finding per distinct
+  # *value* (e.g. one row per leaked secret, listing every URL it appears on)
+  # instead of one row per URL.
+  group_by_value:
+    enabled: true
+    per_host: true              # group within a host rather than project-wide
+    max_urls: 50                # URLs listed on the surviving finding
+    by_module: [...]            # modules grouped by their finding identity (long built-in list)
+    by_rule: [secret-detect, host-header-injection, ldap-injection, ...]  # grouped by the matched rule
+    bundle_suspect: [secret-detect]  # also bundle the module's Suspect-tier results
+    tags: []                    # extra module tags to include
 ```
+
+Run `vigolium config ls known_issue_scan.group_by_value` to print the full built-in module lists for your build.
 
 ### `mutation_strategy`
 

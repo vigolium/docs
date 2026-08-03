@@ -445,7 +445,7 @@ vigolium module ls --type active -v
 > Only run reflected XSS and error-based SQL injection modules
 ```
 ```bash
-vigolium scan -t https://example.com -m xss-reflected,sqli-error
+vigolium scan -t https://example.com -m xss-light-url-params,sqli-error-based
 ```
 
 **Filter modules by tags (OR logic):**
@@ -478,7 +478,7 @@ vigolium module enable xss
 > Enable only the reflected XSS module
 ```
 ```bash
-vigolium module enable active-xss-reflected --id
+vigolium module enable xss-light-url-params --id
 ```
 
 ---
@@ -1130,10 +1130,10 @@ vigolium db reset --force
 
 **Reclaim disk space after deletion:**
 ```
-> Vacuum the database to reclaim space
+> Delete last month's records and reclaim the space
 ```
 ```bash
-vigolium db clean --vacuum
+vigolium db clean --before 2026-07-01     # VACUUM runs automatically after a delete
 ```
 
 ---
@@ -1498,7 +1498,7 @@ vigolium scope view host
 > Show available strategies and their phases
 ```
 ```bash
-vigolium strategy ls
+vigolium strategy
 ```
 
 **Create and manage projects:**
@@ -1524,7 +1524,7 @@ vigolium scan -t https://example.com --project-name my-project
 > Show stats for my-project
 ```
 ```bash
-VIGOLIUM_PROJECT=my-project vigolium db stats
+VIGOLIUM_PROJECT_UUID=a1b2c3d4-... vigolium db stats
 ```
 
 ---

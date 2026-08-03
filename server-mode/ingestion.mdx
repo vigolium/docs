@@ -197,14 +197,14 @@ cat urls.txt | vigolium ingest
 # From an OpenAPI spec
 vigolium ingest --input api.yaml -I openapi -t https://api.example.com
 
-# With a custom scan ID for tagging
-vigolium ingest --input urls.txt --scan-id recon-2026-02
+# Pin the scan UUID (use to group several ingests under one scan)
+vigolium ingest --input urls.txt --scan-uuid 6f1c2b90-8b1e-4a6c-9d2f-5c7a1e3b9d40
 
 # Use a specific database file
 vigolium ingest --input urls.txt --db ./project.db
 
 # Ingest into a specific project
-vigolium ingest --input urls.txt --project-id a1b2c3d4-...
+vigolium ingest --input urls.txt --project-uuid a1b2c3d4-...
 ```
 
 ### Auto-detection (stdin / file content)

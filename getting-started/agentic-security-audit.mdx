@@ -66,6 +66,33 @@ vigolium agent audit --source ~/src/your-app --mode balanced --agent codex
 
 `--source` is required, the audit reads code, not network traffic. It accepts a local path, a git URL (cloned shallow by default), or an archive (`.zip`/`.tar.gz`/`.tar.bz2`/`.tar.xz`).
 
+### Bring your own credentials
+
+By default the audit leg inherits `agent.olium.*`. To supply credentials for a single run — a CI job, a client engagement, a key you don't want in your config — use one of three mutually exclusive flags. Each takes a literal value, `$ENV_NAME`, or `@path`:
+
+```bash
+# API key for the resolved agent (claude → ANTHROPIC_API_KEY, codex → OPENAI_API_KEY)
+vigolium agent audit --source ~/src/your-app --api-key '$ANTHROPIC_API_KEY'
+
+# Anthropic OAuth bearer token (Claude only — from `claude setup-token`)
+vigolium agent audit --source ~/src/your-app --oauth-token @~/.claude/setup-token
+
+# OAuth credential file, Codex `~/.codex/auth.json` shape
+vigolium agent audit --source ~/src/your-app --agent codex --oauth-cred-file '$CODEX_AUTH'
+```
+
+For a piolium run, `--oauth-cred-file` is staged under the pi agent directory with backup-and-restore, so your own `pi` auth is put back afterwards.
+
+### Run controls
+
+| Flag | Default | What it does |
+|---|---|---|
+| `--show-thinking` | off | Render the agent's internal thinking blocks in the live stream (verbose — many lines per phase) |
+| `--preflight-timeout` | `30s` | Per-driver preflight timeout, applied to both `pi` and `claude` |
+| `--plm-phase-retries` | piolium default | Piolium per-phase retry count |
+| `--plm-command-retries` | piolium default | Piolium per-command retry count |
+| `--plm-longshot-timeout` | piolium default | Piolium per-file kill timer in longshot mode, in ms |
+
 <Frame caption="Standalone audit progress in the CLI">
   <img src="/images/audit/vigolium-audit-standalone.png" alt="vigolium-audit standalone run output" />
 </Frame>

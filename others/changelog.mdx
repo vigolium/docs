@@ -16,7 +16,43 @@ package.
 
 <Update label="Unreleased">
 
-A **`replay` refocus**: bulk-selection filters now track `vigolium traffic`, so you can search a slice of stored traffic and re-send it (to a proxy / Burp, or straight to the wire) in one command — and payload fuzzing is consolidated into `vigolium fuzz` by removing `replay`'s `--mutate`. No module changes.
+Nothing yet — the latest released build is **v0.3.6**.
+
+</Update>
+
+<Update label="v0.3.6" description="2026-08-03">
+
+A **false-positive and severity-calibration** release. Three families of live High findings are retired: `bfla-detection` on endpoints that were never privileged, `secret-detect` on values the vendor's own flow requires the browser to carry, and the LFI pair on files a deployment publishes into its own web root. Severities move to match what the oracles actually prove. Registry stays at 201 active + 116 passive.
+
+### Fixed
+
+- **`bfla-detection` reported four classes of non-privileged endpoint as High authorization bypasses.** Admin-path matching was an unbounded substring test, so a static asset like `/appclient/internalServerError.js` read as the `/internal` admin tree — patterns are now anchored at a word boundary (`/admin` still matches `/administration`). Health/liveness probes (`/actuator/health`, `/internal/ping`, `/healthz`) are skipped outright: they answer every method with one fixed body by design. Responses published as long-lived, publicly cacheable artifacts (`max-age ≥ 1h` + validator, no session cookie) are skipped — one representation for every caller can't evidence a per-caller authorization decision. And when the original request carried **no** credentials, a method switch returning byte-identical content is dropped: the route just ignores the method.
+- **`secret-detect` graded ~50 public-by-design identifier families as leaked credentials.** Values the vendor ships to the browser — OAuth client ids, Stripe/Supabase publishable keys, Mapbox public access tokens, widget app ids, site keys — now report Info/Tentative, recognised by rule name, with a guard so a paired-secret rule name (`secret` / `private` / `password`) keeps full severity. Salesforce Connected App consumer keys (`3MVG9…`) get the same treatment by value shape, alongside the existing Google client ID carve-out.
+- **`secret-detect` matched links, resource ids, and non-tokens as secrets.** A hyphenated word slug sitting in the *path* of an absolute URL is now dropped — a proximity rule was firing on an ordinary press-mention `href` and capturing the article slug as a 32-char API key. A `<random>.<camelCaseWord>` value is recognised as a namespaced resource id rather than a two-part `id.secret` credential (covers all ~90 dot-composite rules). A Discord bot token whose leading segment doesn't base64-decode to a snowflake id is rejected as not a token at all.
+- **A bot-challenge interstitial read as a leaked High-severity JWT on every challenged host.** The proof-of-work challenge token (`pow` + `ch`/`dif` claims) is now recognised as a pre-auth token, and an identity claim whose value is a bare IP literal — the edge binding the token to the visitor's own address — no longer counts as an authenticated subject. The interstitial itself is added to the shared challenge-page markers so block detection sees it.
+- **The LFI pair reported published files as file-read vulnerabilities.** When a payload naming a docroot-publishable target (`.env`, `.git/HEAD`, `.htaccess`, `.htpasswd`, `WEB-INF/web.xml`, `web.config`) is injected into a **URL path segment**, the traversal prefix normalizes away and the request is an ordinary GET — a fetch, not an inclusion. `lfi-generic` and `lfi-path-traversal` now report these informationally, anchored at the file's own URL. OS-filesystem targets (`/etc/passwd`, `win.ini`, `/proc/self/environ`) are unaffected: no web root serves them, so a 200 carrying their content is a genuine escape.
+
+### Changed
+
+- **`tls-protocol-cipher-audit` is now Low across the board** (was Medium). Every weak-setting probe — TLS 1.0, TLS 1.1, RC4, 3DES, static-RSA — reports Low, so the aggregate host finding caps at Low. A legacy protocol or cipher still being *offered* is a hardening / compliance gap, not a directly exploitable flaw: attacking it needs a privileged network position plus a client willing to negotiate down. This lines the module up with the rest of the TLS/transport family (`hsts-preload-audit`, `mixed-content-detect` — Low; `tls-cert-recon` — Info).
+- **`lfi-generic` is High, not Critical.** The oracle proves a file was read, not that the read reaches code execution — that depends on a sink the module never establishes. Sibling `lfi-path-traversal` already reported High.
+
+### Internal
+
+- **`infra.CacheMaxAge`** is the one `Cache-Control: max-age` parser, anchored so it can't match the tail of `s-maxage`. `bfla-detection` reads it to recognise a shipped static artifact, `web-cache-poisoning` to decide cacheability.
+- **`modkit` docroot-fetch helpers** (`IsURLPathInsertionPoint`, `DocrootPublishableTarget`, `DocrootFetchNotInclusion`, `DocrootFetchInfo`) are the shared primitive for any file-read module that can be pointed at a URL path segment. The target allowlist is positive, so an unrecognised payload keeps the module's own severity.
+
+</Update>
+
+<Update label="v0.3.5" description="2026-07-28">
+
+A **false-positive hardening** release. Hosts behind a load balancer that round-robins between mismatched backends answer the *same* request with two different pages, which breaks every body-differential oracle in the scanner; a new shared gate proves an endpoint is a function of the request before any diff-based finding is reported. Also ships the **`replay` refocus**: bulk-selection filters now track `vigolium traffic`, and payload fuzzing is consolidated into `vigolium fuzz`. Registry stays at 201 active + 116 passive.
+
+### Fixed
+
+- **False positives on round-robin backend pools, across 10 modules.** Parked hosts serving one of two default server pages at random produced High findings with no application behind them — blind SQLi, path normalization, IDOR, header-trust size shifts, and several diff-based Info leads. A new shared determinism gate re-samples the unmodified request and drops the finding when the endpoint isn't a function of the request. It runs only when a module is about to report, and is memoized per record.
+- **`dashboard-exposure` reported any JSON `/version` endpoint as vLLM at High.** The signature matched on the mere presence of `"version"` — a near-universal health-endpoint convention — and flagged unrelated services. It now requires vLLM's exact response shape and confirms via the vLLM-specific `/v1/models`.
+- **`wp-misconfig` awarded Critical for the word "installation".** The installer probe accepted that bare token, so a default server page mentioning an installation read as an exposed WordPress installer. Replaced with installer-specific markers.
 
 ### Added
 
