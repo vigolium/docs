@@ -320,7 +320,7 @@ Every swarm and autopilot run writes a session dir under `agent.sessions_dir` (d
 ├── tool-results/           # spilled large tool outputs
 ├── output.txt              # query: raw agent output
 ├── inputs.json             # normalized input records
-└── skills/                 # copied embedded skills (vigolium-scanner, agent-browser)
+└── skills/                 # copied embedded skills (vigolium-scanner)
 ```
 
 `EnsureSessionDir(baseDir, agenticScanUUID)` in `pipeline_types.go` is the canonical creator.

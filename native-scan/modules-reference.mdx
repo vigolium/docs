@@ -1,12 +1,12 @@
 ---
 title: "Scanner Modules Reference"
-description: "Reference for Vigolium's 317 scanner modules, 201 active and 116 passive, covering the OWASP Top 10 and beyond."
+description: "Reference for Vigolium's 323 scanner modules, 207 active and 116 passive, covering the OWASP Top 10 and beyond."
 icon: "cubes"
 ---
 
-Vigolium ships with **317 scanner modules**, 201 active and 116 passive, covering the OWASP Top 10 and beyond. Run `vigolium module ls` for the up-to-date enabled list (the registry can grow between releases without a docs refresh).
+Vigolium ships with **323 scanner modules**, 207 active and 116 passive, covering the OWASP Top 10 and beyond. Run `vigolium module ls` for the up-to-date enabled list (the registry can grow between releases without a docs refresh).
 
-Active modules send modified requests to detect vulnerabilities; passive modules analyze existing request/response pairs without generating traffic. Recent additions include the GraphQL security suite, the Adobe Experience Manager (AEM) family, the SaaS data-exposure family (Salesforce / ServiceNow / Power Pages), the Model Context Protocol (MCP) suite, the expanded IIS family, the `dependency-confusion` and `js-beautify` passives, and the v0.2.1 batch (out-of-band SQLi, XPath injection, unauthenticated infra-service exposure, TLS protocol/cipher audit, session fixation, and the LLM-endpoint / payment-integration / DOM-clobbering / CSS-injection / cross-origin-isolation / reverse-tabnabbing passives) — filter the list by tag with `vigolium module ls graphql`, `vigolium module ls aem`, `salesforce`, `servicenow`, `powerpages`, `mcp`, or `iis` (the positional filter matches on id, name, description, and tag; `vigolium module ls --tags` dumps every known tag).
+Active modules send modified requests to detect vulnerabilities; passive modules analyze existing request/response pairs without generating traffic. Recent additions include the v0.3.8 batch (`ssi-injection`, `server-side-js-injection`, `smtp-header-injection`, `react-rsc-rce`, `dependent-response`, `path-relative-stylesheet`), the GraphQL security suite, the Adobe Experience Manager (AEM) family, the SaaS data-exposure family (Salesforce / ServiceNow / Power Pages), the Model Context Protocol (MCP) suite, the expanded IIS family, the `dependency-confusion` and `js-beautify` passives, and the v0.2.1 batch (out-of-band SQLi, XPath injection, unauthenticated infra-service exposure, TLS protocol/cipher audit, session fixation, and the LLM-endpoint / payment-integration / DOM-clobbering / CSS-injection / cross-origin-isolation / reverse-tabnabbing passives) — filter the list by tag with `vigolium module ls graphql`, `vigolium module ls aem`, `salesforce`, `servicenow`, `powerpages`, `mcp`, or `iis` (the positional filter matches on id, name, description, and tag; `vigolium module ls --tags` dumps every known tag).
 
 <Note>
   The **Module ID** column is the exact id `-m` / `--module-id` and `--module-tag` expect (`vigolium scan-url -m xss-stored,sqli-error-based`). Ids carry no `active-` / `passive-` prefix — `--module-id` requires an exact match and `-m` falls back to substring matching, so a prefixed name selects nothing.
@@ -24,7 +24,7 @@ Active modules send modified requests to detect vulnerabilities; passive modules
 
 ---
 
-## Active Modules (201)
+## Active Modules (207)
 
 Active modules send modified requests to detect vulnerabilities via fuzzing, injection, and behavioral analysis. Every registered active module is listed below; `vigolium module ls --type active` prints the same set from your installed build.
 
@@ -73,7 +73,7 @@ Active modules send modified requests to detect vulnerabilities via fuzzing, inj
 
 | Module ID | Name | Description | Severity | Confidence | Tags |
 |---|---|---|---|---|---|
-| `code-exec` | Code Execution (RCE) | OS command injection via time-based blind (sleep/delay measurement) | Critical | Certain | `rce`, `injection` |
+| `code-exec` | Code Execution (RCE) | OS command injection via time-based blind (sleep/delay measurement), plus language-specific interpreter payloads across several string-breakout contexts | Critical | Certain | `rce`, `injection` |
 | `command-injection-echo` | OS Command Injection (Results-Based) | In-band OS command injection confirmed by reflecting a unique arithmetic marker, baseline-compared over multiple rounds to suppress false positives | Critical | Certain | `rce`, `command-injection`, `injection` |
 | `command-injection-oast` | OS Command Injection (Out-of-Band) | Blind OS command injection via DNS/HTTP OAST callbacks (classified distinctly from SSRF/XXE) | Critical | Certain | `rce`, `command-injection`, `oast` |
 | `command-injection-timing` | OS Command Injection (Time-Based) | Time-based blind OS command injection with delay-scaling confirmation across rounds | Critical | Tentative | `rce`, `command-injection`, `injection`, `heavy` |
@@ -83,10 +83,13 @@ Active modules send modified requests to detect vulnerabilities via fuzzing, inj
 | `insecure-deserialization` | Insecure Deserialization | Error-based detection for Java, PHP, Python, Ruby, and .NET deserialization | High | Firm | `injection` |
 | `input-behavior-probe` | Input Behavior Probe | Behavior change detection via header, path, debug param, and char probing | Info | Tentative | `injection` |
 | `padding-oracle` | CBC Padding Oracle | Confirms a CBC padding oracle by flipping ciphertext bytes and observing a reproducible padding-error differential | High | Firm | `cryptography`, `injection`, `heavy` |
-| `ldap-injection` | LDAP Injection | Detects LDAP injection via error-based and boolean-based techniques | Medium | Firm | `injection`, `heavy` |
+| `ldap-injection` | LDAP Injection | Detects LDAP injection via error-based and boolean-based techniques, including a negation oracle (match-all vs match-none divergence) | Medium | Firm | `injection`, `heavy` |
 | `log4shell-probe` | Log4Shell Probe | Detects Log4Shell (CVE-2021-44228) via JNDI payload injection with OAST callbacks | Critical | Certain | `java`, `rce`, `heavy` |
 | `struts-ognl-injection` | Struts OGNL Injection | Detects Apache Struts OGNL injection via Content-Type and parameter payloads | Critical | Firm | `java`, `rce`, `moderate` |
 | `response-header-injection` | HTTP Response Header Injection | Detects HTTP response header injection via CRLF in parameters | Medium | Certain | `crlf`, `injection`, `header`, `response-splitting`, `moderate` |
+| `ssi-injection` | Server-Side Includes (SSI) Injection | Injects a set/echo SSI directive whose value is emitted only when the server parses SSI, with the directive markup consumed — proving evaluation rather than reflection; also confirms `exec` out of band | High | Firm | `injection`, `ssi`, `rce`, `heavy` |
+| `server-side-js-injection` | Server-Side JavaScript Injection | Server-side JavaScript (Node.js) code injection through `eval` / `Function` / `vm` / `$where`, confirmed via an OAST callback or a consistent busy-wait time differential | Critical | Firm | `injection`, `ssji`, `nodejs`, `rce`, `heavy` |
+| `smtp-header-injection` | SMTP Header Injection | CRLF injection into a mail header via an email-bearing parameter, confirmed by grafting a `Bcc` at a unique collaborator address the mailer resolves on delivery | Medium | Firm | `injection`, `smtp`, `crlf`, `email`, `heavy` |
 
 ### SSRF & Out-of-Band (OAST)
 
@@ -105,19 +108,20 @@ Active modules send modified requests to detect vulnerabilities via fuzzing, inj
 
 | Module ID | Name | Description | Severity | Confidence | Tags |
 |---|---|---|---|---|---|
-| `cors-misconfiguration` | CORS Misconfiguration | Permissive CORS policies (reflected origins, null origin, wildcard+credentials) | Low | Firm | `misconfiguration` |
+| `cors-misconfiguration` | CORS Misconfiguration | Permissive CORS policies (reflected origins, null origin, wildcard+credentials), plus a single-mutation trusted-origin probe gated on a negative control so a blanket reflector isn't re-reported | Low | Firm | `misconfiguration` |
 | `host-header-injection` | Host Header Injection | Host header injection via value reflection (password reset/cache poisoning) | Medium | Firm | `misconfiguration` |
-| `web-cache-poisoning` | Web Cache Poisoning | Cache poisoning via unkeyed header injection (X-Forwarded-Host, X-Forwarded-Scheme) | High | Tentative | `misconfiguration` |
+| `web-cache-poisoning` | Web Cache Poisoning | Cache poisoning via unkeyed header injection (`X-Forwarded-Host`, `X-Forwarded-Scheme`, `X-Host`, `X-Forwarded-Server`, `X-Original-Host`, `X-Forwarded-Prefix`) | High | Tentative | `misconfiguration` |
 | `cache-poisoned-dos` | Cache-Poisoned Denial of Service (CPDoS) | CPDoS via header-only HMO/HHO variants that make a shared cache store and replay an origin error; safe unique-buster oracle, never affects shared keys | Medium | Firm | `cache-poisoning`, `cpdos`, `dos` |
 | `unauth-service-exposure` | Unauthenticated Infrastructure Service Exposure | Unauthenticated Docker / Kubernetes / datastore APIs exposed over HTTP, confirmed by a service-specific structural signature and re-verified | Critical | Certain | `exposure`, `infrastructure`, `misconfiguration` |
 | `tls-protocol-cipher-audit` | TLS Protocol & Cipher Audit | Grades a host's TLS by directly negotiating deprecated protocols and weak cipher suites | Low | Certain | `tls`, `crypto`, `transport`, `misconfiguration` |
-| `cache-deception` | Web Cache Deception | Detects web cache deception via path confusion with static file extensions | Medium | Tentative | `cache-poisoning`, `auth-bypass`, `moderate` |
+| `cache-deception` | Web Cache Deception | Detects web cache deception via path confusion with static file extensions and delimiter-confusion variants | Medium | Tentative | `cache-poisoning`, `auth-bypass`, `moderate` |
 | `oauth-misconfiguration` | OAuth/OIDC Misconfiguration | Detects common OAuth/OIDC misconfigurations including open redirect and missing state | Low | Firm | `authentication`, `session`, `moderate` |
 | `common-directory-listing` | Common Directory Listing | Detects directory listing exposure on common web servers (Apache, Nginx, IIS, Jetty, Python) | Low | Firm | `info-disclosure`, `misconfiguration`, `directory-listing`, `light` |
 | `dashboard-exposure` | Exposed Third-Party Dashboard | Probes for exposed third-party dashboards/consoles (Grafana, Airflow, GitLab, Jenkins, Ollama, ...) and unauthenticated version/config/data leaks | Medium | Firm | `dashboard`, `exposure`, `discovery`, `info-leak`, `default-login`, `light` |
 | `go-debug-endpoint-exposure` | Go Debug Endpoint Exposure | Detects exposed Go net/http/pprof and expvar debug endpoints | Medium | Firm | `golang`, `pprof`, `expvar`, `debug`, `info-disclosure`, `misconfiguration`, `light` |
 | `subdomain-takeover` | Subdomain Takeover | Detects dangling DNS records pointing to deprovisioned cloud services | High | Firm | `cloud`, `misconfiguration`, `moderate` |
 | `tls-cert-recon` | TLS Certificate Recon | Reads each host's live TLS certificate for recon: self-signed / private-CA certs and the subdomains and internal names in their SANs | Info | Certain | `recon`, `tls`, `certificate`, `fingerprint`, `light` |
+| `path-relative-stylesheet` | Path-Relative Stylesheet Import (PRSSI) | A page carrying a path-relative stylesheet that the server also serves at a path-info-confused URL without `X-Content-Type-Options: nosniff`, so attacker content can resolve as CSS | Low | Firm | `client-side`, `css-injection`, `prssi`, `moderate` |
 
 ### Access Control
 
@@ -128,7 +132,7 @@ Active modules send modified requests to detect vulnerabilities via fuzzing, inj
 | `csrf-verify` | CSRF Token Verification | Verifies CSRF token enforcement by removing, emptying, or randomizing tokens | High | Firm | `auth-bypass` |
 | `idor-detection` | IDOR Detection | Missing authorization on object ID parameters via neighbor ID probing | High | Tentative | `auth-bypass` |
 | `mass-assignment` | Mass Assignment | Mass assignment via injecting privilege keys into JSON APIs | High | Firm | `auth-bypass` |
-| `open-redirect` | Open Redirect | Open redirect via injected external URL in Location/meta refresh | Medium | Firm | `auth-bypass` |
+| `open-redirect` | Open Redirect | Open redirect via injected external URL in Location/meta refresh, across a wide set of leading separators that catch blocklist-bypass redirect targets | Medium | Firm | `auth-bypass` |
 | `open-redirect-confusion` | Open Redirect via URL Parser Confusion | Open redirect reached through URL-parser-confusion payloads (`@`, backslash, embedded host) that slip past naive redirect validation | High | Firm | `open-redirect`, `ssrf`, `moderate` |
 | `session-fixation` | Session Fixation | Permissive session mechanism that adopts an attacker-supplied session ID across authentication | Medium | Firm | `session`, `auth`, `session-fixation` |
 | `authz-compare` | Cross-Session Authorization Compare | Compares responses across authenticated sessions to detect IDOR/BOLA | High | Firm | `idor`, `bola`, `auth-bypass`, `access-control`, `api-security`, `moderate` |
@@ -154,6 +158,7 @@ Active modules send modified requests to detect vulnerabilities via fuzzing, inj
 | `suspect-transform` | Suspect Transform Detection | Expression evaluation, quote consumption, and unicode normalizations | Suspect | Firm | `detection` |
 | `backslash-transformation` | Backslash Transformation | Escape sequence interpretation, backslash consumption, character handling | Suspect | Firm | `detection` |
 | `internal-header-probe` | Internal Header Probe | Fuzzes custom/internal request headers advertised via Access-Control-Allow-Headers and reports value-dependent response changes | Suspect | Tentative | `cors`, `header`, `recon`, `ssrf`, `intrusive` |
+| `dependent-response` | Referer / User-Agent Dependent Response | Response content that varies on a spoofable `Referer` or `User-Agent` — ineffective gating, cloaking, or weak access control — with each variant re-sampled to rule out dynamic-content noise | Info | Firm | `recon`, `behavior`, `cloaking`, `moderate` |
 
 ### Prototype Pollution
 
@@ -180,8 +185,8 @@ Active modules send modified requests to detect vulnerabilities via fuzzing, inj
 
 | Module ID | Name | Description | Severity | Confidence | Tags |
 |---|---|---|---|---|---|
-| `graphql-scan` | GraphQL Security Scanner | Runs only against a confirmed GraphQL endpoint: introspection & schema exercise, exposed IDE/console (GraphiQL/Playground/Altair), error- and boolean-based SQLi, field-level authorization (IDOR/BOLA), reflected XSS in errors, uncapped query batching, and DoS via deeply-nested/aliased/circular queries | Medium | Certain | `graphql`, `injection`, `idor`, `bola`, `xss`, `dos`, `batching`, `console` |
-| `file-upload-scan` | File Upload Scanner | File upload bypass (extension, null byte, magic bytes, SVG XXE, HTML XSS) | High | Certain | `injection` |
+| `graphql-scan` | GraphQL Security Scanner | Runs only against a confirmed GraphQL endpoint: introspection & schema exercise, exposed IDE/console (GraphiQL/Playground/Altair), error- and boolean-based SQLi, field-level authorization (IDOR/BOLA), reflected XSS in errors, uncapped query batching, and DoS via deeply-nested/aliased/circular queries. Endpoint discovery walks endpoint names over parent-path prefixes and nested `api`/version permutations | Medium | Certain | `graphql`, `injection`, `idor`, `bola`, `xss`, `dos`, `batching`, `console` |
+| `file-upload-scan` | File Upload Scanner | File upload bypass (extension, null byte, magic bytes, SVG XXE, HTML XSS); a PHP web shell is confirmed by an arithmetic execution marker that proves evaluation, not mere storage | High | Certain | `injection` |
 | `default-credentials` | Default Credentials | Login endpoints tested with common credential pairs; CAPTCHA/lockout aware | High | Certain | `auth-bypass` |
 | `sensitive-file-discovery` | Sensitive File Discovery | ~25 marker-based sensitive files and ~1,350 generic paths (.env, .git, logs) | Medium | Tentative | `info-disclosure` |
 | `jsonp-callback` | JSONP Callback Injection | JSONP endpoints via callback injection enabling cross-origin data theft | Medium | Firm | `injection` |
@@ -213,7 +218,7 @@ Active modules send modified requests to detect vulnerabilities via fuzzing, inj
 | Module ID | Name | Description | Severity | Confidence | Tags |
 |---|---|---|---|---|---|
 | `ssrf-blind` | Blind SSRF Detection | Blind SSRF via OAST callbacks | High | Firm | `ssrf`, `injection`, `heavy` |
-| `ssti-blind` | Blind SSTI | Blind SSTI via OAST callbacks and time-delay payloads | Critical | Firm | `injection`, `ssti`, `heavy` |
+| `ssti-blind` | Blind SSTI | Blind SSTI via OAST callbacks and time-delay payloads; JVM template stacks are confirmed with a pure-JVM DNS/URL callback that needs no shell on the target | Critical | Firm | `injection`, `ssti`, `heavy` |
 
 ### Framework Security
 
@@ -230,6 +235,7 @@ Active modules send modified requests to detect vulnerabilities via fuzzing, inj
 | `fastify-hono-probe` | Fastify/Hono Probe | Detects exposed Fastify and Hono framework endpoints | Medium | Firm | `nodejs`, `misconfiguration`, `light` |
 | `metaframework-probe` | Metaframework Probe | Detects exposed Remix, Astro, and SvelteKit internal files and endpoints | Low | Firm | `javascript`, `misconfiguration`, `light` |
 | `nextjs-chunk-audit` | Next.js Static Chunk Audit | Fetches Next.js static JS chunks and extracts routes, domains, and embedded secrets | Info | Certain | `nextjs`, `javascript`, `intel`, `info-disclosure`, `medium`, `light` |
+| `react-rsc-rce` | React Server Components RCE | The React Flight server-action decoder RCE (CVE-2025-55182 / CVE-2025-66478) — a crafted colon-delimited object reference makes the decoder dereference a missing property, surfacing as a Next.js error digest while a well-formed control request does not | Critical | Firm | `nextjs`, `react`, `rce`, `deserialization`, `heavy` |
 
 #### Spring / Java
 

@@ -108,6 +108,31 @@ run-findings/
   The ingestion server can produce this same tree **live** with `vigolium server --mirror-fs <dir>` — see [Running the Server](/server-mode/running-the-server#live-filesystem-mirror).
 </Callout>
 
+## Exporting Stored Results in Several Formats
+
+`vigolium export --format` also takes a comma-separated list — `html`, `report`, `pdf`, `jsonl`, `markdown` (alias `md`), `bundle` (alias `gz`), `fs`. The database is read **once** and every format renders from that one result set, so three formats cost one query rather than three:
+
+```bash
+vigolium export --format html,markdown,bundle -o acme-q3
+# → acme-q3.html
+#   acme-q3.md
+#   acme-q3.tar.gz
+```
+
+With more than one format, `-o/--output` is a shared **base path** and each format appends its own extension (an extension already on the base is replaced, not stacked). Because one `-o` cannot name several files, it is required as soon as you pass a second format. A single format still uses `-o` verbatim: `--format html -o report` writes exactly `report`.
+
+`{ts}` and `{project-uuid}` are expanded once for the whole run, so every file carries the same timestamp even when a slow renderer (`pdf`, which shells out to headless Chrome) finishes seconds after its siblings. The same holds for a `gs://` base, where each format is uploaded under its own key:
+
+```bash
+vigolium export --format html,markdown,bundle -o gs://{project-uuid}/exports/scan-{ts}
+```
+
+If one format fails, the others are still written and the command exits non-zero naming the format that failed.
+
+<Note>
+  `vigolium db export -f` remains single-valued. On the scan commands, `--format` selects live output writers (the five formats above under [Output Formats](#output-formats)) rather than export renderers.
+</Note>
+
 ## Severity Scale
 
 Findings are classified using five severity levels:

@@ -343,12 +343,13 @@ vigolium agent swarm -t https://app.example.com \
 | `--input` | Raw input (curl, HTTP, Burp XML, base64, URL), auto-detected |
 | `--record-uuid` | Use an HTTP record from the database as the seed input |
 | `--prompt` / positional `[prompt]` | Free-text task guidance; credentials and browser intent are extracted from it |
+| `--prompt-file` | Read the task guidance from a file — the same channel as `--prompt`, so a long prompt needn't be shell-escaped. Pass it once: combining with `--prompt` or the positional prompt is an error |
 | `--plan-file` | Prose plus raw HTTP request blocks; cannot be combined with `--input` or a prompt |
 | `--source` | Source-code path (or git URL); enables source analysis + code-audit |
 | `--code-audit` | Force code audit (auto-on with `--source` for balanced/deep) |
 | `--discover` | Run native discovery before planning |
 | `--all-records` | Plan from every HTTP record already in the active project |
-| `--records-from` | Filter project records by spec — `host=`, `status=`, `method=`, `path=`, `since=` (comma-separated) |
+| `--records-from` | Filter project records by spec — `host=`, `path=`, `method=`, `status=`, `source=`, `since=`, `until=` (comma-separated). `since`/`until` take the shared date grammar (`2d`, `today`, `2026-08-01`, RFC3339) |
 | `--max-plan-records` | Cap on records sent to the plan agent, one slot per URL prefix (intensity sets it: quick 10, balanced 25, deep 50; `0` = no limit) |
 | `--triage` | Enable verify-and-rescan loop |
 | `--skill` | Force-load these skills by name into triage, bypassing planner selection (repeatable or comma-separated) |

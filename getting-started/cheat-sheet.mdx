@@ -241,10 +241,19 @@ vigolium scan --stateless -i traffic.har -I har --format jsonl -o results
 
 # Nuclei JSONL
 vigolium scan --stateless -i nuclei.jsonl -I nuclei --format jsonl -o results
+
+# Burp Suite scope export — the JSON a bug-bounty program hands you
+vigolium scan --stateless -T scope.json --format jsonl -o results
 ```
 
+`burpscope` parses a Burp **project-config scope export** (`{"target":{"scope":{"include":[…],"exclude":[…]}}}` — not the binary `.burp` project file) and expands its include rules into seed URLs. It is content-sniffed, so `-T scope.json` works with no `-I`. A wildcard host like `^.*\.example\.com$` is reported rather than scanned — it names a set, not a server, and synthesizing the apex would hit a host the scope never listed. `http://` candidates collapse into their `https://` twins, and exclude rules are applied before anything is emitted.
+
+<Warning>
+  **`-i/--input` and `-T/--target-file` are not interchangeable.** `-T` reads its file as one target URL per line, so pointing it at a spec makes every line of that file a target (and under `-S`, one child scan per line). Specs and exports go through `-i`. The two exceptions are the formats that genuinely *are* target lists: `urls` and `burpscope`.
+</Warning>
+
 <Callout icon="circle-info" color="#3B82F6" iconType="regular">
-  Format aliases: `openapi`/`swagger`, `postman`, `burpxml`/`burp`/`burp-xml`, `burpraw`/`raw`, `har`/`http-archive`, `nuclei`/`nuclei-output`. Run `vigolium scan --list-input-mode` for the full list. Use `-t/--target` to supply the base URL when a spec carries only paths.
+  Format aliases: `openapi`/`swagger`, `postman`, `burpxml`/`burp`/`burp-xml`, `burpraw`/`raw`, `burpscope`/`burp-scope`, `har`/`http-archive`, `nuclei`/`nuclei-output`, `deparos`. Run `vigolium scan --list-input-mode` for the full list. Use `-t/--target` to supply the base URL when a spec carries only paths.
 </Callout>
 
 ---
@@ -313,7 +322,32 @@ vigolium fuzz 'https://example.com/api?id=FUZZ' -w ~/wordlists/ids.txt -j
 vigolium fuzz 'https://example.com/admin/FUZZ' -w dir-short --match-status-code 200,301 --fail-on-match
 ```
 
-See the [Fuzz CLI reference](/others/cli-references#fuzz) for the full flag set (positions, matchers, calibration, and sending payloads through Burp's engine).
+**Don't know what "interesting" looks like yet?** `-a/--anomaly` replaces hand-written matchers. Each response is scored against the baseline *and* against the run's own population, so a status change that every payload triggers reads as the endpoint's normal behaviour rather than a signal:
+
+```bash
+vigolium fuzz 'https://example.com/api/FUZZ' -w dir-short --anomaly
+vigolium fuzz 'https://example.com/api/FUZZ' -w dir-short --anomaly --anomaly-threshold high
+```
+
+Every result carries `anomaly_score` and `anomaly_reasons` (leaked SQL/stack error, 4xx→2xx flip, size/time outlier, rare status, unencoded reflection, …). It reports **where to look**, never a verdict — confirm the lead with `scan-request -m ...`.
+
+Three more things worth knowing:
+
+```bash
+# Numeric matchers take predicates, not just equality: N, N-M, >N, >=N, <N, <=N, !N
+vigolium fuzz 'https://example.com/api/FUZZ' -w dir-short --match-size '>1000' --match-status-code '!404'
+
+# Credential PAIRS across two markers (sniper | batteringram | pitchfork | clusterbomb)
+vigolium fuzz 'https://example.com/login' -X POST -d 'u=FUZZ&p=FUZZ2' \
+  --mode pitchfork -w users.txt:FUZZ -w passwords.txt:FUZZ2
+
+# Pre-flight: print the exact bytes each payload would send, with ZERO network traffic
+vigolium fuzz 'https://example.com/api/FUZZ' -w dir-long --dry-run
+```
+
+`fuzz` also accepts curl's **long-form** flags (`--cookie`, `--data-urlencode`, `--form`, `--compressed`, `--resolve`, …), so a request pasted from DevTools works with minimal editing. Long forms only: the short spellings are taken by vigolium meanings (`-u` record UUID, `-i` input, `-w` wordlist).
+
+See the [Fuzz CLI reference](/others/cli-references#fuzz) for the full flag set (positions, matchers, anomaly scoring, attack modes, calibration, and sending payloads through Burp's engine).
 
 ---
 
@@ -596,6 +630,15 @@ vigolium export --format html -o report.html \
   --severity critical,high \
   --search sqli
 ```
+
+Need several formats? `--format` is a comma-separated list, and the database is read **once** for all of them:
+
+```bash
+vigolium export --format html,markdown,bundle -o acme-q3
+# → acme-q3.html   acme-q3.md   acme-q3.tar.gz
+```
+
+With more than one format, `-o` is a shared **base path** (each format appends its own extension) and becomes required — one `-o` can't name three files. A single format still uses `-o` verbatim. `{ts}` expands once for the whole run, so a slow `pdf` render lands on the same timestamp as its siblings, and if one format fails the others are still written.
 
 <Callout icon="circle-info" color="#3B82F6" iconType="regular">
   HTML requires `-o/--output`. Other report formats: `report`, `pdf` (rendered via headless Chrome), and `markdown` (alias `md`). The output path accepts `gs://<project>/<key>` URLs and a `{ts}` timestamp placeholder. See [Output & Reporting → HTML](/getting-started/output-and-reporting#html).
@@ -913,9 +956,19 @@ vigolium traffic --status 401,403,500 --method POST
 vigolium traffic --source ingest-proxy
 vigolium traffic --from 2026-01-01 --to 2026-02-01
 
+# Relative offsets and named days work too (aliases: --since / --until)
+vigolium traffic --since 2d              # last two days
+vigolium traffic --since today           # since local midnight
+vigolium traffic --since '1h30m ago'
+vigolium finding --since yesterday --min-severity high
+
 # Combine filters: POSTs to the API that returned 200 and leaked a token
 vigolium traffic --host api.example.com --method POST --body "token" --status 200
 ```
+
+<Callout icon="circle-info" color="#3B82F6" iconType="regular">
+  `--from`/`--to` (aliases `--since`/`--until`) work the same on `finding`, `traffic`, `db ls`, `db export`, and `replay`. Bare dates and wall-clock times resolve in your **local** zone, and a bare date on the upper bound snaps to end-of-day — so `--from 2026-08-01 --to 2026-08-01` is the whole of Aug 1, not an empty range. See [Date filtering](/others/cli-references#date-filtering).
+</Callout>
 
 Choose how each record is rendered:
 
@@ -989,7 +1042,7 @@ vigolium ol -p 'what model are you running'
 Once `vigolium ol` returns a model name, every agent command works: `vigolium agent autopilot`, `vigolium agent swarm`, `vigolium agent query`, and `vigolium agent audit`.
 
 <Callout icon="circle-info" color="#3B82F6" iconType="regular">
-  These are two of several providers, olium also supports the Claude Code Agent SDK bridge, Anthropic OAuth/API-key, and any OpenAI-compatible backend (Ollama, OpenRouter, LM Studio, vLLM). For the full provider matrix, credential handling, and the source-code audit drivers, see the setup guide, starting with the recommended Codex path: [Set up the agent → Codex](https://docs.vigolium.com/getting-started/setup-agent#2-codex-cheapest-with-a-chatgpt-subscription-recommended).
+  These are two of several providers, olium also supports the Claude Code Agent SDK bridge, Anthropic OAuth/API-key, and any OpenAI-compatible backend (Ollama, OpenRouter, LM Studio, vLLM). If you already pay for a coding agent (Codex, Claude, Grok, …), the recommended path is to route it through a local OpenAI-compatible proxy instead of buying a new key: [Set up the agent → reuse your subscription](https://docs.vigolium.com/getting-started/setup-agent#recommended-reuse-the-coding-agent-subscription-you-already-have). For the full provider matrix, credential handling, and the source-code audit drivers, see the [setup guide](https://docs.vigolium.com/getting-started/setup-agent).
 </Callout>
 
 ---

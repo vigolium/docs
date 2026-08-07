@@ -193,9 +193,30 @@ vigolium scan -I har     -i traffic.har
 cat urls.txt | vigolium scan -i -
 ```
 
-Run `vigolium --list-input-mode` to see every supported input format with examples. Accepted formats are `urls`, `openapi`/`swagger`, `postman`, `curl`, `burpraw`/`raw`, `burpxml`/`burp`, `har`, and `nuclei`.
+Run `vigolium --list-input-mode` to see every supported input format with examples. Accepted formats are `urls`, `openapi`/`swagger`, `postman`, `curl`, `burpraw`/`raw`, `burpxml`/`burp`, `burpscope`/`burp-scope`, `har`, `nuclei`, and `deparos`.
 
-An unknown `-I/--input-mode` value is now **rejected up front** with a clear error (it previously fell through to the Nuclei parser silently, so a typo could yield zero or partial records with no warning).
+An unknown `-I/--input-mode` value is **rejected up front** with a clear error (it previously fell through to the Nuclei parser silently, so a typo could yield zero or partial records with no warning).
+
+<Warning>
+  **`-i/--input` vs `-T/--target-file` is not a free choice.** `-T` reads its file as one target URL per line, so a spec or an export must go through `-i` — pointing `-T` at a YAML spec makes every line of that file a target (and under `-S` fans out one child scan per line). The two exceptions are the formats that genuinely *are* target lists: `urls` and `burpscope`.
+</Warning>
+
+### `burpscope` — scan a bug-bounty scope file
+
+`burpscope` parses a **Burp Suite project-config scope export** — the `{"target":{"scope":{"include":[…],"exclude":[…]}}}` JSON a bug-bounty program hands out, *not* the proprietary binary `.burp` project file — and expands its include rules into seed URLs:
+
+```bash
+vigolium scan -T scope.json                  # content-sniffed, no -I needed
+vigolium scan -i scope.json -I burpscope     # or name it explicitly
+```
+
+It is content-sniffed on both the `-T` and `-i` paths, so it works without `-I`; an explicit `-I` always wins. Three rules govern the expansion:
+
+- **A wildcard host is never guessed at.** `^.*\.example\.com$` names a set, not a server — synthesizing the apex would send traffic at a host the scope never listed. Those are reported separately rather than scanned.
+- **An `http://` candidate collapses into its `https://` twin** when the same host and path are in scope over both (Burp writes both for every host, and the http one is a redirect in practice). An explicit non-default port survives as its own distinct service.
+- **Exclude rules are applied to the derived targets** before anything is emitted.
+
+A scope file that yields zero targets is a hard error, not an empty run.
 
 ## Ingestion
 
@@ -295,6 +316,7 @@ vigolium export --format jsonl --only findings
 vigolium export --format jsonl --only findings,http
 vigolium export --format html -o report.html
 vigolium export --format fs -o run            # browsable run-traffic/ + run-findings/ tree (also on `db export`)
+vigolium export --format html,markdown,bundle -o acme-q3   # several formats, one DB read
 
 # Live Burp bridge — read Burp history into the traffic view, or push DB traffic back into Burp
 vigolium traffic --burp-bridge-url http://127.0.0.1:9009                                # merge live Burp Proxy history
@@ -350,6 +372,23 @@ vigolium finding --id 42 --to-repeater --send-via-burp \
 ```
 
 **Cleanup safety.** A bare `vigolium db clean` with no selector is **rejected** — narrow the delete with a filter (`--scan-uuid`, `--host`, `--before`, `--status`, `--severity`, `--search`, `--orphans`, `--findings-only`, `--table`), use `db clean --all --force` to empty the data tables, or `vigolium db reset --force` to delete and recreate the SQLite database file from scratch (it VACUUMs automatically; without `--force` on a TTY it prompts for interactive confirmation).
+
+### Several export formats in one run
+
+`vigolium export --format` takes a comma-separated list — `html`, `report`, `pdf`, `jsonl`, `markdown` (alias `md`), `bundle` (alias `gz`), `fs`. The database is read **once** and every format renders from that one result set, so three formats cost one query rather than three:
+
+```bash
+vigolium export --format html,markdown,bundle -o acme-q3
+# → acme-q3.html
+#   acme-q3.md
+#   acme-q3.tar.gz
+```
+
+- **One format keeps `-o` verbatim.** `--format html -o report` writes exactly `report`; extension-deriving only kicks in from the second format onward. Because one `-o` cannot name three files, it becomes **required as a base path** as soon as you pass a second format. An extension already on the base is replaced, not stacked.
+- **`{ts}` and `{project-uuid}` expand once for the whole run**, before per-format derivation, so every file carries the same timestamp even when a slow renderer (`pdf` shells out to headless Chrome) finishes seconds after its siblings.
+- **A failing format does not discard its siblings.** The error is reported inline, the run continues, and the command exits non-zero with an `N of M formats failed` summary. A single format still returns its bare error unchanged.
+
+The same applies to a `gs://` base — each format is uploaded under its own key. `vigolium db export -f` remains single-valued.
 
 ### Import
 
@@ -462,11 +501,50 @@ The selection surface mirrors `vigolium traffic`:
 
 - **Match:** a positional term, repeatable `--search` (AND-combined; matches URL/path **and** the raw request/response), `--host`, `--method` (repeatable), `--status` (repeatable), `--path`, `--source`, `--body`.
 - **Exclude:** repeatable `--exclude-search` and `--exclude-body` drop matching records.
-- **Range & order:** `--from` / `--to` (`YYYY-MM-DD` or RFC3339), `--sort uuid|created_at|sent_at|method|status|time` (default `created_at`), `--asc` (default: newest-first), `--offset <n>` for pagination.
+- **Range & order:** `--from` / `--to` (see [Date filtering](#date-filtering) for the accepted forms), `--sort uuid|created_at|sent_at|method|status|time` (default `created_at`), `--asc` (default: newest-first), `--offset <n>` for pagination.
 - `--all` lifts the default `-n/--limit` cap (100); narrow the set with the selectors instead. Each record is re-sent verbatim — payload / insertion-point fuzzing lives in [`vigolium fuzz`](#fuzz).
 - Throttle with `-c/--concurrency` (default 10); cap the set with `-n/--limit` (default 100, lifted by `--all`).
 - Combine with `--proxy`, `--save-to-burp`, or `--send-via-burp` as with single-record replay.
 - `-S/--stateless --db <file>` reads baselines from a standalone `.sqlite`/`.jsonl` export with project scoping off — it never writes to your project DB.
+
+### Replay through a real browser
+
+`--with-browser` loads each matched record's URL in a real browser routed through `--proxy`, instead of re-sending the stored bytes. Use it when an intercepting proxy needs genuine browser traffic — real TLS fingerprint, JS execution, and subresource loads — rather than a replayed byte stream:
+
+```bash
+vigolium replay --host acme.test --all --with-browser --proxy http://127.0.0.1:8080
+```
+
+<Warning>
+  This is **not** a diff mode. A navigation exposes no status code and no response body, so there is nothing to compare against the baseline. Those runs emit a `browser` object — `requested_url`, `final_url`, `title`, `dialogs`, and `original_method` when the record's method wasn't GET (a navigation can only issue a GET) — and leave `result` **null**, rather than a hollow summary whose zero-valued status would read as a real comparison.
+</Warning>
+
+Because nothing is re-sent, `--with-browser` is rejected alongside every flag downstream of the send: `--in-replace`, `--raw-request`, and the Burp send/stage targets. Without `--proxy` it warns — browser traffic isn't being routed anywhere to be captured.
+
+## Date filtering
+
+`--from` / `--to` (aliases `--since` / `--until`) are available on `finding`, `traffic`, `db ls`, `db export`, and `replay`, all sharing one parser. `db clean --before` and swarm's `--records-from since=|until=` accept the same forms:
+
+| Form | Examples |
+|---|---|
+| Relative offset | `2d`, `12h`, `30m`, `1w`, compound `1h30m`, optional trailing `ago` |
+| Named | `today`, `yesterday`, `now` |
+| Date | `YYYY-MM-DD` |
+| Date + wall-clock time | `YYYY-MM-DD HH:MM[:SS]` |
+| Absolute | RFC3339 |
+
+```bash
+vigolium finding --since 2d --min-severity high     # last two days
+vigolium traffic --from today                       # since local midnight
+vigolium traffic --from 2026-08-01 --to 2026-08-01  # the whole of Aug 1
+vigolium db ls --since '1h30m ago'
+```
+
+Two behaviours are worth knowing. Bare dates and wall-clock times resolve in your **local** zone — resolving them as UTC would silently drop the first hours of the local day, and `--since today` is the flag's whole point. And a bare date on an **upper** bound snaps to end-of-day, so `--from D --to D` is the full day D rather than an empty range. An inverted range is a hard error, not silently-empty output.
+
+<Note>
+  `db clean --before` deliberately does *not* snap to end-of-day, so the named day survives the delete.
+</Note>
 
 ## Fuzz
 
@@ -488,17 +566,67 @@ vigolium fuzz -u <record-uuid> --fuzz params -w fuzz
 # Agent handle: stream JSONL to stderr, print ONE summary object to stdout
 vigolium fuzz 'https://acme.test/api?id=FUZZ' -w ~/wordlists/ids.txt -j
 
+# Let the run tell you what's interesting instead of writing matchers
+vigolium fuzz 'https://acme.test/api/FUZZ' -w dir-short --anomaly
+
+# Credential pairs in lockstep across two markers
+vigolium fuzz 'https://acme.test/login' -X POST -d 'u=FUZZ&p=FUZZ2' \
+  --mode pitchfork -w users.txt:FUZZ -w passwords.txt:FUZZ2
+
 # CI/agent gate: exit non-zero (3) if any result matches
 vigolium fuzz 'https://acme.test/admin/FUZZ' -w dir-short --match-status-code 200,301 --fail-on-match
 ```
 
-**Source** (one of): a positional URL (with `-X/--request`, `-H/--header`, and `-d/--data` to build the method, headers, and body), `-i/--input` (curl, raw HTTP, Burp XML, base64, URL, or `-` for stdin; `--input-file` reads that same value from a file), `-u/--record-uuid` (a stored HTTP record), or a request piped on stdin. `-t/--target` overrides the scheme/host/port the request is actually sent to.
+**Source** (one of): a positional URL (with `-X/--request`, `-H/--header`, and `-d/--data` to build the method, headers, and body), `-i/--input` (curl, raw HTTP, Burp XML, base64, URL, or `-` for stdin; `--input-file` reads that same value from a file), `-u/--record-uuid` (a stored HTTP record), or a request piped on stdin. `-t/--target` overrides the scheme/host/port the request is actually sent to. `-X`, `-H`, and `-d` apply to **every** source, not just a positional URL, and are applied before positions are resolved — so a marker introduced by `-H 'X-Forwarded-For: FUZZ'` is discovered.
 
-**Positions** (what to fuzz): a literal `FUZZ` marker anywhere in the request (request line, path, header, or body) wins if present; otherwise `--fuzz method|path|params|param-name|headers|cookies|all` (default: all discovered insertion points), `--point TYPE:name` (e.g. `URL_PARAM:id`, repeatable), or `--fuzz-header <name>` (repeatable). The marker keyword is configurable with `--keyword`.
+**Positions** (what to fuzz): a literal `FUZZ` marker anywhere in the request (request line, path, header, or body) wins if present; otherwise `--fuzz method|path|params|param-name|headers|cookies|all` (default: all discovered insertion points), `--point TYPE:name` (e.g. `URL_PARAM:id`, repeatable), or `--fuzz-header <name>` (repeatable). `--fuzz-header` **injects** a header the request doesn't already carry rather than erroring — `X-Forwarded-For` is interesting precisely because the client never sends it. The marker keyword is configurable with `--keyword`.
 
 **Payloads** (combine freely): `--class` selects a built-in vulnerability class — `xss`, `sqli`, `ssti`, `ssrf`, `lfi`, `path_traversal`, `xxe`, `cmdi`, `open_redirect`, `crlf` (aliases like `traversal`, `rce`, `sql`, `template` accepted); `-w/--wordlist` takes a builtin name (`fuzz`, `dir-short`, `dir-long`, `file-short`, `file-long`) **or** a file path (repeatable); `-p/--payload` adds an inline literal (repeatable).
 
-**Matchers & excludes.** Matchers **keep** a response (OR-combined; empty keeps all): `--match-status-code` (accepts `all`), `--match-size`, `--match-words`, `--match-lines`, `--match-regex`, `--match-time` (ms). Each has an `--exclude-*` counterpart that **drops** a response — `--exclude-status-code`, `--exclude-size`, `--exclude-words`, `--exclude-lines`, `--exclude-regex`, `--exclude-time`. Auto-calibration (on by default) probes the target's wildcard/catch-all and suppresses matches identical to it — suppressed results carry `"calibrated":true`; disable it with `--no-calibrate`.
+**Attack modes** (`--mode`). Numbered markers `FUZZ`, `FUZZ2`, `FUZZ3`… become separate positions, and `-w users.txt:FUZZ` binds a wordlist to one of them:
+
+| Mode | Behaviour |
+|---|---|
+| `sniper` (default) | One position at a time, the others left at their original value |
+| `batteringram` | The same payload placed in every position at once |
+| `pitchfork` | Lists advance in lockstep — credential *pairs*, bounded by the shortest list |
+| `clusterbomb` | Every combination of every list |
+
+Multi-position modes are **marker-only**: an `httpmsg` insertion point is built against the request it was analyzed on, so applying a second would discard the first's edit. Clusterbomb expansion is bounded, so a runaway product is a clear error rather than an out-of-memory kill.
+
+**Matchers & excludes.** Matchers **keep** a response (OR-combined; empty keeps all): `--match-status-code` (accepts `all`), `--match-size`, `--match-words`, `--match-lines`, `--match-regex`, `--match-time` (ms), `--match-time-z`, and `--match-header`. Each has an `--exclude-*` counterpart that **drops** a response. `--match-mode all` requires every category instead of any (likewise `--exclude-mode`).
+
+Numeric flags take a **comparison predicate**, not just exact equality — `N`, `N-M`, `>N`, `>=N`, `<N`, `<=N`, `!N`, comma-separated. Exact equality alone is near-useless for sizes, since a page carrying a timestamp or CSRF token is never byte-identical twice:
+
+```bash
+--match-status-code 200,301   --match-size '>1000'    --match-words 50-80
+--match-lines '!0'            --match-time '>500'     # bare N on --match-time means >=N
+--match-header 'Location: /admin'                     # presence-only: --match-header Location
+```
+
+`--match-header` matches response headers — header reflection is the whole signal for open redirect and response splitting. Reflection is likewise reported as `reflected_raw` (verbatim) separately from an escaped echo, with `reflected_in` naming the location (`body`, `header:Location`), because conflating a verbatim echo with an HTML-escaped one hides the difference between "this might execute" and "the app escaped it".
+
+Auto-calibration (on by default) probes the target's wildcard/catch-all and suppresses matches identical to it — suppressed results carry `"calibrated":true`; disable it with `--no-calibrate`.
+
+**Anomaly scoring** (`-a/--anomaly`) is the alternative to writing matchers by hand. Writing a matcher means knowing the interesting size or status up front; instead, each response is scored against the baseline **and** against the run's own population, and the ones that stand out are kept:
+
+```bash
+vigolium fuzz 'https://acme.test/api/FUZZ' -w dir-short --anomaly --anomaly-threshold high
+```
+
+The population reference is what makes this work on an unknown target — a status change that *every* payload triggers is the endpoint's normal behaviour, not a signal, and only rarity distinguishes those. Signals include a leaked SQL/stack/template error the baseline lacked, a 5xx, a 4xx→2xx flip (auth-bypass-shaped), size and time outliers, a body no other payload produced, a rare status, a changed `Location`/`WWW-Authenticate`, and unencoded reflection. Outliers use **median-absolute-deviation** rather than standard deviation, since a fuzz population is full of outliers by construction and they would inflate a stddev enough to hide themselves.
+
+Every result carries `anomaly_score` and `anomaly_reasons`. `--anomaly-threshold low|medium|high` (or a number) sets the bar; `--anomaly-min-population` (default 12) is how many responses must land before rarity and outlier signals count. With `--anomaly` and no explicit matchers, "interesting" replaces "keep everything" as the gate.
+
+<Note>
+  Anomaly scoring reports **where to look**, never a verdict — the primitive stance holds. Confirm a lead with the module scanner: the `-j` summary hands you a ready `scan-request` query for exactly that.
+</Note>
+
+**Baseline timing.** `--baseline-samples N` sends the un-fuzzed request N times to measure timing jitter, giving each result a `time_z` (standard deviations above the baseline mean) that `--match-time-z` can gate on. Default is 1, or 3 under `--anomaly`. This is how to express a time-based signal without guessing a per-target millisecond threshold.
+
+**Curl parity.** `fuzz` accepts curl's long-form flags so a request pasted from DevTools works with minimal editing: `--cookie`, `--user`, `--user-agent`, `--referer`, `--data-raw`, `--data-binary`, `--data-urlencode`, `--form`, `--form-string`, `--get`, `--head`, `--insecure`, `--cacert`, `--cert`, `--key`, `--max-redirs`, `--connect-timeout`, `--max-time`, `--compressed`, `--http1.1`, `--http2`, `--resolve`, `--path-as-is`. Long forms **only** — the short spellings are already taken by vigolium meanings (`-u` record UUID, `-i` input, `-w` wordlist, `-c` concurrency). Body assembly is shared with the curl input parser, so `--data-urlencode` and `--form` behave identically whether they arrive as flags or inside a pasted curl command. `--auth-session` / `--session-id` / `--no-cookies` mirror `replay`.
+
+**Dry run.** `--dry-run` resolves positions and payloads and prints the exact bytes each would send, with **zero** network traffic — the pre-flight to run before committing to a wordlist-scale job. `--ignore-scope` overrides the project-scope guard when the target is outside configured scope.
 
 **Output.** Default is JSONL (one object per send) to stdout — matched-only unless `--all-results`; `--pretty` renders a human-readable table, `-o/--output` writes to a file. Under `-j/--json`, the JSONL streams to **stderr** and a single summary object prints to stdout: `{target, sent, matched, calibrated, baseline, top_results (ranked anomalies), query (a ready scan-request confirmation)}` — a handle a coding agent can act on directly. `--fail-on-match` exits `3` when any result matches, for CI/agent gating. Throttle with `-c/--concurrency` (default 10) and `--delay <ms>`; `--timeout` sets the per-request timeout and `--no-redirects` stops following 30x. Honors `HTTP_PROXY`/`HTTPS_PROXY` for Burp inspection.
 
@@ -547,9 +675,11 @@ vigolium skills install                           # Install vigolium-scanner for
 vigolium skills install --agent codex --scope global   # --agent claude|codex|agents, --scope project|global
 vigolium skills install --all                     # Install every bundled skill
 vigolium skills install --dir ./.claude/skills    # Override the destination directory
-vigolium skills --third-party-skills              # Also list vendored third-party skills (e.g. agent-browser)
-vigolium skills install --all --third-party-skills   # ...and include them in --all
+vigolium skills get vigolium-scanner --full       # Include the reference files, not just SKILL.md
+vigolium skills get --all                         # Output every bundled skill
 ```
+
+An already-installed skill is skipped unless `--force` is given. Because the content is embedded in the binary it always matches the installed version — prefer `vigolium skills install` over copying stale files by hand.
 
 ## Extensions
 
@@ -640,7 +770,7 @@ vigolium agent swarm -t https://example.com \
 
 `agent swarm` accepts the olium override flags `--provider`, `--model`, `--base-url`, `--llm-api-key`, `--oauth-cred`, and `--oauth-token`; each falls back to `agent.olium.*`. For the Vertex providers, `--gcp-project` and `--gcp-location` set the GCP project and region (falling back to `$GOOGLE_CLOUD_PROJECT` / `$GOOGLE_CLOUD_LOCATION`, then `agent.olium.google_cloud_*`, then `us-central1`). `--prompt` and the positional `[prompt]` are the same task-guidance slot and stay verbatim when structured target/source flags are also present.
 
-**Choosing the input records.** Without `--discover`, swarm plans from the traffic it's given: `--all-records` uses every HTTP record in the active project, and `--records-from` filters them by a spec string (`host=`, `status=`, `method=`, `path=`, `since=`, comma-separated). `--max-plan-records` caps how many reach the plan agent — it selects the most interesting with one slot per URL prefix, and `--intensity` overrides the default (quick `10`, balanced `25`, deep `50`; `0` = no limit).
+**Choosing the input records.** Without `--discover`, swarm plans from the traffic it's given: `--all-records` uses every HTTP record in the active project, and `--records-from` filters them by a spec string (`host=`, `path=`, `method=`, `status=`, `source=`, `since=`, `until=`, comma-separated — `since`/`until` take the [shared date grammar](#date-filtering)). `--max-plan-records` caps how many reach the plan agent — it selects the most interesting with one slot per URL prefix, and `--intensity` overrides the default (quick `10`, balanced `25`, deep `50`; `0` = no limit).
 
 **Tuning the run.** `--probe-concurrency` (default 10), `--probe-timeout` (default 10s), and `--max-probe-body` (default 2 MB) bound the probing stage; `--sub-agent-concurrency` (default 3) caps parallel source-analysis sub-agents (routes, auth, extensions); `--max-master-retries` (default 3) is how many times a master-agent parse failure is retried. `--disable-guardrail` skips the prompt-safety classifier on the natural-language prompt — use it only when a known-good prompt is being refused.
 

@@ -37,6 +37,27 @@ Higher-precedence sources override lower ones. Within the config file, environme
 | `VIGOLIUM_PROJECT_UUID` | Default project UUID for CLI operations (equivalent to `--project-uuid`; `VIGOLIUM_PROJECT` is a legacy alias) |
 | `VIGOLIUM_PROXY` | HTTP/SOCKS proxy URL, used when `--proxy` is not set |
 | `VIGOLIUM_HOME` | Base directory for Vigolium data (used by the installer; defaults to `~/.vigolium`) |
+| `VIGOLIUM_DB_PATH` | Default for the global `--db` flag — pins a shell to one session database |
+
+### `VIGOLIUM_DB_PATH`
+
+Set it once and every command in that shell reads and writes the same database file, without repeating `--db`:
+
+```bash
+export VIGOLIUM_DB_PATH=~/engagements/acme/session.sqlite
+
+vigolium scan -t https://acme.test        # writes here
+vigolium finding --min-severity high      # reads from here
+vigolium fuzz -u <record-uuid>            # resolves the record from here
+```
+
+Each run prints a one-line notice naming the resolved database (suppressed under `--silent`, `-j`, and `--ci-output-format`).
+
+The variable carries one deliberate asymmetry. **Reads** additionally treat the file as a *standalone source* — project scoping is turned off, so every row in the file is listed regardless of the `project_uuid` it carries, exactly as `-S --db <file>` behaves. **Writes** do not: a scan into the pinned database still records its own project. This means you can point the variable at a colleague's export and query all of it, while your own scans stay properly attributed.
+
+<Note>
+  An explicit `--db` always wins. The variable is skipped until the file exists, so the first read of a not-yet-written session doesn't fail. And it never sets `--stateless` for you: on `scan` / `scan-url` / `scan-request` / `run` that flag means "scan into a throwaway temp database" and is mutually exclusive with `--db` — passing `-S` explicitly on one of those commands makes the variable a no-op.
+</Note>
 
 Any environment variable can also be interpolated inside `vigolium-configs.yaml`:
 
@@ -254,8 +275,8 @@ Browser-based crawling.
 
 ```yaml
 spidering:
-  max_depth: 0               # 0 = unlimited
-  max_states: 0              # 0 = unlimited
+  max_depth: 6               # 0 = unlimited
+  max_states: 1500           # 0 = unlimited
   max_duration: 30m
   max_consecutive_fails: 100
   headless: true
@@ -265,6 +286,8 @@ spidering:
   browser_engine: chromium   # chromium | ungoogled | fingerprint
   no_cdp: false              # disable CDP event listener detection
   no_forms: false            # disable automatic form filling
+  self_register: false       # complete a public signup form and crawl as that account
+  graph_output_dir: ""       # write the crawl graph here (one file per host); empty disables
 
   # AI pilot mode (agent-controlled browser):
   pilot_mode: false
@@ -275,6 +298,14 @@ spidering:
   pilot_max_retries: 2
   pilot_stall_timeout: 7m
 ```
+
+<Note>
+  `max_depth` and `max_states` default to **6** and **1500** — they were unlimited before v0.3.8. Both bound how the crawl spends its `max_duration`: without a depth bound a link-dense site can sink the whole budget into one deep branch and never revisit the breadth near the seed, and without a state bound a template that mints a state per row (a paginated table, a calendar) spends it on near-identical pages. Set either to `0` to restore unlimited.
+</Note>
+
+`self_register` lets the crawl complete a public signup form and continue as the account it creates — on an app with open registration, that is the difference between crawling the marketing shell and crawling the product. It runs at most once per host, only submits to an in-scope host, and reuses the identity it creates at any later login form. It stays **off** by default because registering is a write; `--intensity deep` turns it on, and setting this key to `true` forces it on at any intensity.
+
+`graph_output_dir` writes the finished crawl graph into a directory (one file per host). Captured traffic records *what* was requested; the graph records *how* the crawler got there — which action on which state, with which form values, and the selector to find that element again — which is what makes a run reproducible and lets a later pass re-reach a specific state. It is a directory rather than a path because one browser session reuses a single config across all of a host's seeds.
 
 ### `dynamic-assessment`
 

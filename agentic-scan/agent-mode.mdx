@@ -43,7 +43,8 @@ Every agent invocation is dispatched through the in-process **olium runtime** (`
 
 - **Use for:** pentest-style engagements where you want the agent to be creative and decide what to do.
 - **How it works:** one autonomous operator runs until it calls `halt_scan` or hits limits. `legacy` keeps one conversation; `shadow`/`enforced` rotate bounded sections and persist resumable state. When `--source` is provided, vigolium-audit runs first to prepare a frozen whitebox context bundle.
-- **Key flags:** `[prompt]`/`--prompt`, `-t/--target`, `--input`, `--burp-bridge-url`, `--prior-context {auto|summary|off}`, `--knowledge-base`, `--plan-file`, `--source`, `--max-duration`, `--intensity {quick|balanced|deep}`, `--audit {lite|balanced|deep|off}`, `--resume`, `--session-dir`, `--transcript`, `--triage`, `--diff`, and `--last-commits`.
+- **Key flags:** `[prompt]`/`--prompt`/`--prompt-file`, `-t/--target`, `--input`, `--burp-bridge-url`, `--prior-context {auto|summary|off}`, `--knowledge-base`, `--plan-file`, `--source`, `--max-duration`, `--intensity {quick|balanced|deep}`, `--audit {lite|balanced|deep|off}`, `--resume`, `--session-dir`, `--transcript`, `--triage`, `--diff`, and `--last-commits`.
+- **Throwaway runs:** `-S`/`--stateless` runs the whole autopilot into a throwaway temp DB (project DB untouched, like `vigolium scan -S`) and materializes `--format` outputs from it — `console`, `jsonl`, `html`, `report`, `pdf`, `sqlite`, `fs`, with `-o`/`--output` as the shared base (default `vigolium-result/vigolium-autopilot`). A file-producing `--format` is an error **without** `-S`; `-S` is rejected with `--db`, `--db-isolate`, and `--resume`.
 
 See [Autopilot](/agentic-scan/autopilot).
 
@@ -51,7 +52,7 @@ See [Autopilot](/agentic-scan/autopilot).
 
 - **Use for:** target-specific scanning when you want structure (planning → native scan → triage), source-aware route discovery, or verification loops.
 - **How it works:** 10-phase pipeline, normalize → auth (opt) → source-analysis (opt) → code-audit (opt) → discover (opt) → plan (AI) → extension → native scan → triage (opt) → rescan (opt).
-- **Key flags:** `[prompt]`/`--prompt`, `-t/--target` (required with `--source`), `--input`, `--plan-file`, `--record-uuid`, `--source`, `--discover`, `--code-audit`, `--triage`, `--max-iterations`, `-m/--modules`, `--vuln-type`, `--audit {lite|balanced|deep}`, `--intensity`, `--only`/`--skip`/`--start-from`, and `--with-extensions`.
+- **Key flags:** `[prompt]`/`--prompt`/`--prompt-file`, `-t/--target` (required with `--source`), `--input`, `--plan-file`, `--record-uuid`, `--source`, `--discover`, `--code-audit`, `--triage`, `--max-iterations`, `-m/--modules`, `--vuln-type`, `--audit {lite|balanced|deep}`, `--intensity`, `--only`/`--skip`/`--start-from`, and `--with-extensions`. `swarm` does not yet carry `-S/--stateless`.
 
 See [Swarm](/agentic-scan/swarm).
 

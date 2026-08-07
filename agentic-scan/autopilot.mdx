@@ -179,6 +179,7 @@ vigolium agent autopilot -t https://staging.example.com \
 | `--input` |, | Raw input (curl, raw HTTP, Burp XML, base64, URL). Reads stdin if piped |
 | `--record-uuid` |, | Use an HTTP record from the database as the seed input |
 | `--prompt` / positional `[prompt]` |, | Free-text task guidance. With explicit target/source flags it stays verbatim; otherwise the intent parser also derives structured fields from it. |
+| `--prompt-file` |, | Read the task guidance from a file — the **same** channel as `--prompt`, so a long prompt needn't be shell-escaped. Pass the guidance once: combining it with `--prompt` or the positional prompt is an error. |
 | `--plan-file` |, | Prose plus raw HTTP request blocks. Owns task guidance and seed input, so it cannot be combined with `--input`, `--record-uuid`, or a prompt. |
 | `--burp-bridge-url` | `$VIGOLIUM_BURP_BRIDGE_URL` | Import live Burp Proxy history into the project before prior context and pre-scan are built. |
 | `--prior-context` | `auto` | Existing project traffic/findings briefing: `auto` (bounded table), `summary` (one-line pointer), or `off`. |
@@ -197,6 +198,9 @@ vigolium agent autopilot -t https://staging.example.com \
 | `--skill-tag` |, | Force-load every skill carrying one of these tags (e.g. `xss,idor`) |
 | `--no-skill-filter` | false | Load the full skill set; skip the pre-flight skill selection |
 | `--db-isolate` | false | Scan into a private temporary database, then merge results into `--db` at the end (lets parallel runs share one DB; SQLite only) |
+| `-S, --stateless` | false | Run the whole autopilot into a throwaway temporary database, then materialize `--format` outputs from it. Mirrors `vigolium scan -S`. See [Throwaway runs and reports](#throwaway-runs-and-reports--s---stateless). |
+| `--format` | `console` | Comma-list of outputs to write from a `-S` run: `console`, `jsonl`, `html`, `report`, `pdf`, `sqlite`, `fs`. A file-producing format is an error without `-S`. |
+| `-o, --output` | `vigolium-result/vigolium-autopilot` | Shared base path for the `-S` export; each `--format` appends its own extension. Only applies with `-S`. |
 | `--piolium` |, | Run piolium audit instead of vigolium-audit when `--source` is set (`lite`/`balanced`/`deep`/`longshot`/…); empty auto-picks piolium when `pi` is installed |
 | `--no-prescan` | false | Skip the native pre-scan that seeds http_records before the operator (target-only runs; no-op with `--source`) |
 | `--no-preflight-discovery` | false | Skip pre-flight discovery and OpenAPI/Swagger ingestion. |
@@ -216,6 +220,35 @@ vigolium agent autopilot -t https://staging.example.com \
 | `--post-halt-gap-threshold` | 5 | New `(method, URL)` routes the post-halt probe must find before the agent is re-entered (`0` = built-in default) |
 
 The CLI no longer exposes `--focus`, `--instruction`, `--instruction-file`, `--browser`, `--credentials`, or the other auth-intent flags. Put that information in `--prompt` (or the positional prompt). Browser tooling is always available, and the intent parser extracts login details and browser requirements. The REST API keeps its structured `focus`, `instruction`, `browser`, and credential fields for programmatic callers.
+
+### Throwaway runs and reports (`-S/--stateless`)
+
+`-S/--stateless` runs the whole autopilot into a throwaway temporary database — your project DB is left untouched — then materializes `--format` outputs from it, mirroring `vigolium scan -S`. Use it for a one-off assessment you want as files rather than as project state:
+
+```bash
+vigolium agent autopilot --stateless \
+  --format sqlite,html,console \
+  -t https://app.example.com \
+  --intensity deep --prompt-file prompt.md
+```
+
+`--format` accepts a comma-separated list of `console`, `jsonl`, `html`, `report`, `pdf`, `sqlite`, `fs` — exactly the same set `vigolium scan -S` accepts, from the same shared list. With more than one format, `-o/--output` is a shared **base path** and each format appends its own extension; with no `-o`, the base defaults to `vigolium-result/vigolium-autopilot`. The exported `.sqlite` reopens directly:
+
+```bash
+vigolium finding -S --db vigolium-result/vigolium-autopilot.sqlite --min-severity high
+```
+
+The operator's own `vigolium` subprocesses inherit the throwaway database (via `VIGOLIUM_DB_PATH`), and so do the native scans it launches — so nothing the run does leaks into your project database.
+
+<Warning>
+  A file-producing `--format` (anything but `console`) is a **hard error without `-S`**. A persisted agentic run has no live output writer, so there is nothing to materialize — export the project DB afterwards instead:
+
+  ```bash
+  vigolium export --format html,markdown -o report --agentic-scan <uuid>
+  ```
+</Warning>
+
+`-S` is rejected alongside `--db`, `--db-isolate`, and `--resume` — a resumed run restores its target, scratchpad, and prior findings from the project database, which a throwaway one does not have. Under a multi-app natural-language prompt, every app runs into the same scratch database and the combined result is exported once.
 
 ---
 

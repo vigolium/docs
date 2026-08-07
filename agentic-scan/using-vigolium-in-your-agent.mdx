@@ -46,15 +46,24 @@ The skill uses lazy-loaded references: the main `SKILL.md` stays small, and deta
 
 ```
 public/skills/vigolium-scanner/
-├── SKILL.md                              # Main skill (decision tree, recipes, flags)
+├── SKILL.md                     # Main skill (decision tree, recipes, routing)
 └── references/
-    ├── scanning-commands.md              # scan, scan-url, scan-request, run
-    ├── server-and-ingestion.md           # server, ingest, traffic, traffic replay
-    ├── agent-commands.md                 # agent, agent query, autopilot, swarm
-    ├── data-and-management.md            # db, module, ext, config, scope, source, export
-    ├── flags-reference.md                # Complete alphabetical flag index
-    └── writing-extensions.md             # JS extension API and examples
+    ├── scanning.md              # scan, scan-url, scan-request, run
+    ├── agent-modes.md           # agent query/autopilot/swarm/audit/olium/triage/session
+    ├── agent-loop.md            # the -j JSON contracts, triage, replay, exit-code gating
+    ├── fuzzing.md               # vigolium fuzz: positions, payloads, matchers, anomaly
+    ├── burp.md                  # Burp bridge: send-via-burp, Repeater/Organizer staging
+    ├── auth.md                  # --auth-file / --auth, YAML format, extract rules
+    ├── data.md                  # db, finding, traffic, module, ext, js, config, export
+    ├── server.md                # vigolium server: REST API, recording/MITM proxy, live mirror
+    ├── ingest.md                # vigolium ingest: local/remote, per-format input examples
+    ├── extensions.md            # writing JS scanner modules against vigolium.*
+    └── flags.generated.md       # generated from the command tree — grep by flag name
 ```
+
+<Note>
+  These filenames changed in v0.3.7–v0.3.9: the references were renamed to shorter stems, `flags-reference.md` became the generated `flags.generated.md`, `server-and-ingestion.md` split into `server.md` + `ingest.md`, and fuzzing and the Burp bridge moved out of `agent-loop.md` into their own files. A separate `agent-browser` skill was dropped. Re-run `vigolium skills install` to pick up the current layout.
+</Note>
 
 ---
 

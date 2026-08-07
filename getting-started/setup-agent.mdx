@@ -15,10 +15,56 @@ icon: "plug"
 
 olium talks to a provider (Claude / OpenAI / a local model), and two specialised drivers, **vigolium-audit** and **piolium**, run on top of it for source-code audits.
 
+## Recommended: reuse the coding-agent subscription you already have
+
+If you already pay for a coding agent, **Codex/ChatGPT, Claude Code, Grok, Gemini, Copilot**, you don't need a new API key. Put a local router in front of those logins and point vigolium at it as a plain OpenAI-compatible endpoint. One config, and every `vigolium agent …` command runs on the subscription you're already paying for.
+
+Two routers do this well, pick either:
+
+- **[OmniRoute](https://github.com/diegosouzapw/OmniRoute)**
+- **[CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI)**
+
+Both log into your existing agent accounts and expose them behind a single local OpenAI-compatible `/v1` endpoint, so switching models is a one-line change on vigolium's side.
+
+<Steps>
+  <Step title="Start the router">
+    Install and log in per the router's README, then leave it running. It will print the local port it listens on.
+  </Step>
+  <Step title="Point vigolium at it">
+    ```bash
+    export OMNI_API_KEY="sk-<your-api-key>"
+
+    vigolium config set agent.olium.provider openai-compatible
+    vigolium config set agent.olium.custom_provider.base_url http://localhost:20128/v1
+
+    vigolium config set agent.olium.custom_provider.model_id gc/grok-4.5
+
+    vigolium config set agent.olium.custom_provider.api_key '${OMNI_API_KEY}'
+    ```
+  </Step>
+  <Step title="Verify">
+    ```bash
+    vigolium ol -p 'what model are you running'
+    ```
+
+    A model name back means you're done, `autopilot`, `swarm`, `query` and the audit drivers all use it from here.
+  </Step>
+</Steps>
+
+The port and the `model_id` are whatever your router exposes, `http://localhost:20128/v1` and `gc/grok-4.5` above are OmniRoute's; hit the router's `/v1/models` to list the ids it routes for you. Quoting `'${OMNI_API_KEY}'` keeps the key out of `vigolium-configs.yaml`, it's expanded from the environment at load time (see [custom headers](#custom-headers-auth-routing-observability)).
+
+<Callout icon="triangle-exclamation" color="#FFC107" iconType="regular">
+  Whatever you route to must actually emit **tool calls**, olium is an agent loop, not a chat box. Frontier models behind these routers (Grok, Claude, GPT, Gemini) are all fine; small local models often aren't. See the [tool-calling caveat](#4-custom-llm-backend-openaianthropic-compatible-api) below.
+</Callout>
+
+---
+
+If you'd rather wire a provider up directly, without a router, the rest of this page covers each one:
+
 | What | Section | When you need it |
 |---|---|---|
 | olium provider | [Olium agent](#1-olium-agent-the-engine-everything-runs-on) | Always, every agent command needs one provider. |
-| Codex (OpenAI OAuth) | [Codex](#2-codex-cheapest-with-a-chatgpt-subscription-recommended) | You have a ChatGPT Plus/Pro/Team subscription. |
+| Codex (OpenAI OAuth) | [Codex](#2-codex-cheapest-with-a-chatgpt-subscription) | You have a ChatGPT Plus/Pro/Team subscription. |
 | Claude | [Claude](#3-claude-anthropic) | You have a Claude Code subscription (Agent SDK bridge — the default — or the `claude` CLI), an OAuth token, or an Anthropic API key. |
 | Custom LLM backend / local model | [Custom LLM backend](#4-custom-llm-backend-openaianthropic-compatible-api) | You want a local model (Ollama, LM Studio) or a custom OpenAI- / Anthropic-compatible gateway (OpenRouter, vLLM, LiteLLM, …). |
 | Vigolium Audit | [Vigolium audit](#5-vigolium-audit-source-code-driver) | You want a whitebox source-code audit with no extra install. |
@@ -58,7 +104,7 @@ If that returns a model name, the provider is wired correctly. From there, `vigo
 
 ---
 
-## 2. Codex, cheapest with a ChatGPT subscription (Recommended)
+## 2. Codex, cheapest with a ChatGPT subscription
 
 If you already use OpenAI's **Codex CLI**, vigolium reuses the same OAuth credential file. No API key needed, refresh handled automatically.
 
@@ -174,6 +220,8 @@ vigolium can drive **any custom LLM backend** — a cloud gateway or a **local L
 
 Both read `custom_provider.base_url` (required), `custom_provider.model_id`, an optional `custom_provider.api_key` (empty = no auth header, for local servers), and `custom_provider.extra_headers`. Pick whichever matches your backend's wire format — everything below applies to both.
 
+This is also the driver behind the [recommended router setup](#recommended-reuse-the-coding-agent-subscription-you-already-have) at the top of the page: OmniRoute / CLIProxyAPI are just another OpenAI-compatible `base_url`, one that happens to be fronting your existing Codex / Claude / Grok logins.
+
 ### Ollama (local, no key)
 
 ```bash
@@ -288,7 +336,7 @@ vigolium ol --provider anthropic-vertex \
 
 ## 5. Vigolium audit, source-code driver
 
-`vigolium agent audit` runs a whitebox source-code audit. The harness (agents, commands, skills) ships **embedded in the vigolium binary**, no extra install. It drives the `claude` or `codex` CLI under the hood (resolved from `agent.olium.provider`), so you need a working Claude *or* Codex setup from [section 2](#2-codex-cheapest-with-a-chatgpt-subscription-recommended) or [section 3](#3-claude-anthropic).
+`vigolium agent audit` runs a whitebox source-code audit. The harness (agents, commands, skills) ships **embedded in the vigolium binary**, no extra install. It drives the `claude` or `codex` CLI under the hood (resolved from `agent.olium.provider`), so you need a working Claude *or* Codex setup from [section 2](#2-codex-cheapest-with-a-chatgpt-subscription) or [section 3](#3-claude-anthropic).
 
 ```bash
 # 1. Make sure `claude` (or `codex`) is installed and authenticated.

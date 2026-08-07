@@ -71,6 +71,12 @@ Vigolium accepts targets in multiple formats via `-I` / `--input-mode`:
 | cURL commands | `-I curl` | `vigolium scan -i curls.sh -I curl` |
 | HAR file | `-I har` | `vigolium scan -i traffic.har -I har` |
 | Nuclei output | `-I nuclei` | `vigolium scan -i nuclei.json -I nuclei` |
+| Deparos discovery output | `-I deparos` | `vigolium scan -i deparos.jsonl -I deparos` |
+| Burp scope export | `-I burpscope` | `vigolium scan -T scope.json` (content-sniffed) |
+
+<Warning>
+  `-T/--target-file` reads its file as one target URL per line, so a spec or an export must go through `-i/--input` — pointing `-T` at a YAML spec makes every line of that file a target. The exceptions are the two formats that genuinely *are* target lists: `urls` and `burpscope`.
+</Warning>
 
 ```bash
 # Scan an OpenAPI spec (auto-uses server URLs from the spec)

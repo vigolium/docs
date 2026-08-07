@@ -10,7 +10,7 @@ Answers to the questions that come up most often. For a system-level picture, st
 
 <AccordionGroup>
   <Accordion title="What is Vigolium?">
-    Vigolium is a high-fidelity web vulnerability scanner written in Go. It combines deterministic, module-based scanning with AI-driven agentic analysis to provide broad and deep coverage of web application security issues. It ships 317 modules (201 active, 116 passive) covering injection flaws, misconfigurations, information disclosure, authentication issues, and more.
+    Vigolium is a high-fidelity web vulnerability scanner written in Go. It combines deterministic, module-based scanning with AI-driven agentic analysis to provide broad and deep coverage of web application security issues. It ships 323 modules (207 active, 116 passive) covering injection flaws, misconfigurations, information disclosure, authentication issues, and more.
   </Accordion>
   <Accordion title="What are the ways to run Vigolium?">
     Three operating modes:
@@ -51,7 +51,7 @@ Answers to the questions that come up most often. For a system-level picture, st
     Yes. `--only <phase>` enables a single phase and disables all others; `--skip <phase>` disables specific phases (the two are mutually exclusive). Phase aliases are normalized, e.g. `deparos`/`discover` → `discovery`, `spitolas` → `spidering`, `ext` → `extension`. `vigolium run <phase>` is an alias for `scan --only <phase>`.
   </Accordion>
   <Accordion title="What input formats can I feed a scan?">
-    URLs, OpenAPI/Swagger, Postman collections, cURL commands, Burp raw requests, Burp XML exports, Nuclei JSONL output, and Deparos discovery output. Run `vigolium --list-input-mode` for every supported format with examples.
+    URLs, OpenAPI/Swagger, Postman collections, cURL commands, Burp raw requests, Burp XML exports, Burp project-config scope exports (`burpscope`), HAR captures, Nuclei JSONL output, and Deparos discovery output. Run `vigolium --list-input-mode` for every supported format with examples.
   </Accordion>
   <Accordion title="Why am I seeing duplicate-looking findings collapsed together?">
     By design. Vigolium has three levels of deduplication: request-level (the `DedupManager`), inline finding-level (the `finding_hash` unique constraint with `INSERT ON CONFLICT DO NOTHING`), and post-phase grouping (`DeduplicateFindings()` merges findings sharing the same module/severity/URL, folding extra request/response pairs into the survivor's `AdditionalEvidence`, capped at 10). See [Native Scan → Deduplication](/architecture/native-scan).

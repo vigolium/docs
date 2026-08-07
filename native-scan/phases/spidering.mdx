@@ -83,6 +83,36 @@ Filling a form only exercises its inputs — the endpoints *behind* those forms 
 
 These passes are **default-on and bounded**. The form-submission passes are gated off by the same `--no-forms` flag that disables form filling. Destructive forms and paths are deliberately skipped — delete/logout actions, `_method`-override forms, and similar state-changing submits are never fetched.
 
+### Frontier seeding (`robots.txt` and `sitemap.xml`)
+
+A link-following crawl can only reach what something links to. Before the main loop starts, the crawler reads the host's `robots.txt` and `sitemap.xml` and folds every in-scope location it finds into the graph — which is how routes that nothing on the site links to still enter discovery. Ironically, `robots.txt` disallow rules are often the most interesting entries: they name the paths the operator would rather nobody browsed.
+
+Seeding is a **whole-crawl pass**, not a landing-page step: it navigates to other locations and needs scope adoption already settled, so it runs after the index state is initialized and before the crawl loop. Locations are recorded up to a cap (1000), but only a subset (25) are actually *browsed into states*. Those are chosen by rounding over path **shapes** — identifier-looking segments are collapsed, so a sitemap dominated by one template (`/product/1`, `/product/2`, … ×900) cannot spend the entire allowance inside it. The rest are requested and recorded as traffic without being crawled.
+
+On by default. The run reports how many locations were declared and how many were browsed.
+
+### Speculative link scraping
+
+A rendered SPA never serves its route list as static HTML — the URLs live in inline scripts, JSON blobs, and commented-out markup. After a page settles, the crawler scrapes URL-like strings out of the document's inline script and HTML comments, keeps the same-origin ones, and fetches them so they land in the traffic corpus.
+
+On by default and budgeted against the same dedup set the anchor primer uses, with its own per-call allowance so neither primer can silently consume the other's. Once the allowance is spent, later states skip the scan entirely rather than paying a full-document walk to learn there is nothing left.
+
+### Self-registration (`self_register`)
+
+On an application with open registration, the entire authenticated surface is invisible to an unauthenticated crawl. `self_register` lets the crawl complete a public signup form and continue as the account it creates, turning that surface into ordinary crawlable content.
+
+It is heavily constrained, along the same lines as the default-credential pass:
+
+- **Single-flighted per host**, and it never submits to an off-host action.
+- It fills through the normal form handler, so the identity it creates lands in the shared fill context and is **reused by any later login form** — whether or not registration itself logged the browser in.
+- It stays **off by default**, because registering is a write. `--intensity deep` enables it; setting `spidering.self_register: true` forces it on at any intensity.
+
+### Crawl graph output (`graph_output_dir`)
+
+Captured traffic records *what* was requested. The crawl graph records *how the crawler got there* — which action on which state, the selector that finds that element again, and the form values used. That is what makes a run reproducible and lets a later pass re-reach a specific state without rediscovering the path to it.
+
+Set `spidering.graph_output_dir` to a directory and each host's graph is written into it as its own file. It is a directory rather than a path because one browser session reuses a single base config across all of a host's seeds — a precomputed path would be whatever the first target implied, and every later seed would overwrite it. The DOM itself is deliberately excluded from the dump; the selector and form values on each edge are the point, since they are what make a transition replayable.
+
 ### DOM-based XSS (Browser-Confirmed)
 
 As the final step of the crawl, the browser crawler runs a **browser-confirmed DOM-based XSS probe** over the client-side routes it already visited. It reuses the live browser and the routes discovered during the crawl rather than sending a separate fuzzing pass:
@@ -143,12 +173,18 @@ Hash-based deduplication prevents duplicate records. A cleanup loop removes stal
 
 The crawl stops when any of these are met:
 
-- Maximum states discovered
-- Maximum duration elapsed
-- Maximum crawl depth reached
-- Maximum consecutive failures
+- Maximum states discovered (`max_states`, default **1500**)
+- Maximum duration elapsed (`max_duration`, default 30m)
+- Maximum crawl depth reached (`max_depth`, default **6**)
+- Maximum consecutive failures (`max_consecutive_fails`, default 100)
 - No more candidate actions to explore
 - Context cancellation
+
+<Note>
+  `max_depth` and `max_states` were unlimited before v0.3.8. Both exist to bound how the crawl spends its `max_duration`: without a depth bound a link-dense site can sink the whole budget into one deep branch and never revisit the breadth near the seed, and without a state bound a template that mints a state per row (a paginated table, a calendar) spends it on near-identical pages. Set either to `0` in [`spidering`](/getting-started/configuration#spidering) to restore unlimited.
+</Note>
+
+The end-of-crawl follow-up and retry sweeps are **gated on the stop reason**: both are no-ops when the crawl stopped on its budget, the state cap, or a failure streak. A streak means the application isn't answering, which no retry fixes.
 
 ## Entry Point
 

@@ -16,7 +16,92 @@ package.
 
 <Update label="Unreleased">
 
-Nothing yet — the latest released build is **v0.3.6**.
+Nothing yet — the latest released build is **v0.3.9**.
+
+</Update>
+
+<Update label="v0.3.9" description="2026-08-07">
+
+An **output and agent-ergonomics** release: multi-format exports, throwaway autopilot runs, and a profile-overlay fix that had been silently disabling discovery.
+
+### Added
+
+- **`export --format` takes a comma-separated list** (`html,markdown,bundle`) — the database is read once, `-o` becomes a shared base path, and a failing format no longer discards its siblings.
+- **`agent autopilot -S/--stateless`** runs the whole autopilot into a throwaway database and materializes `--format` outputs from it, mirroring `vigolium scan -S`.
+- **`--prompt-file`** on `agent autopilot` / `swarm` — task guidance from a file, same channel as `--prompt`, so a long prompt needn't be shell-escaped.
+- **`VIGOLIUM_DB_PATH`** — env-var default for `--db` that pins a shell to one session database; reads additionally treat it as a stateless source, writes do not.
+- **Agent setup-guide pointer** — surfaced in `agent` / `olium` help, under `--list-agents`, and on any agent command failure, including credential errors raised inside the olium TUI.
+
+### Changed
+
+- **`scan -S` and `agent autopilot -S` share one `--format` list**, so a format accepted by either is accepted by both.
+- **The `vigolium-scanner` skill splits its server/ingest reference** into `server.md` and `ingest.md`, with an expanded data/query reference.
+
+### Fixed
+
+- **A scanning profile zeroed every config key it did not set** — `--intensity quick|balanced|deep` wiped `discovery.jstangle.memory_budget_mb` and no-op'd the entire discovery phase; profile overlays are now key-preserving.
+- **An invalid jstangle memory budget** is now a clear config error at scan start rather than a silently aborted discovery phase.
+
+</Update>
+
+<Update label="v0.3.8" description="2026-08-06">
+
+A **coverage** release: six new active modules (registry now 207 active + 116 passive), unified `--from`/`--to` date filtering across the read commands, and richer browser-crawl seeding.
+
+### Added
+
+- **`ssi-injection`** — Server-Side Includes injection detection, confirmed by a set/echo directive whose value is emitted only when SSI is processed (High).
+- **`server-side-js-injection`** — server-side JavaScript (Node.js) injection, confirmed via an out-of-band callback or a busy-wait time differential (Critical).
+- **`smtp-header-injection`** — CRLF injection into email headers, confirmed by grafting a `Bcc` at a unique collaborator address the mailer resolves on delivery (Medium).
+- **`react-rsc-rce`** — React Server Components server-action decoder RCE probe (CVE-2025-55182 / CVE-2025-66478), gated on a Next.js fingerprint and paired with a benign control (Critical).
+- **`dependent-response`** — responses that change based on a spoofable `Referer` or `User-Agent`, each variant re-sampled to rule out dynamic-content noise (Info).
+- **`path-relative-stylesheet`** — path-relative stylesheet import (PRSSI/RPO) on a page reachable via path-info confusion without `nosniff` (Low).
+- **`--from`/`--to`** (aliases `--since`/`--until`) time filtering on `finding` / `traffic` / `db ls` / `db export` / `replay`, plus `db clean --before` and swarm `--records-from`, sharing one parser. Accepts relative offsets (`2d`, `12h`, `1h30m`, optional `ago`), `today`/`yesterday`/`now`, `YYYY-MM-DD`, and RFC3339. Bare dates resolve in the **local** zone, and a bare date on an upper bound snaps to end-of-day so `--from D --to D` is the whole of day D.
+- **`burpscope` input mode** — parses a Burp Suite project-config scope export and expands its include rules into seed URLs; content-sniffed so it works through `-T` and `-i` alike. A wildcard host is never guessed at, an `http://` candidate collapses into its `https://` twin, and exclude rules are applied to derived targets.
+- **Frontier seeding from `robots.txt` and `sitemap.xml`** reaches crawl routes that nothing links to (default on).
+- **Speculative link scraping** pulls same-origin URLs out of inline scripts and HTML comments a rendered SPA never serves in static HTML (default on).
+- **Spidering knobs** — `max_depth`/`max_states` bounds (now defaulting to 6/1500 rather than unlimited), `self_register`, and `graph_output_dir`.
+
+### Changed
+
+- **`code-exec`** now ships language-specific interpreter payloads across several string-breakout contexts, not just generic OS-shell payloads.
+- **`ssti-blind`** confirms JVM template stacks with a pure-JVM DNS/URL callback, needing no shell on the target.
+- **`cors-misconfiguration`** adds a single-mutation trusted-origin probe gated on a negative control, so a blanket reflector isn't re-reported.
+- **`file-upload-scan`** confirms PHP web shells by an arithmetic execution marker that proves evaluation, not mere storage.
+- **`graphql-scan`** walks endpoint names over parent-path prefixes and nested `api`/version permutations.
+- **`ldap-injection`** adds a negation boolean oracle (match-all vs match-none divergence).
+- **`open-redirect`** matches a wider set of leading separators to catch blocklist-bypass redirect targets.
+- **`cache-deception`** adds delimiter-confusion variants alongside the static-extension append.
+- **`web-cache-poisoning`** probes `X-Host` / `X-Forwarded-Server` / `X-Original-Host` / `X-Forwarded-Prefix` as cached-authority vectors.
+- **`secret-detect` / `env-secret-exposure`** treat vendor client-side keys (Pusher, Salesforce) as public identifiers while keeping Stripe restricted **live** keys graded as secrets.
+- **Input-mode help** clarifies `-i/--input` vs `-T/--target-file` so a spec isn't mistaken for a target list.
+
+</Update>
+
+<Update label="v0.3.7" description="2026-08-04">
+
+A **scan throughput** release. Dynamic assessment is ~99.7% idle wait, so a static concurrency cap sets the phase wall clock outright — four changes attack that. Also ships the `vigolium fuzz` curl-parity + anomaly-scoring overhaul and bulk/browser replay. Registry stays at 201 active + 116 passive.
+
+### Added
+
+- **`fuzz` curl parity** — accepts curl's long-form flags (`--cookie`, `--user`, `--data-urlencode`, `--form`, `--resolve`, `--compressed`, …), with body assembly shared with the curl parser so `--data-urlencode` / `--form` behave identically as a flag or inside a pasted command. Long forms only: the short spellings are already taken by vigolium meanings (`-u` record UUID, `-i` input, `-w` wordlist).
+- **`fuzz -a/--anomaly`** scores each response against the baseline *and* the run's own population, so a status change every payload triggers reads as normal behaviour rather than a signal. Outliers use median-absolute-deviation rather than standard deviation, since a fuzz population is full of outliers by construction and they would inflate a stddev enough to hide themselves.
+- **`fuzz` attack modes** — `sniper` / `batteringram` / `pitchfork` / `clusterbomb` over numbered `FUZZ` markers, plus a comparison-predicate matcher grammar (`N-M`, `>N`, `!N`) because exact equality alone is near-useless for sizes — a page carrying a timestamp or CSRF token is never byte-identical twice. Also `--match-header`, `--match-mode all`, `--baseline-samples`, and a `--dry-run` that resolves positions and payloads with zero network traffic.
+- **`replay` bulk pattern search** reuses `traffic`'s own filters verbatim, and `--with-browser` emits a `browser` object instead of a hollow diff a navigation can't produce.
+- **Adaptive per-host concurrency ramps above `MaxPerHost`** (2× headroom) so a scan can discover a host tolerates more; WAF auto-arm stays pinned, since a block is not licence to raise concurrency.
+
+### Fixed
+
+- **`curl -e https://referer/ https://target/` silently retargeted the request at the referer** — skipping an unrecognized flag left its value looking like a bare token, i.e. the URL. The parser is now table-driven and strict, and an unknown flag is a hard error rather than a skip.
+- **A per-module timeout never stopped the module** — 725+ abandoned modules kept hammering the target for findings that were then discarded; the abandon signal now refuses to start new requests.
+- **`ReuseRatio` read healthy during heavy churn** — a 17.6× undercount from httptrace misattribution, now derived from dials counted in the transport's own dialers.
+- **Discovery pre-warm ran 10 sequential waves before any fuzzing** — 66% of a host's discovery time at ~0.01 CPU cores; now sized to configured concurrency, capped at 16.
+- **`input-behavior-probe` re-learned one number per insertion point** — 40 round trips where 2 suffice; now memoized per endpoint, with identical detection behaviour.
+
+### Changed
+
+- **The four costliest probes are tagged `heavy`, not `moderate`** — affects `--intensity quick` only; the default scan still runs all 201 active modules, and every deferred module is logged.
+- **Skills restructure** — the `agent-browser` skill is dropped, the `vigolium-scanner` references are renamed to shorter stems, and the hand-maintained `flags-reference.md` is replaced by a generated `flags.generated.md`.
 
 </Update>
 
