@@ -127,7 +127,7 @@ The optional `Countable` interface adds `Count() int64` for progress tracking.
 | Type | File | Description | Countable |
 |------|------|-------------|-----------|
 | `TargetSource` | `source.go` | Iterates CLI `-t` targets, builds GET requests via `GetRawRequestFromURL()` | Yes |
-| `FileSource` | `file.go` | Parses input files (OpenAPI, Burp, HAR, cURL, etc.) via format-specific parsers | Yes |
+| `FileSource` | `file.go` | Parses input files (OpenAPI, WSDL/SOAP, Burp, HAR, cURL, etc.) via format-specific parsers | Yes |
 | `StdinSource` | `stdin.go` | Reads URLs line-by-line from stdin | No |
 | `SingleSource` | `single_source.go` | Returns a single item, then EOF. Used by `scan-url`/`scan-request` | Yes (1) |
 | `MultiSource` | `multi.go` | Drains sub-sources sequentially in order | Yes (sum) |
@@ -145,6 +145,7 @@ Resolved by `resolveFormat()` in `file.go`:
 |---|---|
 | `urls`, `url`, `list` | Line-delimited URLs |
 | `openapi`, `swagger` | OpenAPI/Swagger spec |
+| `wsdl`, `soap`, `svc` | WSDL 1.1 / SOAP service description |
 | `postman` | Postman collection |
 | `curl` | cURL commands |
 | `burpraw`, `burp-raw`, `raw` | Burp raw request files |

@@ -65,6 +65,7 @@ Vigolium accepts targets in multiple formats via `-I` / `--input-mode`:
 |--------|------|---------|
 | URL list (default) | `-I urls` | `vigolium scan -T urls.txt` |
 | OpenAPI / Swagger | `-I openapi` | `vigolium scan -i api-spec.yaml -I openapi` |
+| WSDL / SOAP | `-I wsdl` | `vigolium scan -i service.wsdl -I wsdl -t https://soap.example.com` |
 | Postman Collection | `-I postman` | `vigolium scan -i collection.json -I postman` |
 | Burp XML export | `-I burpxml` | `vigolium scan -i burp-export.xml -I burpxml` |
 | Raw HTTP request | `-I burpraw` | `vigolium scan -i request.txt -I burpraw` |

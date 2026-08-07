@@ -137,6 +137,9 @@ vigolium scan -T targets.txt
 # From an OpenAPI / Swagger spec
 vigolium scan -i api.yaml -I openapi -t https://api.example.com
 
+# From a WSDL / SOAP service (or a live .svc/.asmx URL)
+vigolium scan -i service.wsdl -I wsdl -t https://soap.example.com
+
 # Pipe URLs from stdin
 cat urls.txt | vigolium scan
 
@@ -144,7 +147,7 @@ cat urls.txt | vigolium scan
 echo "curl -X POST -d 'user=admin' https://example.com/login" | vigolium scan-request
 ```
 
-Supported input modes (`-I`): `urls`, `openapi`, `swagger`, `postman`, `curl`, `burpraw`, `burpxml`, `nuclei`, `har`. An unknown `-I` value is rejected with a clear error (no silent fallback).
+Supported input modes (`-I`): `urls`, `openapi`, `swagger`, `wsdl` (`soap`, `svc`), `postman`, `curl`, `burpraw`, `burpxml`, `nuclei`, `har`. An unknown `-I` value is rejected with a clear error (no silent fallback).
 
 ## Step 6: Pick specific modules (optional)
 

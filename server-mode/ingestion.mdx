@@ -197,6 +197,9 @@ cat urls.txt | vigolium ingest
 # From an OpenAPI spec
 vigolium ingest --input api.yaml -I openapi -t https://api.example.com
 
+# From a WSDL / SOAP service description
+vigolium ingest --input service.wsdl -I wsdl -t https://soap.example.com
+
 # Pin the scan UUID (use to group several ingests under one scan)
 vigolium ingest --input urls.txt --scan-uuid 6f1c2b90-8b1e-4a6c-9d2f-5c7a1e3b9d40
 

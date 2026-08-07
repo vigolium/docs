@@ -220,7 +220,7 @@ Run `vigolium scan --resume` bare, with no other flags, and it auto-discovers th
 
 ---
 
-## 7. Scan from an OpenAPI / Swagger / Postman / Burp / HAR input
+## 7. Scan from an OpenAPI / Swagger / WSDL / Postman / Burp / HAR input
 
 Feed a spec or capture with `-i <file>` and select the format with `-I <format>`. Auto-discovery/crawling is skipped, Vigolium scans exactly the endpoints defined in the input.
 
@@ -228,6 +228,10 @@ Feed a spec or capture with `-i <file>` and select the format with `-I <format>`
 # OpenAPI / Swagger spec
 vigolium scan --stateless -i api.yaml -I openapi \
   -t https://api.example.com --format jsonl -o results
+
+# WSDL / SOAP service (or a live .svc/.asmx URL, which fetches its own WSDL)
+vigolium scan --stateless -i service.wsdl -I wsdl \
+  -t https://soap.example.com --format jsonl -o results
 
 # Postman collection
 vigolium scan --stateless -i collection.json -I postman \
@@ -253,7 +257,7 @@ vigolium scan --stateless -T scope.json --format jsonl -o results
 </Warning>
 
 <Callout icon="circle-info" color="#3B82F6" iconType="regular">
-  Format aliases: `openapi`/`swagger`, `postman`, `burpxml`/`burp`/`burp-xml`, `burpraw`/`raw`, `burpscope`/`burp-scope`, `har`/`http-archive`, `nuclei`/`nuclei-output`, `deparos`. Run `vigolium scan --list-input-mode` for the full list. Use `-t/--target` to supply the base URL when a spec carries only paths.
+  Format aliases: `openapi`/`swagger`, `wsdl`/`soap`/`svc`, `postman`, `burpxml`/`burp`/`burp-xml`, `burpraw`/`raw`, `burpscope`/`burp-scope`, `har`/`http-archive`, `nuclei`/`nuclei-output`, `deparos`. Run `vigolium scan --list-input-mode` for the full list. Use `-t/--target` to supply the base URL when a spec carries only paths.
 </Callout>
 
 ---

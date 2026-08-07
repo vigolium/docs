@@ -195,6 +195,10 @@ Run `vigolium scan --resume` bare — with no other flags — and it auto-discov
 vigolium scan --stateless -i api.yaml -I openapi \
   -t https://api.example.com --format jsonl -o results
 
+# WSDL / SOAP service description
+vigolium scan --stateless -i service.wsdl -I wsdl \
+  -t https://soap.example.com --format jsonl -o results
+
 # Postman collection
 vigolium scan --stateless -i collection.json -I postman \
   -t https://api.example.com --format jsonl -o results
