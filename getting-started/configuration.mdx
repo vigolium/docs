@@ -384,9 +384,13 @@ server:
   disable_swagger: false           # drop the Swagger UI + spec endpoint (CLI: --no-swagger)
   users_file: ~/.vigolium/users.json   # file-based logins for POST /api/auth/login
   license: open-source             # license tag surfaced in /server-info
+  enable_burp_bridge: false        # opt in to merging live proxy history into /api/http-records
+  burp_bridge_url: ""              # loopback bridge address used when enable_burp_bridge is true
 ```
 
 The narrowing flags — `--view-only`, `--no-agent`, `--demo-only`, `--alternative-ingest-key`, `--disable-warm-session` — are CLI-only; see [Narrowing the Exposed Surface](/server-mode/running-the-server#narrowing-the-exposed-surface).
+
+`burp_bridge_url` has a sensible default address, so the boolean is what decides whether the bridge is contacted — otherwise every config would silently enable it. Precedence is `-B/--burp-bridge-url` → `$VIGOLIUM_BURP_BRIDGE_URL` → config (only when `enable_burp_bridge: true`); passing the flag works regardless of the boolean. `--caido-bridge-url` is an alias of the same flag (the [Caido plugin](/getting-started/caido-plugin) exposes the same loopback bridge) — both spellings set the same value and read the same env var and config key.
 
 ### `agent`
 
@@ -608,13 +612,15 @@ Pre-scan intelligence gathering from public data sources.
 
 ```yaml
 external_harvester:
-  sources: [wayback, commoncrawl, alienvault]
-  # Additional sources: urlscan, virustotal (require API keys)
+  sources: [wayback, commoncrawl, alienvault, arquivo]   # keyless — the default set
+  # Additional sources: urlscan, virustotal (join the set only once their key is set)
 
   api_keys:
     urlscan: ""
     virustotal: ""
 ```
+
+`wayback` and `commoncrawl` also mine archived response **bodies** (and Wayback's `robots.txt` history) for URLs no index holds. Mined URLs are scope-checked and junk-extension filtered before they enter the scan, while index rows are passed through verbatim. Budgets are fixed constants rather than flags, since the phase runs unattended.
 
 ### `oast`
 

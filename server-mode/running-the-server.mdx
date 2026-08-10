@@ -32,7 +32,7 @@ vigolium server --mirror-fs ./mirror
 # Passively scan every ingested request as it arrives (no active traffic)
 vigolium server --scan-on-receive --passive-only
 
-# Merge live Burp Proxy history into GET /api/http-records
+# Merge live Burp/Caido proxy history into GET /api/http-records
 vigolium server --burp-bridge-url http://127.0.0.1:9009
 ```
 
@@ -101,19 +101,23 @@ vigolium server --scan-on-receive --passive-only
 - `--passive-only` restricts scan-on-receive to **passive modules only** — the safest way to analyze forwarded traffic in place.
 - Combining `--passive-only` with `--full-native-scan-on-receive` still crawls (discovery + spidering send requests); for zero active traffic, use `--scan-on-receive` without the full-native flag.
 
-## Live Burp Bridge
+## Live Proxy Bridge
 
-`--burp-bridge-url <url>` connects the server to a running Burp Suite through the [`burp-vigolium`](https://github.com/vigolium/burp-vigolium) extension's loopback live-bridge listener. Live Burp **Proxy history** rows are merged into `GET /api/http-records` on the fly, so the Web UI and API see current Burp traffic alongside the database without a separate ingest step:
+`--burp-bridge-url <url>` connects the server to a running proxy through its loopback live-bridge listener — either the [`burp-vigolium`](https://github.com/vigolium/burp-vigolium) Burp extension or the [`caido-vigolium`](https://github.com/vigolium/caido-vigolium) Caido plugin. Live **proxy history** rows are merged into `GET /api/http-records` on the fly, so the Web UI and API see current proxy traffic alongside the database without a separate ingest step:
 
 ```bash
 vigolium server --burp-bridge-url http://127.0.0.1:9009
+vigolium server --caido-bridge-url http://127.0.0.1:9009   # alias for the same flag
 ```
 
-- The listener is a loopback-only address the extension exposes; `http://127.0.0.1:9009` is the default. Enable it under **Vigolium → Bridge → Enable live bridge** in Burp.
-- Live rows are labelled `source: burp`, and the usual `/api/http-records` filters, sorting, and pagination continue to apply.
+- The listener is a loopback-only address the extension/plugin exposes; `http://127.0.0.1:9009` is the default. Enable it under **Vigolium → Bridge** in either tool.
+- `--caido-bridge-url` is an **alias**, not a second flag: both integrations serve one protocol on one port, so which vendor is listening is discovered from the reply rather than declared on the command line.
+- Live rows are labelled `source: burp` or `source: caido` — taken from the `implementation` the listener reports on every reply — and the usual `/api/http-records` filters, sorting, and pagination continue to apply (`?source=caido` selects just those rows). A listener too old to report an implementation is read as `burp`, which is what every bridge record was labelled as before vendor detection existed.
+- Live records carry temporary UUIDs beginning with `burp:` regardless of vendor: that prefix is a routing token meaning "this record lives behind the bridge, not in the database", not a provenance label. `GET /api/http-records/:uuid` resolves them.
+- On a successful merge the response sets `X-Vigolium-Bridge-Source` to the vendor that answered; if the proxy is closed or the listener is unavailable, the server keeps returning database records and sets `X-Vigolium-Burp-Bridge: unavailable`.
 - The `VIGOLIUM_BURP_BRIDGE_URL` env var supplies the same URL as a fallback; the flag overrides it.
 
-See the [Burp Suite guide](/getting-started/burp-suite) for the full bidirectional bridge workflow.
+See the [Burp Suite guide](/getting-started/burp-suite) or the [Caido guide](/getting-started/caido-plugin) for the full bidirectional bridge workflow.
 
 ## Authentication
 

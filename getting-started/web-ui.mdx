@@ -104,6 +104,10 @@ Point the extension at the **Server URL** (`http://127.0.0.1:9002`) and paste in
   Install the extension, forward proxy traffic, dispatch native and agentic scans, and use the bidirectional live bridge — see the dedicated guide.
 </Card>
 
+<Card title="Using Vigolium with Caido" icon="plug" href="/getting-started/caido-plugin" horizontal>
+  The same workflows from Caido: install `caido-vigolium.zip`, forward proxied traffic, dispatch scans from the palette, and drive the same live bridge with `--caido-bridge-url`.
+</Card>
+
 ## REST API for results and scans
 
 Everything the Web UI and the Burp extension do is backed by a documented REST API, so you can drive Vigolium from scripts, CI, or a coding agent. All `/api/*` routes require `Authorization: Bearer <API_KEY>` unless the server was started with `-A`.

@@ -14,9 +14,59 @@ package.
   the build you have installed, and `vigolium update` to upgrade.
 </Note>
 
-<Update label="Unreleased">
+<Update label="Unreleased" description="lands as v0.3.12">
 
-Nothing yet — the latest released build is **v0.3.10**.
+A **SARIF output** release: emit SARIF 2.1.0 so runs feed GitHub code scanning, DefectDojo, and the VS Code SARIF Viewer. Also teaches the bridge to say which proxy it is, so Caido traffic stops showing up labelled `burp`. No module changes (registry stays at 207 active + 116 passive).
+
+<Warning>
+  **Upgrading with Caido:** pair this release with the [Caido plugin](/getting-started/caido-plugin). Vendor detection is wire-only with no fallback probe, so a listener predating it is read as Burp — silently. Rows imported from Caido before this release stay labelled `burp` and cannot be reclassified after the fact.
+</Warning>
+
+### Added
+
+- **`sarif` output format** — writes a SARIF 2.1.0 log on `scan`/`scan-url`/`scan-request`/`run`, `vigolium export`, and `vigolium import --format`. See [Output and Reporting](/getting-started/output-and-reporting#sarif).
+- File-anchored findings map to the source file (URL kept as a related location); DAST evidence rides in `webRequest`/`webResponse`.
+- `security-severity`, zero-padded CWE tags, and `FindingHash` fingerprints so consumers bucket and track findings across re-scans.
+- **`--caido-bridge-url`** alias for `--burp-bridge-url` (`-B`) — the [Caido plugin](https://github.com/vigolium/caido-vigolium) exposes the same bridge listener.
+- **Bridge traffic is labelled by vendor** — listeners report an `implementation` identity on every `/health`, `/search` and `/inspect` reply, mapped through a closed allowlist to `http_records.source`, so the `traffic` Source column, `--source caido`, and persisted imports all name the proxy that actually served the traffic.
+- **`X-Vigolium-Source` on `POST /api/ingest-http`** — a client pushing traffic can declare itself (`burp`, `caido`) instead of landing under the generic `ingest-server` label every HTTP client shares. Allowlisted rather than passthrough: `source` decides which rows scan-on-receive feeds back into a scan, so a client able to claim `scanner` could silently exclude its own traffic from the scan it just asked for.
+- `X-Vigolium-Bridge-Source` response header on `/api/http-records`, naming the vendor that answered.
+
+### Changed
+
+- `--format` extension/output-path machinery now recognizes `.sarif` on both scan and export sides.
+- `--source` on a bridge-enabled `traffic`/`replay` query admits any bridge vendor up front — which one is listening is not knowable until it replies — and drops the live set afterwards when the vendor does not match, zeroing its total alongside it so paging is not inflated by records it cannot show.
+- Send-preflight warnings and the bridge import summary name the answering vendor instead of assuming Burp.
+- Record UUIDs keep the `burp:` prefix for both vendors: it is a routing token meaning "this record lives behind the bridge, not in the database", not a provenance label. Vendor lives in `source`.
+
+### Fixed
+
+- Bridge-sourced rows were excluded from scan-on-receive — silently, since they land in the database and the poller simply never selected them. `burp` and `caido` now join the ingest source set.
+
+</Update>
+
+<Update label="v0.3.11" description="2026-08-09">
+
+An **external-harvest** release: `wayback`/`commoncrawl` now mine archived response bodies (not just their indexes), plus a new keyless `arquivo` source and urlscan paging fixes. No module changes (registry stays at 207 active + 116 passive).
+
+### Added
+
+- **`arquivo` source** — keyless web-archive index, added to the default source set.
+- **`wayback` body mining** — replays captures via `/web/<ts>id_/` and walks each host's `robots.txt` history to recover paths no index holds.
+- **`commoncrawl` body mining** — range-fetches each index row's WARC record (one small gzip member) and extracts in-scope URLs from the body.
+- **`urlscan` `task.url`** — also collects the originally-submitted URL, not only the final loaded one.
+
+### Changed
+
+- Mined URLs are scope-checked, junk-extension filtered, and stripped of archive hostnames; index rows are still emitted verbatim.
+- Mining is gated on the index carrying timestamps and capped by fixed per-domain budgets, not flags.
+- Config validation's valid-source list and key-required checks now derive from one table, so they can't drift.
+
+### Fixed
+
+- **urlscan `search_after` cursor** — `sort` is kept as raw JSON so a millisecond timestamp isn't reformatted into a 400 (or a panic on a string value).
+- **urlscan page size lowered to 1000** — an over-large size is rejected outright rather than clamped.
+- **JS regex-literal false positives in the relative-URL extractor** — `(` is no longer treated as a URL delimiter and shapes like `/x/gi` are rejected.
 
 </Update>
 

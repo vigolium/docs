@@ -285,7 +285,10 @@ See [CI/CD Integration](/guides/ci-cd-integration) for full pipeline examples.
 | `console` | Terminal (default) | Colored, human-readable |
 | `jsonl` | `<o>.jsonl` | One JSON object per line; `-j` is shorthand |
 | `html` | `<o>.html` | Interactive ag-grid report; requires `-o` |
+| `report` / `pdf` | `<o>.html` / `<o>.pdf` | Document-style report; `pdf` renders through headless Chrome |
+| `sarif` | `<o>.sarif` | SARIF 2.1.0 for GitHub code scanning / DefectDojo / SARIF viewers; requires `-o` |
 | `sqlite` | `<o>.sqlite` | Standalone DB dump (`VACUUM INTO`); requires `-S` + `-o`. Aliases `sqlite3`, `db` |
+| `fs` | `<o>-traffic/`, `<o>-findings/` | Flat browsable tree; alias `file-system` |
 | `console,jsonl,html` | All of the above | Comma-separate to combine |
 
 For stateless runs, `-o` is the **base** path, Vigolium appends the correct extension per format and materializes every requested format from the temporary database before tearing it down.

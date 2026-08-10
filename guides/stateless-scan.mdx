@@ -137,6 +137,16 @@ Interactive report with ag-grid table. Requires `-o` to specify the output path:
 vigolium scan --stateless -t https://example.com --format html -o report
 ```
 
+### SARIF
+
+A SARIF 2.1.0 log of the run's findings, for GitHub code scanning, DefectDojo, and SARIF viewers. Requires `-o`:
+
+```bash
+vigolium scan --stateless -t https://example.com --format sarif -o results.sarif
+```
+
+Pairs naturally with a stateless CI run — nothing is persisted, and the artifact is the upload. See [Output and Reporting](/getting-started/output-and-reporting#sarif) for the finding→schema mapping.
+
 ### SQLite
 
 Dump the per-run database to a single standalone `.sqlite` file (via `VACUUM INTO`). Only available in stateless mode and requires `-o`. Aliases: `sqlite3`, `db`:

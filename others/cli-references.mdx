@@ -39,7 +39,7 @@ These work on every command (run `vigolium --help` for the authoritative list):
 | `--project-uuid` / `--project-name` | Scope every operation to a project (see [Projects](/others/projects)) |
 | `--scan-uuid <uuid>` | Pin the scan UUID for this session — use it to sync results across nodes |
 | `--proxy <url>` | Route all requests through an HTTP/SOCKS5 proxy |
-| `--format <list>` | Output format(s): `console`, `jsonl`, `html`, `sqlite`, `fs` |
+| `--format <list>` | Output format(s): `console`, `jsonl`, `html`, `report`, `pdf`, `sarif`, `sqlite`, `fs` |
 | `--ext <file>` / `--ext-dir <dir>` | Load a JavaScript extension / override the extension directory |
 | `--mem-limit <size>` | Soft heap ceiling (`GOMEMLIMIT`) for scans: empty = auto (⅓ of RAM, scaled down by `-P/--parallel`), `off`, or an explicit `6GiB` / `50%`. An existing `GOMEMLIMIT` env var wins. |
 | `--force` | Skip confirmation prompts |
@@ -270,7 +270,7 @@ See [Transparent Proxy](/server-mode/proxy) for the full MITM workflow.
   `--catchup-threads` and `--disable-catchup` are deprecated no-ops kept for compatibility — catch-up scanning is disabled. They still appear in `--help` and in older examples.
 </Note>
 
-`--burp-bridge-url <url>` points the server at a running Burp Suite's loopback **live bridge** (default listener `http://127.0.0.1:9009`, exposed by the [`burp-vigolium`](https://github.com/vigolium/burp-vigolium) extension) and merges Burp's live Proxy rows into `GET /api/http-records` — labelled `source: burp` — for the UI and API. The flag also reads the `VIGOLIUM_BURP_BRIDGE_URL` env var as a fallback. See [Using Vigolium with Burp Suite](/getting-started/burp-suite) for bridge setup.
+`--burp-bridge-url <url>` (alias `--caido-bridge-url`) points the server at a running Burp Suite's or Caido's loopback **live bridge** (default listener `http://127.0.0.1:9009`, exposed by the [`burp-vigolium`](https://github.com/vigolium/burp-vigolium) extension or the [`caido-vigolium`](https://github.com/vigolium/caido-vigolium) plugin) and merges its live proxy rows into `GET /api/http-records` — labelled `source: burp` or `source: caido` according to which listener answered — for the UI and API. The flag also reads the `VIGOLIUM_BURP_BRIDGE_URL` env var as a fallback. See [Using Vigolium with Burp Suite](/getting-started/burp-suite) or [with Caido](/getting-started/caido-plugin) for bridge setup.
 
 `--passive-only` (with `--scan-on-receive`) restricts scanning to **passive modules only** — no active scan traffic is sent, and secret detection is included. It's the safest way to analyze forwarded Burp/proxy traffic in place. Combining it with `--full-native-scan-on-receive` still crawls (discovery + spidering send requests); for zero active traffic, use `--scan-on-receive` without the full-native flag.
 
@@ -358,7 +358,7 @@ vigolium agent query --prompt-template review | vigolium finding load
 vigolium finding load --finding-file agent-output.json --scan-uuid 6f1c2b90-8b1e-4a6c-9d2f-5c7a1e3b9d40
 ```
 
-**Live Burp bridge.** With a running Burp Suite exposing the loopback bridge (default listener `http://127.0.0.1:9009`, from the [`burp-vigolium`](https://github.com/vigolium/burp-vigolium) extension; env fallback `VIGOLIUM_BURP_BRIDGE_URL`), `vigolium traffic --burp-bridge-url <url>` merges Burp's live Proxy history into the traffic view. Add `--save-to-vigolium-db` to persist those bridge rows into the DB (the current page, or every match with `--all`), or `--save-to-burp` to copy DB traffic **into** Burp's Target Site map (the two `--save-to-*` flags are mutually exclusive). See [Using Vigolium with Burp Suite](/getting-started/burp-suite) for bridge setup.
+**Live proxy bridge.** With a running Burp Suite or Caido exposing the loopback bridge (default listener `http://127.0.0.1:9009`, from the [`burp-vigolium`](https://github.com/vigolium/burp-vigolium) extension or the [`caido-vigolium`](https://github.com/vigolium/caido-vigolium) plugin; env fallback `VIGOLIUM_BURP_BRIDGE_URL`), `vigolium traffic --burp-bridge-url <url>` merges the proxy's live history into the traffic view. `-B` and `--caido-bridge-url` are the same flag, and live rows are labelled with the vendor that answered (`source: burp` / `source: caido`), so `--source caido` selects exactly the traffic Caido served. Add `--save-to-vigolium-db` to persist those bridge rows into the DB (the current page, or every match with `--all`), or `--save-to-burp` to copy DB traffic **into** Burp's Target Site map (the two `--save-to-*` flags are mutually exclusive). See [Using Vigolium with Burp Suite](/getting-started/burp-suite) for bridge setup.
 
 **Push findings to Burp.** `vigolium finding --push-to-burp` (paired with `--burp-bridge-url`) hands the selected finding(s)' evidence request+response to Burp's Organizer — severity-coloured, one item per finding — for manual confirmation. `--to-repeater` opens the finding's request in a Repeater tab instead (Burp caps Repeater at ~30 tabs/min, so prefer `--push-to-burp` for a large selection), and `--send-via-burp` re-issues the request through Burp's engine to capture a fresh response (with `--http-mode auto|http1|http2|http2_ignore_alpn`). These honour the usual `finding` selectors (`--severity`, `--min-severity`, a fuzzy term, `--id`).
 
@@ -375,7 +375,7 @@ vigolium finding --id 42 --to-repeater --send-via-burp \
 
 ### Several export formats in one run
 
-`vigolium export --format` takes a comma-separated list — `html`, `report`, `pdf`, `jsonl`, `markdown` (alias `md`), `bundle` (alias `gz`), `fs`. The database is read **once** and every format renders from that one result set, so three formats cost one query rather than three:
+`vigolium export --format` takes a comma-separated list — `html`, `report`, `pdf`, `jsonl`, `markdown` (alias `md`), `sarif`, `bundle` (alias `gz`), `fs` (alias `file-system`). The database is read **once** and every format renders from that one result set, so three formats cost one query rather than three:
 
 ```bash
 vigolium export --format html,markdown,bundle -o acme-q3
@@ -418,7 +418,7 @@ vigolium import gs://<project-uuid>/imports/scan.tar.gz
 vigolium import --burp-bridge-url http://127.0.0.1:9009
 ```
 
-`--burp-bridge-url <url>` turns `import` into a one-shot persist of **all** of a running Burp's live Proxy history into the database (default listener `http://127.0.0.1:9009`; env fallback `VIGOLIUM_BURP_BRIDGE_URL`). It's an import *source*, so it cannot be combined with path arguments or `--glob-db`. See [Using Vigolium with Burp Suite](/getting-started/burp-suite).
+`--burp-bridge-url <url>` (alias `--caido-bridge-url`) turns `import` into a one-shot persist of **all** of a running Burp's or Caido's live proxy history into the database (default listener `http://127.0.0.1:9009`; env fallback `VIGOLIUM_BURP_BRIDGE_URL`). It's an import *source*, so it cannot be combined with path arguments or `--glob-db`. Persisted rows keep the vendor they came from (`source=burp` / `source=caido`) and remain available after the proxy stops. See [Using Vigolium with Burp Suite](/getting-started/burp-suite) or [with Caido](/getting-started/caido-plugin).
 
 **Report metadata.** When `import` / `export` render an HTML report, three flags fill in header fields the source data can't supply: `--report-url <url>` sets the target of the report's "Raw Report URL" button (overriding `VIGOLIUM_REPORT_SHARED_URL`; also available on `scan` / `run`), `--report-duration "10h42m5s"` states the scan duration, and `--report-generated-at 2026-08-01T03:00:00Z` stamps the generation time. `import --upload` pushes the artifact to cloud storage, with `--upload-key` overriding the default `imports/<basename>-<ts>.<ext>` object key.
 
@@ -472,7 +472,7 @@ vigolium replay --record-uuid abc12345 --burp-bridge-url http://127.0.0.1:9009 \
 
 `--save-to-burp` (paired with `--burp-bridge-url`) adds each replayed request and its fresh response straight into Burp's Target Site map — without proxying it twice — so a confirmed exploit lands back in Burp for manual follow-up (default listener `http://127.0.0.1:9009`; env fallback `VIGOLIUM_BURP_BRIDGE_URL`). See [Using Vigolium with Burp Suite](/getting-started/burp-suite).
 
-**Send through Burp's engine.** `--send-via-burp` routes the send through Burp's own HTTP stack so the exact bytes reach the wire — a deliberate `Content-Length`, a smuggling prefix, or an unusual method is preserved instead of being normalised by Go's client. Pick the wire protocol with `--http-mode auto|http1|http2|http2_ignore_alpn` (default `auto`; use `http1` for request smuggling / desync so `auto` doesn't renegotiate HTTP/2 and reframe the request). Independently, `--to-repeater` (with `--repeater-tab <name>`, default `vigolium`) stages the request in a Burp Repeater tab, and `--to-organizer` (with `--notes` and `--highlight`) stores the request + response pair in Burp's Organizer. All require `--burp-bridge-url`; without them the send path is unchanged. See [Send traffic through Burp's engine](/getting-started/burp-suite#send-traffic-through-burps-engine).
+**Send through Burp's engine.** `--send-via-burp` routes the send through Burp's own HTTP stack so the exact bytes reach the wire — a deliberate `Content-Length`, a smuggling prefix, or an unusual method is preserved instead of being normalised by Go's client. Pick the wire protocol with `--http-mode auto|http1|http2|http2_ignore_alpn` (default `auto`; use `http1` for request smuggling / desync so `auto` doesn't renegotiate HTTP/2 and reframe the request). Independently, `--to-repeater` (with `--repeater-tab <name>`, default `vigolium`) stages the request in a Burp Repeater tab, and `--to-organizer` (with `--notes` and `--highlight`) stores the request + response pair in Burp's Organizer. All require `--burp-bridge-url`; without them the send path is unchanged. See [Send traffic through Burp's engine](/getting-started/burp-suite#send-traffic-through-burps-engine). Against [Caido](/getting-started/caido-plugin#send-traffic-through-caidos-engine) the same flags apply, mapped to the closest equivalent: `--to-repeater` opens a **Replay session**, `--to-organizer` stores the pair in a named **Replay collection**, and the raw send is always HTTP/1.1.
 
 ### Bulk replay
 

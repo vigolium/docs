@@ -14,6 +14,22 @@ Import HTTP request/response data into the database for scanning. Supports multi
 |-------------------|----------|--------------------------------------------------------------------|
 | `Content-Type`    | Yes      | Must be `application/json`                                         |
 | `X-Project-UUID`  | No       | Project UUID to scope the imported data. Falls back to the default project if omitted. |
+| `X-Vigolium-Source` | No     | The pushing tool: `burp` or `caido`. Anything else (or omitted) stores the record as `ingest-server`. |
+
+### Declaring the pushing tool
+
+Records ingested through this endpoint are stored with `source: "ingest-server"` by default — the same label every HTTP client shares. A client can name itself instead, so its traffic stays distinguishable later:
+
+```bash
+curl -s -X POST http://localhost:9002/api/ingest-http \
+  -H "Content-Type: application/json" \
+  -H "X-Vigolium-Source: caido" \
+  -d '{"input_mode": "url", "content": "https://example.com/api/users?id=1"}' | jq .
+```
+
+Accepted values are `burp` and `caido` — the same labels the [live bridge](/server-mode/running-the-server#live-proxy-bridge) writes, so one `?source=caido` filter covers traffic that arrived either by Vigolium pulling over the bridge or by the plugin pushing here. The Vigolium [Burp extension](/getting-started/burp-suite) and [Caido plugin](/getting-started/caido-plugin) set it automatically.
+
+The list is a closed **allowlist**, not a passthrough, and anything else falls back to `ingest-server`. `source` is not only a display label: it decides which rows scan-on-receive feeds back into a running scan, so a client free to claim `scanner` could silently exclude its own traffic from the scan it just asked for.
 
 **Request body:**
 

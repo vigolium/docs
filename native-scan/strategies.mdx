@@ -110,7 +110,14 @@ vigolium scan -t https://example.com --external-harvest
 vigolium scan -t https://example.com --strategy deep
 ```
 
-Sources: Wayback Machine, CommonCrawl, AlienVault OTX, URLScan, VirusTotal. API keys for URLScan and VirusTotal can be configured in `vigolium-configs.yaml` under `external_harvester.sources`.
+Sources: **Wayback Machine, CommonCrawl, AlienVault OTX, Arquivo.pt** are keyless and enabled by default; **URLScan** and **VirusTotal** join the set only once their API key is configured in `vigolium-configs.yaml` under `external_harvester.api_keys`. Configure the active set with `external_harvester.sources`.
+
+Wayback and CommonCrawl also **mine archived response bodies**, not just the index:
+
+- Wayback replays each capture through `/web/<ts>id_/` (the raw, un-rewritten copy) and walks every main host's `robots.txt` history — the old `Disallow:` lines name paths no crawler was ever allowed to record.
+- CommonCrawl range-fetches the WARC record each index row already locates, which is one small gzip member rather than the whole archive file.
+
+Index rows are emitted **verbatim** — an index row is what the archive recorded, including the malformed URLs a scanner once requested. Mined URLs are the ones that get filtered: scope-checked on a label boundary, junk-extension filtered, and stripped of archive hostnames, so mining a page can't fan the scan out across every CDN and analytics host it references. Mining is gated on the index carrying timestamps (a replay is addressed by timestamp) and capped by fixed per-domain budgets, since the phase runs unattended.
 
 ### Content Discovery
 

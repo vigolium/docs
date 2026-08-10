@@ -233,6 +233,15 @@ vigolium scan -t https://example.com --format fs -o run
 ```
 `--format fs` writes two sibling dirs off the `-o` base — `run-traffic/` and `run-findings/` — so you can investigate with plain `ls`/`grep`/`jq`. Each `<host>/<id>.req` is the raw, replayable request (strip the leading `@target` line), `<id>.resp.headers`/`<id>.resp.body` hold the gzip-decoded response, and `<id>.md` under `-findings/` is the finding cross-linked to its `.req`. Start from `index.json` in each dir — `jq` it to map every id to its url/status/severity. Works with or without `-S`; honors `--omit-response`. See [Output and Reporting](/getting-started/output-and-reporting#filesystem-fs) for the full layout.
 
+**Scan to SARIF (for GitHub code scanning / DefectDojo):**
+```
+> Scan and produce a SARIF file I can upload to code scanning
+```
+```bash
+vigolium scan -S -t https://example.com --format sarif -o results.sarif
+```
+`--format sarif` writes a SARIF 2.1.0 log; it also works on `vigolium export --format sarif` and `vigolium import --format sarif` (the path for publishing an agentic source audit). Code findings anchor to `file:line` so a consumer can annotate a diff; HTTP findings anchor to their URL and carry the evidence exchange in `webRequest`/`webResponse`. See [Output and Reporting](/getting-started/output-and-reporting#sarif).
+
 **Scan with custom scanning profile:**
 ```
 > Use the aggressive scanning profile

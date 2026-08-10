@@ -20,13 +20,13 @@ Returns paginated HTTP request/response records stored in the database. Response
 | `status_code`  | string |         | Filter by status code (comma-separated)      |
 | `content_type` | string |         | Filter by response content type              |
 | `search`       | string |         | Search across URL and path                   |
-| `source`       | string |         | Filter by ingestion source (e.g. `ingest-server`, `cli`, `burp`) |
+| `source`       | string |         | Filter by ingestion source (e.g. `ingest-server`, `cli`, `burp`, `caido`) |
 | `min_risk`     | int    |         | Filter by minimum risk score                 |
 | `remark`       | string |         | Filter by remark                             |
 | `sort`         | string | `created_at` | Sort field: `created_at`, `sent_at`, `method`, `path`, `status_code`, `response_time` |
 | `order`        | string | `desc`  | Sort order: `asc` or `desc`                  |
 
-> **Note:** When the server is started with `--burp-bridge-url` (see [Running the Server](/server-mode/running-the-server#live-burp-bridge)), live Burp Proxy history rows are merged into this endpoint's results labelled `source: burp` — filter to just those live rows with `?source=burp`.
+> **Note:** When the server is started with `--burp-bridge-url` (alias `--caido-bridge-url`, see [Running the Server](/server-mode/running-the-server#live-proxy-bridge)), live Burp or Caido proxy history rows are merged into this endpoint's results before sorting and pagination. Live rows are labelled `source: burp` or `source: caido` depending on which listener answered — filter to just those live rows with `?source=burp` / `?source=caido`. The response carries `X-Vigolium-Bridge-Source` naming the vendor. No separate public bridge endpoint is required.
 
 ```bash
 # List recent records

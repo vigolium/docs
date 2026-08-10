@@ -1,0 +1,308 @@
+---
+title: "Using Vigolium with Caido"
+description: "Install the Vigolium Caido plugin, forward proxy traffic into a running Vigolium server, launch native and agentic scans from Caido, and use the bidirectional live bridge to sync traffic in both directions."
+icon: "plug"
+---
+
+The **Vigolium Caido plugin** turns Caido into a front-end for your Vigolium server. As you browse, requests and responses are forwarded to Vigolium, native and agentic scans are launched straight from Caido's context menus and command palette, and findings stream back into both Caido and the [Web UI](/getting-started/web-ui) because everything is stored in the same Vigolium database.
+
+The plugin does **not** run the scanner inside Caido. It forwards traffic to the Vigolium server and polls it for findings, so scans use your Vigolium server resources and keep running even after Caido is closed.
+
+It is the Caido counterpart to the [Burp Suite extension](/getting-started/burp-suite) and speaks the **same bridge protocol**, so every `vigolium --burp-bridge-url` command works against Caido with no CLI changes. Vigolium also accepts **`--caido-bridge-url`** as an alias for the same flag — either spelling works on every command and both resolve to the same value.
+
+<Frame caption="Findings tab in Caido — filterable findings, request/response evidence, and Copy as Markdown">
+  <img src="/images/caido-plugin/vigolium-caido-plugin-2.png" alt="Vigolium Caido plugin Findings tab showing findings, severity filters, and request and response evidence" />
+</Frame>
+
+## Download the plugin
+
+The plugin is distributed as a pre-built package from the dedicated repository:
+
+<Card title="Vigolium Caido plugin" icon="github" href="https://github.com/vigolium/caido-vigolium">
+  Grab the latest **`caido-vigolium.zip`** and browse the source at
+  [github.com/vigolium/caido-vigolium](https://github.com/vigolium/caido-vigolium).
+</Card>
+
+Download [`caido-vigolium.zip`](https://github.com/vigolium/caido-vigolium/blob/main/caido-vigolium.zip) directly, or build it from source:
+
+```bash
+git clone https://github.com/vigolium/caido-vigolium
+cd caido-vigolium
+pnpm install
+pnpm build          # → ./caido-vigolium.zip (and dist/plugin_package.zip)
+```
+
+<Callout icon="circle-info" color="#3B82F6" iconType="regular">
+  Bridge traffic is labelled by vendor (`source: caido`) from **Vigolium v0.3.12** onward. Detection is wire-only with no fallback probe, so an older Vigolium reads every bridge record as `burp` — silently. Rows imported from Caido before that release stay labelled `burp` and cannot be reclassified after the fact.
+</Callout>
+
+## Install and connect
+
+<Steps>
+  <Step title="Start the Vigolium server">
+    The plugin needs a running server to talk to. Start one (add `--mirror-fs <dir>` to also write traffic to disk):
+
+    ```bash
+    # With API authentication (recommended)
+    export VIGOLIUM_API_KEY=my-secret-key
+    vigolium server
+
+    # Or, local development only — no auth
+    vigolium server -A
+    ```
+
+    Retrieve the API key to paste into the plugin:
+
+    ```bash
+    vigolium config ls server.auth_api_key --force
+    ```
+  </Step>
+  <Step title="Load the package into Caido">
+    In Caido, go to **Plugins → Install Package → From File** and choose the downloaded `caido-vigolium.zip`. A **Vigolium** entry appears in the sidebar.
+
+    A frontend plugin is enabled **per user**: check that both *Vigolium* and *Vigolium Backend* are ticked under **Plugins → Installed**, then reload the window — the frontend script is only evaluated on a full page load.
+  </Step>
+  <Step title="Point it at your server">
+    Open **Vigolium → Settings**, enter the **Server URL** (default `http://127.0.0.1:9002`) and **API key**, then select **Test connection** to confirm the server is reachable. Both values are stored in the plugin's own database in Caido Data.
+  </Step>
+  <Step title="Send traffic">
+    Use a context-menu action, a keyboard shortcut, or the command palette to dispatch traffic. Findings stream into the **Findings** tab and the Web UI as they are produced.
+  </Step>
+</Steps>
+
+<Frame caption="Settings tab — server connection, scan options, request statistics, and the shortcut reference">
+  <img src="/images/caido-plugin/vigolium-caido-plugin-4.png" alt="Vigolium Caido plugin Settings tab for server connection, scan options, request statistics, and keyboard shortcuts" />
+</Frame>
+
+## Three dispatch workflows
+
+Right-click a request in **Search**, **Sitemap**, **Replay**, or either message pane — the actions are available directly, without opening a nested menu:
+
+| Action | macOS | Windows / Linux | What it does |
+|--------|-------|-----------------|--------------|
+| **Send to ingestion** | `⌘⌃V` | `Ctrl+Alt+V` | Stores the selected request/response in Vigolium via `/api/ingest-http` |
+| **Send to native scan** | `⌘⌃N` | `Ctrl+Alt+N` | Starts a deterministic module-based scan of the selected request |
+| **Send to agentic scan** | `⌘⌃A` | `Ctrl+Alt+A` | Starts an AI-guided (swarm) scan of the selected request |
+
+Every action is also a command: open the palette with `⌘K` / `Ctrl+K` and search for **Vigolium**.
+
+Vigolium preserves headers, cookies, body fields, query parameters, and path segments as scanner input, so a request sent from Replay is scanned exactly as you shaped it.
+
+Under **Settings → Scan options** you can pin a comma-separated module list and a timeout (`30s`, `2m`); leaving either blank uses the server default. **Scan all HTTP records** submits every stored record with those options.
+
+## Forward proxy traffic automatically
+
+Instead of dispatching requests one at a time, turn on **Proxy forwarding** (Bridge tab) to send every proxied exchange into Vigolium ingestion. It always starts **off** when the plugin loads. Combine it with **In-scope only** so out-of-scope hosts don't pollute the database, and use the filter rules to allow or deny by file extension, HTTP method, or host — the defaults already drop static assets and `OPTIONS`/`HEAD`.
+
+<Card title="Passive-only ingestion" icon="lightbulb" horizontal>
+  Pair proxy forwarding with a passive-only server (`vigolium server -S --passive-only`) to continuously analyze browsed traffic — secrets, security headers, cookie flags, disclosure — without sending any active requests. See [Server &amp; Ingestion](/getting-started/server-and-ingestion).
+</Card>
+
+## What you get inside Caido
+
+The **Vigolium** panel is organized into six tabs:
+
+| Tab | Purpose |
+|-----|---------|
+| **Findings** | Searchable, sortable findings with per-finding evidence tabs, request/response editors, an expandable description, **Copy as Markdown**, and **Export JSON** |
+| **HTTP Records** | Filterable, sortable request/response records synchronized with Vigolium, with per-record **Send to Replay** / **Scan** / **Delete** |
+| **Scanning** | Native and agentic scan history with pagination, refresh controls, and scan logs |
+| **Bridge** | Sitemap snapshots, the live loopback listener, proxy forwarding, and filter rules |
+| **Settings** | Server connection, scan options, request statistics, and the shortcut reference |
+| **Logs** | Timestamped activity log (INFO / WARN / ERROR) |
+
+<Frame caption="HTTP Records tab — filterable records with Send to Replay, Scan, and Delete on the selected row">
+  <img src="/images/caido-plugin/vigolium-caido-plugin-3.png" alt="Vigolium Caido plugin HTTP Records tab showing filterable request and response records synchronized with Vigolium" />
+</Frame>
+
+Selecting a finding opens its primary request and response in Caido's message editors; additional evidence appears as adjacent tabs so you can compare without a drop-down. **Copy as Markdown** copies the full finding — metadata, description, matched URLs, requests, responses, and extra evidence — ready to paste into a report or a coding agent.
+
+### Keyboard shortcuts
+
+| Action | macOS | Windows / Linux |
+|--------|-------|-----------------|
+| Send to ingestion | `⌘⌃V` | `Ctrl+Alt+V` |
+| Send to native scan | `⌘⌃N` | `Ctrl+Alt+N` |
+| Send to agentic scan | `⌘⌃A` | `Ctrl+Alt+A` |
+| Snapshot Sitemap | `⌘⌃S` | `Ctrl+Alt+S` |
+| Refresh active record view | `⌘⌃R` | `Ctrl+Alt+R` |
+
+Rebind them under Caido's **Settings → Shortcuts**. The refresh shortcut is contextual — it refreshes whichever record view is currently showing.
+
+<Note>
+  The Burp extension's `Ctrl+Alt+…` bindings carry over on Windows and Linux. macOS uses `⌘⌃` instead, because `Alt` there is the Option dead-key — the OS turns `Alt+V` into `√` before Caido sees it.
+</Note>
+
+## Sitemap snapshots
+
+Beyond per-request dispatch, the plugin can upload the project's whole **Sitemap** to Vigolium in one shot. Open **Vigolium → Bridge → Sitemap snapshot** and either run a snapshot immediately (`⌘⌃S` / `Ctrl+Alt+S`) or enable periodic snapshots (disabled by default; five-minute interval when on). Use **In-scope only** to exclude out-of-scope traffic.
+
+Snapshots are **incremental** within the current session and **idempotent** on the server: requests and available responses upload in bounded chunks, and unchanged records are never duplicated.
+
+## Bidirectional live bridge
+
+The **live bridge** connects Vigolium's CLI and server to Caido in *both* directions over a loopback-only listener — query live Caido traffic from Vigolium, or copy Vigolium traffic back into Caido's Sitemap.
+
+<Frame caption="Bridge tab — Sitemap snapshots, the loopback live-bridge listener, proxy forwarding, and filter rules">
+  <img src="/images/caido-plugin/vigolium-caido-plugin-1.png" alt="Vigolium Caido plugin Bridge tab showing the live bridge listener URL, sitemap snapshot controls, and proxy forwarding filter rules" />
+</Frame>
+
+<Steps>
+  <Step title="Check the listener in Caido">
+    The bridge is **on by default** so the bridge flags work as soon as the plugin is installed. Open **Vigolium → Bridge** to turn it off, change the listener URL (default `http://127.0.0.1:9009`), or enable **In-scope items only** to keep bridge searches within the project's scope. The plugin refuses any non-loopback bind address.
+  </Step>
+  <Step title="Point Vigolium at the listener">
+    Pass the listener URL to any bridge-aware command with the `--caido-bridge-url` flag (`--burp-bridge-url` and `-B` are the same flag) — this is the recommended way, since each command stays explicit and self-contained:
+
+    ```bash
+    vigolium traffic --caido-bridge-url http://127.0.0.1:9009
+    ```
+
+    Only when you'd rather not repeat the flag across many commands in the same shell, export the env var once instead:
+
+    ```bash
+    export VIGOLIUM_BURP_BRIDGE_URL="http://127.0.0.1:9009"   # optional fallback — the flag overrides it
+    ```
+  </Step>
+</Steps>
+
+Every command below takes `--caido-bridge-url http://127.0.0.1:9009`; if you exported `VIGOLIUM_BURP_BRIDGE_URL`, drop the flag.
+
+### Read live Caido traffic
+
+Merge Caido's traffic into a Vigolium traffic view without persisting anything. Live rows are labelled `source: caido`, and the usual filters, sorting, pagination, and JSON output all apply:
+
+```bash
+# Browse Caido's live traffic alongside your database records
+vigolium traffic --caido-bridge-url http://127.0.0.1:9009
+
+# Only the live Caido portion of the merged view
+vigolium traffic --caido-bridge-url http://127.0.0.1:9009 --source caido
+```
+
+Point a running server at the listener to do the same for the API and Web UI — `GET /api/http-records` then returns Caido's live rows merged with stored ones, and the response carries `X-Vigolium-Bridge-Source: caido`:
+
+```bash
+vigolium server --caido-bridge-url http://127.0.0.1:9009
+```
+
+### Persist Caido traffic into the database
+
+Two ways in, depending on how much you want:
+
+```bash
+# The traffic your active filters selected (add --all for every match, not just this page)
+vigolium traffic --caido-bridge-url http://127.0.0.1:9009 --save-to-vigolium-db
+
+# One-shot bulk import of ALL bridge-visible traffic
+vigolium import --caido-bridge-url http://127.0.0.1:9009
+```
+
+Bridge imports are **idempotent**: new requests are inserted, changed responses refresh the existing row, and unchanged traffic is skipped. Persisted rows keep `source: caido`, so they stay distinguishable after Caido closes. Because the bridge is an import source in its own right, the flag can't be combined with a path argument or `--glob-db` in the same `import` invocation.
+
+### Push Vigolium traffic back into Caido
+
+The reverse direction — copy stored records into Caido's **Sitemap** so you can work them by hand:
+
+```bash
+# Copy the DB traffic your filters selected into Caido's Sitemap
+vigolium traffic --caido-bridge-url http://127.0.0.1:9009 --save-to-burp
+
+# Send a replayed request + its fresh response straight into the Sitemap
+vigolium replay --record-uuid <uuid> --caido-bridge-url http://127.0.0.1:9009 --save-to-burp
+```
+
+`--save-to-burp` and `--save-to-vigolium-db` are mutually exclusive — pick a direction per command. (The flag keeps its `burp` spelling because it names the shared bridge protocol, not the vendor.)
+
+### Seed an agentic scan from Caido
+
+Autopilot can pull live traffic across the bridge **before** it builds its prior-context brief and runs the pre-scan, so the agent starts from the traffic you already browsed instead of rediscovering it:
+
+```bash
+vigolium agent autopilot -t https://example.com \
+  --caido-bridge-url http://127.0.0.1:9009
+```
+
+<Callout icon="shield-halved" color="#00b368" iconType="regular">
+  The bridge listener requires no credentials because it only binds to a validated loopback address, rejects unexpected `Host`/`Origin` headers, and uses temporary result references that expire when the listener restarts. Turning the setting off or uninstalling the plugin stops the listener immediately.
+</Callout>
+
+### Caido projects
+
+Caido scopes traffic to the **selected project**, which Burp has no equivalent of. Two consequences:
+
+- A bridge search only ever returns the active project's traffic. The active project is reported on `/health` and shown in the Bridge tab.
+- Switching project expires all outstanding search references, exactly as restarting the listener does. The Vigolium client already treats an unknown reference as "search again".
+
+## Send traffic through Caido's engine
+
+The read/write bridge above moves stored traffic between the two tools. The **send bridge** goes one step further: it lets `replay`, `fuzz`, and `finding` issue a request through **Caido's own HTTP stack** — so the exact bytes you assembled hit the wire instead of being normalised by Go's client — and stage the exchange into **Replay** for manual follow-up.
+
+All of these flags require the bridge URL and are **opt-in**: without them, each command's send path is byte-for-byte unchanged. The listener is preflighted once up front, so an unavailable bridge is a single clear error rather than one failure per request.
+
+```bash
+# Replay a stored record through Caido's engine
+vigolium replay --record-uuid abc12345 \
+                 --caido-bridge-url http://127.0.0.1:9009 --send-via-burp
+
+# Open it in a Replay session named 'desync'
+vigolium replay --record-uuid abc12345 --caido-bridge-url http://127.0.0.1:9009 \
+                 --to-repeater --repeater-tab desync
+
+# Fuzz through Caido and collect every matched result in a named Replay collection
+vigolium fuzz 'https://acme.test/api?id=FUZZ' -w ~/wordlists/ids.txt \
+              --match-status-code 200 \
+              --caido-bridge-url http://127.0.0.1:9009 --send-via-burp --matches-to-organizer
+
+# Push a finding's evidence into a Replay collection for manual confirmation
+vigolium finding xss --push-to-burp --caido-bridge-url http://127.0.0.1:9009
+```
+
+The flags are the ones documented in the [Burp send-bridge reference](/getting-started/burp-suite#send-traffic-through-burps-engine) — `--send-via-burp`, `--http-mode`, `--send-timeout`, `--to-repeater`, `--to-organizer`, `--matches-to-organizer`, `--push-to-burp`. Behaviour is matched wherever Caido allows it; where it cannot be, the plugin picks the closest equivalent rather than pretending:
+
+| Burp | Caido |
+|------|-------|
+| Organizer (flat list, notes + highlight) | Named **Replay collection** — `--notes` becomes the collection name |
+| Repeater tab | **Replay session**, renamed to `--repeater-tab` |
+| `--http-mode` negotiation | Validated and echoed, but Caido's raw send is always HTTP/1.1 |
+| Target Site map | **Sitemap**, backed by the project's request store |
+| One global session | Per-project traffic (see [Caido projects](#caido-projects)) |
+
+## How traffic is labelled
+
+Which proxy is listening is **discovered, not declared**: the plugin reports `implementation: "vigolium-caido-bridge"` on every `/health`, `/search`, and `/inspect` reply, and Vigolium maps that through a closed allowlist onto the `source` column it stamps on each record. So `--source caido` selects exactly the traffic this plugin served, and the Source column reads `caido` rather than `burp`.
+
+Traffic **pushed** to the Vigolium server (rather than pulled over the bridge) carries `X-Vigolium-Source: caido` and lands with the same label, so one filter covers both directions.
+
+Two consequences worth knowing:
+
+- **Record UUIDs keep the `burp:` prefix** regardless of vendor. It is a routing token meaning "this record lives behind the bridge, not in the database", not a provenance label — vendor lives in `source`.
+- **A Vigolium older than v0.3.12 reads every bridge record as `burp`**, because detection is wire-only with no fallback probe.
+
+## Under the hood
+
+The plugin calls the standard Vigolium API (authenticated with `Authorization: Bearer {API_KEY}`):
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/health` | Test the server connection |
+| `POST` | `/api/ingest-http` | Store selected or forwarded Caido traffic (with `X-Vigolium-Source: caido`) |
+| `POST` | `/api/scan-request` | Start a native scan for selected traffic |
+| `POST` | `/api/agent/run/swarm` | Start an agentic scan for selected traffic |
+| `POST` | `/api/scan-all-records` | Scan all stored HTTP records |
+| `POST` | `/api/burp/sitemap/snapshot` | Upload an idempotent Sitemap snapshot chunk |
+| `GET` | `/api/findings`, `/api/http-records`, `/api/scans`, `/api/agent/sessions` | List findings, records, and scan runs |
+
+The loopback bridge listener is a separate, unauthenticated, local-only transport. Its endpoint paths keep the `burp-bridge` prefix so no CLI change is required:
+
+| Method | Bridge endpoint | Purpose |
+|--------|-----------------|---------|
+| `GET` | `/health` | Listener health, capabilities, scope mode, active project |
+| `POST` | `/api/burp-bridge/search` | Search the project's traffic |
+| `POST` | `/api/burp-bridge/inspect` | Retrieve request/response data for a temporary search reference |
+| `POST` | `/api/burp-bridge/sitemap` | Add a Base64-encoded request/response item to Caido's Sitemap |
+| `POST` | `/api/burp-bridge/repeater` | Open a request (or a search reference) in Caido Replay |
+| `POST` | `/api/burp-bridge/send` | Issue a request through Caido's HTTP stack and return the response |
+| `POST` | `/api/burp-bridge/organizer` | Store a request + response pair in a named Replay collection |
+
+For lower-level ingestion details, see [Server ingestion](/server-mode/ingestion); for the Burp Suite equivalent, see [Using Vigolium with Burp Suite](/getting-started/burp-suite); for the full plugin reference and source, see [github.com/vigolium/caido-vigolium](https://github.com/vigolium/caido-vigolium).

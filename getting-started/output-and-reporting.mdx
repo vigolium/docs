@@ -15,7 +15,20 @@ icon: "file-export"
 
 ## Output Formats
 
-The `--format` flag controls the output format. Five formats are available, and they can be combined (e.g. `--format jsonl,html`):
+The `--format` flag controls the output format, and formats can be combined (e.g. `--format jsonl,html`). Native scans accept:
+
+| Format | Output |
+|--------|--------|
+| `console` | Human-readable terminal output (default) |
+| `jsonl` | One JSON object per line |
+| `html` | Self-contained interactive grid report |
+| `report` | Self-contained document-style report |
+| `pdf` | PDF document rendered through headless Chrome |
+| `sarif` | SARIF 2.1.0 log for GitHub code scanning, DefectDojo, SARIF viewers |
+| `sqlite` | Standalone database that can be reopened by Vigolium (aliases: `sqlite3`, `db`) |
+| `fs` | Flat, browsable request/response and finding tree (alias: `file-system`) |
+
+Matching is case-insensitive, and a format that writes a file requires `-o/--output`.
 
 ### Console (default)
 
@@ -67,6 +80,42 @@ HTML format is supported for:
 - Discovery phase output (discovered URLs and endpoints)
 - Spidering phase output (crawled pages)
 
+### SARIF
+
+```bash
+vigolium scan --target https://example.com --format sarif -o scan.sarif
+```
+
+A [SARIF 2.1.0](https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/sarif-v2.1.0-errata01-os-complete.html) log of the run's findings — the interchange format GitHub code scanning, DefectDojo, the VS Code SARIF Viewer, and most SAST/DAST aggregators ingest without a custom parser. Available on `scan`/`scan-url`/`scan-request`/`run`, on [`vigolium export`](#exporting-stored-results-in-several-formats), and on `vigolium import --format`.
+
+How findings map onto the schema:
+
+| Vigolium | SARIF |
+|----------|-------|
+| Module id / name | `tool.driver.rules[].id` / `.name` |
+| Severity | `level` — critical + high → `error`, medium → `warning`, low + info → `note` |
+| Severity / CVSS | `properties["security-severity"]`, on both the rule and the result — what GitHub buckets alerts by |
+| CWE | Rule tag `external/cwe/cwe-079` (zero-padded, links to MITRE) |
+| Source file `path:line` | `locations[].physicalLocation` with a `region` |
+| URL | `locations[].physicalLocation` when there is no source file, otherwise a `relatedLocation` |
+| Request / response | `webRequest` / `webResponse` (the spec's own DAST fields) |
+| Finding hash | `partialFingerprints` — lets a consumer track one finding across re-scans instead of reopening it every run |
+
+- **Code findings** (from [`vigolium agent audit`](/getting-started/agentic-security-audit) and the source-aware agent modes) anchor to a **file and line**, which is what lets GitHub annotate them onto a pull-request diff. An absolute audit path is made repo-relative only when the repository name identifies a directory in it; otherwise the absolute path is kept rather than guessed at, so a result is never pinned to the wrong file.
+- **Native-module findings** anchor to their **URL** and carry the proof exchange in `webRequest`/`webResponse`. Bodies are capped (4 KB each) so a large scan stays inside upload limits; a result whose evidence was cut carries `properties.evidenceTruncated`.
+- A clean scan still emits `results: []` and `rules: []` — an absent array reads as a malformed run rather than as zero findings.
+
+Uploading to GitHub code scanning:
+
+```bash
+vigolium scan -S "$TARGET" --format sarif -o results.sarif
+gh api /repos/{owner}/{repo}/code-scanning/sarifs \
+  -f commit_sha="$(git rev-parse HEAD)" -f ref="refs/heads/main" \
+  -f sarif="$(gzip -c results.sarif | base64)"
+```
+
+See [CI/CD Integration](/guides/ci-cd-integration#github-code-scanning-sarif) for the full workflow.
+
 ### SQLite
 
 ```bash
@@ -110,7 +159,7 @@ run-findings/
 
 ## Exporting Stored Results in Several Formats
 
-`vigolium export --format` also takes a comma-separated list — `html`, `report`, `pdf`, `jsonl`, `markdown` (alias `md`), `bundle` (alias `gz`), `fs`. The database is read **once** and every format renders from that one result set, so three formats cost one query rather than three:
+`vigolium export --format` also takes a comma-separated list — `html`, `report`, `pdf`, `jsonl`, `markdown` (alias `md`), `sarif`, `bundle` (alias `gz`), `fs` (alias `file-system`). The database is read **once** and every format renders from that one result set, so three formats cost one query rather than three:
 
 ```bash
 vigolium export --format html,markdown,bundle -o acme-q3
@@ -130,7 +179,7 @@ vigolium export --format html,markdown,bundle -o gs://{project-uuid}/exports/sca
 If one format fails, the others are still written and the command exits non-zero naming the format that failed.
 
 <Note>
-  `vigolium db export -f` remains single-valued. On the scan commands, `--format` selects live output writers (the five formats above under [Output Formats](#output-formats)) rather than export renderers.
+  `vigolium db export -f` remains single-valued. On the scan commands, `--format` selects live output writers (the formats above under [Output Formats](#output-formats)) rather than export renderers.
 </Note>
 
 ## Severity Scale

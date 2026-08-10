@@ -8,6 +8,10 @@ The **Vigolium Burp Suite extension** turns Burp into a front-end for your Vigol
 
 The extension does **not** run the scanner inside Burp's JVM. It forwards traffic to the Vigolium server and polls it for findings, so scans use your Vigolium server resources and keep running even after Burp is closed.
 
+<Callout icon="plug" color="#3B82F6" iconType="regular">
+  Using **Caido** instead? The [Vigolium Caido plugin](/getting-started/caido-plugin) offers the same workflows — dispatch, proxy forwarding, sitemap snapshots, and the live bridge — over the same bridge protocol, with `--caido-bridge-url` as an alias for `--burp-bridge-url`.
+</Callout>
+
 <Frame caption="Findings Records tab in Burp Suite — findings, request/response evidence, and Copy Finding as Markdown">
   <img src="/images/burp-extension/vigolium-burp-ext-1.png" alt="Vigolium Burp extension Findings Records tab showing findings, request and response evidence, and live scan status" />
 </Frame>
@@ -135,6 +139,8 @@ Snapshots are **incremental** within the current Burp session and **idempotent**
 ## Bidirectional live bridge
 
 The **live bridge** connects Vigolium's CLI and server to Burp in *both* directions over an opt-in, loopback-only listener — query live Burp Proxy history from Vigolium, or copy Vigolium traffic back into Burp's Target Site map.
+
+The same protocol backs the [Caido plugin](/getting-started/caido-plugin), so `--burp-bridge-url` and its `--caido-bridge-url` alias are one flag. Which vendor is listening is **discovered, not declared**: each reply carries an `implementation` identity that Vigolium maps onto the record's `source` label (`burp` or `caido`), and the merged `/api/http-records` response names it in `X-Vigolium-Bridge-Source`. A listener too old to report one is read as `burp`.
 
 <Frame caption="Bridge tab — Target Site map snapshots, the loopback live-bridge listener, Proxy forwarding, and filter rules">
   <img src="/images/burp-extension/vigolium-burp-ext-3.png" alt="Vigolium Burp extension Bridge tab showing the live bridge listener URL, proxy interception, and proxy filter rules" />

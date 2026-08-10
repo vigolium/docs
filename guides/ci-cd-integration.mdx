@@ -61,6 +61,33 @@ Extract a summary of findings:
 jq '{name: .name, severity: .severity, url: .url}' results.jsonl
 ```
 
+## GitHub code scanning (SARIF)
+
+`--format sarif` writes a SARIF 2.1.0 log, so findings land in the repository's **Security → Code scanning** tab instead of only in build output. Code findings anchor to a file and line, which is what lets GitHub annotate them onto the pull-request diff; HTTP findings anchor to their URL and carry the proof exchange in the standard `webRequest`/`webResponse` fields.
+
+```yaml
+- name: Vigolium scan
+  run: vigolium scan -S -t "$TARGET_URL" --format sarif -o results.sarif --soft-fail
+
+- name: Upload SARIF
+  uses: github/codeql-action/upload-sarif@v3
+  with:
+    sarif_file: results.sarif
+```
+
+Combine it with the other formats in one run — the scan is executed once and each format is materialized from the same result set:
+
+```bash
+vigolium scan -S -t "$TARGET_URL" --format sarif,html,jsonl -o results
+# → results.sarif  results.html  results.jsonl
+```
+
+<Note>
+  Use `--soft-fail` (or run the upload with `if: always()`) when you also pass `--fail-on`, so a failing gate still publishes the SARIF before the job exits non-zero. Findings carry a stable `partialFingerprints` hash, so GitHub tracks one alert across re-scans rather than reopening it every run.
+</Note>
+
+The same format is available on stored data — `vigolium export --format sarif -o project.sarif` — and on `vigolium import --format sarif`, which is the path for publishing an agentic [source audit](/getting-started/agentic-security-audit) into code scanning.
+
 ## With Source Code (Agent Mode)
 
 Source-aware analysis lives in agent mode now. When the source code is available in the CI workspace, run an AI-driven swarm with `--source` for route extraction and AI-generated extensions:

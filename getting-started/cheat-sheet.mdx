@@ -1,6 +1,6 @@
 ---
 title: "Vigolium Cheat Sheet"
-description: "A one-page, copy-paste reference for the workflows you reach for most: live traffic mirroring, replaying through Burp, passive/secret scanning of forwarded traffic, importing external data, parallel fan-out, resuming, spec-driven scans, single-request scans, content discovery, filtering to one vulnerability class or technology, browsing recorded traffic in the database, triaging findings with a coding agent, reproducing an exploit, setting up the AI agent, exporting stored data to a browsable filesystem tree, and inspecting or editing config."
+description: "A one-page, copy-paste reference for the workflows you reach for most: live traffic mirroring, replaying through Burp or Caido, passive/secret scanning of forwarded traffic, importing external data, parallel fan-out, resuming, spec-driven scans, single-request scans, content discovery, filtering to one vulnerability class or technology, browsing recorded traffic in the database, triaging findings with a coding agent, reproducing an exploit, setting up the AI agent, exporting stored data to a browsable filesystem tree, and inspecting or editing config."
 icon: "square-terminal"
 ---
 
@@ -733,6 +733,7 @@ What the extension can do:
 | **Snapshot the whole Target Site map** into Vigolium | **Bridge → Target Site Map Snapshot** (`Ctrl+Alt+S`, or auto every N minutes) |
 | **Bidirectional live bridge** — read Burp history from the CLI, or push Vigolium traffic back into Burp's Site map | Enable **Bridge → Enable live bridge** (loopback `http://127.0.0.1:9009`), then drive it from the CLI |
 | **Send exact bytes through Burp's engine**, or stage traffic into Repeater / Organizer | `replay` / `fuzz` / `finding` with `--send-via-burp`, `--to-repeater`, `--to-organizer`, or `--push-to-burp` (all need `--burp-bridge-url`) |
+| **Do all of the above from Caido** | Install the [Caido plugin](/getting-started/caido-plugin) — same protocol, same flags, `--caido-bridge-url` alias |
 
 Once the loopback bridge is enabled in Burp, drive it from Vigolium with the `--burp-bridge-url` flag (export `VIGOLIUM_BURP_BRIDGE_URL` only if you'd rather not repeat the flag):
 
@@ -759,6 +760,24 @@ vigolium finding xss --burp-bridge-url http://127.0.0.1:9009 --push-to-burp
 <Callout icon="circle-info" color="#3B82F6" iconType="regular">
   Pairs naturally with [section 1 (live filesystem mirror)](#1-mirror-ingested-traffic-findings-to-a-live-filesystem-tree) and [section 3 (passive/secret scan on forwarded traffic)](#3-passive-secret-scan-on-forwarded-traffic): run `vigolium server -S --passive-only --mirror-fs output-dir -A` and the extension feeds it while findings and readable request/response files appear in real time. **Full walkthrough** — install, connect, the three dispatch workflows, proxy forwarding, site-map snapshots, and the live bridge: [Using Vigolium with Burp Suite](/getting-started/burp-suite).
 </Callout>
+
+### Using Caido instead
+
+The [**Vigolium Caido plugin**](https://github.com/vigolium/caido-vigolium) does everything above from Caido: install `caido-vigolium.zip` via **Plugins → Install Package → From File**, set the server URL + API key under **Vigolium → Settings**, and dispatch with `⌘⌃V` / `⌘⌃N` / `⌘⌃A` (`Ctrl+Alt+…` on Windows/Linux) or the `⌘K` palette. The live bridge is on by default on the same loopback port, so every bridge command works unchanged — `--caido-bridge-url` is an alias for `--burp-bridge-url`:
+
+```bash
+# Merge live Caido traffic into the local traffic view, then keep only the Caido rows
+vigolium traffic --caido-bridge-url http://127.0.0.1:9009
+vigolium traffic --caido-bridge-url http://127.0.0.1:9009 --source caido
+
+# One-shot persist of everything the bridge exposes
+vigolium import --caido-bridge-url http://127.0.0.1:9009
+
+# Issue exact bytes through Caido's HTTP stack, staged into a Replay session
+vigolium replay -i req.txt --caido-bridge-url http://127.0.0.1:9009 --send-via-burp --to-repeater
+```
+
+Bridge rows are labelled by the vendor that actually answered (`source: caido` vs `burp`), so one `--source` filter separates them — including traffic the plugin *pushed* to the server, which sets `X-Vigolium-Source: caido`. Record UUIDs keep the `burp:` prefix for both, since that names the bridge route rather than the vendor. **Full walkthrough:** [Using Vigolium with Caido](/getting-started/caido-plugin).
 
 ---
 

@@ -199,7 +199,7 @@ vigolium agent autopilot -t https://staging.example.com \
 | `--no-skill-filter` | false | Load the full skill set; skip the pre-flight skill selection |
 | `--db-isolate` | false | Scan into a private temporary database, then merge results into `--db` at the end (lets parallel runs share one DB; SQLite only) |
 | `-S, --stateless` | false | Run the whole autopilot into a throwaway temporary database, then materialize `--format` outputs from it. Mirrors `vigolium scan -S`. See [Throwaway runs and reports](#throwaway-runs-and-reports--s---stateless). |
-| `--format` | `console` | Comma-list of outputs to write from a `-S` run: `console`, `jsonl`, `html`, `report`, `pdf`, `sqlite`, `fs`. A file-producing format is an error without `-S`. |
+| `--format` | `console` | Comma-list of outputs to write from a `-S` run: `console`, `jsonl`, `html`, `report`, `pdf`, `sarif`, `sqlite`, `fs`. A file-producing format is an error without `-S`. |
 | `-o, --output` | `vigolium-result/vigolium-autopilot` | Shared base path for the `-S` export; each `--format` appends its own extension. Only applies with `-S`. |
 | `--piolium` |, | Run piolium audit instead of vigolium-audit when `--source` is set (`lite`/`balanced`/`deep`/`longshot`/…); empty auto-picks piolium when `pi` is installed |
 | `--no-prescan` | false | Skip the native pre-scan that seeds http_records before the operator (target-only runs; no-op with `--source`) |
@@ -232,7 +232,7 @@ vigolium agent autopilot --stateless \
   --intensity deep --prompt-file prompt.md
 ```
 
-`--format` accepts a comma-separated list of `console`, `jsonl`, `html`, `report`, `pdf`, `sqlite`, `fs` — exactly the same set `vigolium scan -S` accepts, from the same shared list. With more than one format, `-o/--output` is a shared **base path** and each format appends its own extension; with no `-o`, the base defaults to `vigolium-result/vigolium-autopilot`. The exported `.sqlite` reopens directly:
+`--format` accepts a comma-separated list of `console`, `jsonl`, `html`, `report`, `pdf`, `sarif`, `sqlite`, `fs` — exactly the same set `vigolium scan -S` accepts, from the same shared list. With more than one format, `-o/--output` is a shared **base path** and each format appends its own extension; with no `-o`, the base defaults to `vigolium-result/vigolium-autopilot`. The exported `.sqlite` reopens directly:
 
 ```bash
 vigolium finding -S --db vigolium-result/vigolium-autopilot.sqlite --min-severity high
