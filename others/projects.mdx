@@ -31,6 +31,20 @@ vigolium project create my-engagement
 vigolium project create client-app --description "Q1 2026 pentest for client-app"
 ```
 
+Creating a project is usually the first thing to touch a database, so the `project`
+subcommands create the schema and seed the default rows themselves — pointing
+`--db` at a path that doesn't exist yet is fine:
+
+```bash
+vigolium project create my-engagement --db ./engagement.sqlite
+```
+
+<Note>
+  Before **v0.4.0** this failed with `no such table: projects`, because the `project`
+  subcommands assumed an earlier command had already initialized the file. On older
+  builds, run `vigolium init` (or any scan) against the database first.
+</Note>
+
 ### List projects
 
 ```bash
@@ -92,6 +106,19 @@ Several mechanisms select the active project, listed by precedence (highest firs
 | Default project | Used when no flag or env var is set |
 
 `--project-uuid` and `--project-name` are mutually exclusive (`--project-name` must match exactly one project).
+
+<Warning>
+  **Requires v0.4.0 or newer.** On earlier builds the selection above worked for
+  *reads*, but a scan or ingest wrote its findings and HTTP records into the
+  **default** project regardless — so `vigolium finding list --project-name
+  my-engagement` came back empty after a scan that had just reported findings.
+  Upgrading fixes new runs; data already written that way stays in the default
+  project and is not migrated — reach it with `--project-uuid
+  00000000-0000-0000-0000-000000000001`.
+</Warning>
+
+A failed project lookup is fatal on the scan commands: if `--project-name` matches
+nothing, the scan stops rather than quietly falling back to the default project.
 
 ### CLI examples
 

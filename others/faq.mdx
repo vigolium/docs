@@ -112,6 +112,11 @@ Answers to the questions that come up most often. For a system-level picture, st
   <Accordion title="I upgraded, what happens to my existing scan data?">
     Existing databases are migrated in place. The `project_uuid` column is added with the default-project UUID as its default, so pre-multi-tenancy data lands in the default project.
   </Accordion>
+  <Accordion title="My scan reported findings, but the project has none">
+    On builds **older than v0.4.0**, project selection applied to reads but not to writes: `scan`/`scan-url`/`scan-request`/`ingest` and the server stamped every finding and HTTP record with the **default** project regardless of `--project-uuid`, `--project-name`, `VIGOLIUM_PROJECT_UUID` or `X-Project-UUID`. The scan printed its findings, then `vigolium finding list --project-name <name>` returned nothing.
+
+    Upgrade to v0.4.0 or newer (`vigolium update`, then `vigolium version`). Existing rows are not migrated — read them back with `--project-uuid 00000000-0000-0000-0000-000000000001`. See [Projects & Multi-Tenancy](/others/projects).
+  </Accordion>
   <Accordion title="How does cloud storage work?">
     Storage is disabled by default. When enabled (`storage.enabled: true`), a single S3 client talks to GCS, S3, or self-hosted MinIO. The project UUID is the in-bucket prefix (not the bucket name), so one bucket safely holds many projects: `gs://<project-uuid>/<key>` maps to `s3://<bucket>/<project-uuid>/<key>`. `gs://` URLs are first-class scan inputs and export targets. See [Storage API](/api-references/storage).
   </Accordion>

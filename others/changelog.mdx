@@ -14,7 +14,29 @@ package.
   the build you have installed, and `vigolium update` to upgrade.
 </Note>
 
-<Update label="Unreleased" description="lands as v0.3.12">
+<Update label="v0.4.0" description="2026-08-11">
+
+A **multi-tenancy fix** release: scans, ingestion, and the `project` subcommands now honor the active project end-to-end, so non-default projects stop silently losing their findings and records. No module changes (registry stays at 207 active + 116 passive).
+
+<Warning>
+  **If you run more than one project:** before this release, every scan and ingest wrote its findings and HTTP records into the **default** project no matter which project you selected — `--project-uuid`, `--project-name`, `VIGOLIUM_PROJECT_UUID` and `X-Project-UUID` all selected the project correctly, but the executor never stamped it. Data already written that way is still in the default project and is not moved by upgrading. See [Projects & Multi-Tenancy](/others/projects).
+</Warning>
+
+### Fixed
+
+- **Findings and records from `scan`/`scan-url`/`scan-request`/`ingest`/`server` landed in the default project on any non-default project** — the executor's project field was read on every write but set by none of its callers.
+- Every executor caller now resolves and passes the active project: the CLI scan and ingest paths, the server's URL / request / records handlers, and the discovery, external-harvest and dynamic-assessment runner phases.
+- **A failed project resolution on `scan-url`/`scan-request` is now fatal**, not a warning — continuing would silently misfile the whole scan into the default project.
+- **`vigolium project create` failed with `no such table: projects` on a fresh `--db` file** — the `project` subcommands never created the schema before touching it. Creating a project is normally the *first* command to touch a new database, so it could previously only be worked around by copying an already-populated one.
+- `project create`/`list`/`use`/`delete` now bootstrap the schema and seed the default rows, so a brand-new database is usable straight away.
+
+### Added
+
+- Unit and E2E coverage (`TestExecutorConfigAlwaysSetsProjectUUID` plus a project-scoping E2E test) guarding the wiring against regression.
+
+</Update>
+
+<Update label="v0.3.12" description="2026-08-10">
 
 A **SARIF output** release: emit SARIF 2.1.0 so runs feed GitHub code scanning, DefectDojo, and the VS Code SARIF Viewer. Also teaches the bridge to say which proxy it is, so Caido traffic stops showing up labelled `burp`. No module changes (registry stays at 207 active + 116 passive).
 
