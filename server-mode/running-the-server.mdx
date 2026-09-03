@@ -88,7 +88,7 @@ Every record and finding lands under `./mirror/traffic/<host>/…` and `./mirror
 
 ## Scan on Receive
 
-`-S/--scan-on-receive` runs the scanner against every ingested request as it is persisted, so forwarded Burp/proxy traffic is analyzed in place without a separate scan command:
+`--scan-on-receive` runs the scanner against every ingested request as it is persisted, so forwarded Burp/proxy traffic is analyzed in place without a separate scan command:
 
 ```bash
 # Full active + passive assessment on every ingested request
@@ -97,6 +97,10 @@ vigolium server --scan-on-receive
 # Passive modules only — no active scan traffic is ever sent (secret detection still runs)
 vigolium server --scan-on-receive --passive-only
 ```
+
+<Warning>
+  **Spell it `--scan-on-receive`, not `-S`.** As of v0.4.5, `-S` means `--stateless` on every other Vigolium command; on `server` and `ingest` it survives only as a **deprecated alias** for `--scan-on-receive`, and warns when used.
+</Warning>
 
 - `--passive-only` restricts scan-on-receive to **passive modules only** — the safest way to analyze forwarded traffic in place.
 - Combining `--passive-only` with `--full-native-scan-on-receive` still crawls (discovery + spidering send requests); for zero active traffic, use `--scan-on-receive` without the full-native flag.

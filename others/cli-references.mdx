@@ -15,7 +15,25 @@ vigolium --full-example      # Curated tour of all common usage
 vigolium version             # Build and version info
 ```
 
-The global `--soft-fail` flag forces an exit code of `0` even when a command fails (the error is still printed to stderr). It keeps a failing `vigolium` call from interrupting the wrapping script or CI pipeline:
+### Exit codes
+
+Since v0.4.5 the exit status is a **table**, not two values:
+
+| Code | Meaning |
+|-----:|---------|
+| `0` | Success (or `--soft-fail` forced it) |
+| `1` | Error — the command failed to do its job |
+| `2` | Usage error — bad flag, bad value, rejected combination |
+| `3` | `fuzz --fail-on-match` (or `kit secret-scan --fail-on-match` / `kit jwt-crack --fail-on-crack`) matched |
+| `4` | A `--fail-on <severity>` gate tripped |
+
+<Warning>
+  **`4` is not a failure.** The scan ran to completion, wrote its output, and found something at or above the threshold — the opposite outcome from `1`, where it never got that far. Before v0.4.5 both returned `1`, so a CI job could not tell "the scanner crashed" from "the scanner worked and found a critical". Branch on them separately: treating every non-zero as breakage either ignores real outages or reports every finding as one.
+</Warning>
+
+`--fail-on <info|suspect|low|medium|high|critical>` works on `scan`, `scan-url`, `scan-request`, and `run`, and **output is always written first** — the gate only changes the exit code. Under `-P/--parallel` the gate is evaluated per child, and the parent batch fails only when every target fails.
+
+The global `--soft-fail` flag forces an exit code of `0` even when a command fails (the error is still printed to stderr), and overrides `--fail-on`. It keeps a failing `vigolium` call from interrupting the wrapping script or CI pipeline:
 
 ```bash
 vigolium scan -t https://example.com --soft-fail
@@ -27,7 +45,9 @@ These work on every command (run `vigolium --help` for the authoritative list):
 
 | Flag | What it does |
 |---|---|
-| `-j, --json` | Machine-readable JSON for agent / programmatic use (compact bodies; pairs with `--fields` / `--compact` / `--full-body`) |
+| `-j, --json` | Machine-readable JSON for agent / programmatic use (compact bodies; pairs with `--fields` / `--compact` / `--full-body`). Every command emits the [same envelope](/getting-started/cheat-sheet#the-json-envelope) |
+| `-S, --stateless` | Run against a throwaway/standalone database. Since v0.4.5 it means the same thing on **every** command, and is accepted as a harmless no-op where it has none |
+| `--events ndjson` | *(scan / run / scan-url / scan-request)* Stream machine events on stdout while the scan runs |
 | `-v, --verbose` / `--debug` | Verbose logging / debug-level logging (debug also prints outgoing HTTP request lines) |
 | `--silent` | Suppress everything except findings |
 | `--dump-traffic` | Print every request/response pair to stderr, Burp-style (bypasses the logger) |
@@ -93,8 +113,12 @@ vigolium scan-url -S -t https://example.com --silent --print-traffic        # ra
 # Network controls
 vigolium scan -t https://example.com --proxy http://127.0.0.1:8080
 vigolium scan -t https://example.com -c 100 --rate-limit 200
+vigolium scan -t https://example.com --rate-limit known-issue-scan=20   # cap ONE phase (repeatable, mixes with the bare form)
 vigolium scan -t https://example.com --scanning-max-duration 2h
 vigolium scan -t https://example.com --no-waf-pacing         # Disable proactive WAF/CDN pre-throttling (speed control)
+
+# Machine event stream on stdout while the scan runs (human console stays on stderr)
+vigolium scan -t https://example.com --events ndjson 2>/dev/null | jq -c .
 
 # Discovery: sweep alternate HTTP(S) ports on the target hosts (deep intensity or --follow-subdomains)
 vigolium scan -t https://example.com --intensity deep --port-sweep-ports 80,443,8080,8443
@@ -121,6 +145,70 @@ The repeatable "opaque" flags — `-H/--header`, `--auth`, `--auth-file`, `-t/--
 **Speed control — WAF-aware pacing.** The per-host rate limiter now **proactively pre-throttles** a host the first time earlier-phase traffic fingerprints it behind a recognized CDN/WAF edge (CloudFront, Cloudflare, Akamai, Imperva/Incapsula, Sucuri, or Azure Front Door — detected from headers on ordinary 200s), dropping that host's concurrency to `MaxPerHost/4` and ramping back up on healthy responses. This keeps an aggressive active phase from bursting the edge into a rate-based block that would hide findings. A one-time-per-host `[waf-pacing-armed]` notice prints the drop (e.g. `40→10`) to stderr and the session log. `--no-waf-pacing` disables this **proactive** pacing; the **reactive** back-off after a *confirmed* WAF block still applies. It's a Speed Control flag, available on `scan` / `scan-url` / `scan-request` / `run` / `ingest`.
 
 **Discovery — alternate-port sweep.** `--port-sweep-ports` overrides the alternate HTTP(S) ports swept on the CLI target hosts (comma-separated). The sweep runs when `--intensity deep` is set or `--follow-subdomains` is on, so a host reachable on `8080`/`8443` (or any port you list) is discovered and scanned alongside the standard `80`/`443`.
+
+### Pace: per-phase rate limits
+
+The three speed dials — `-c/--concurrency`, `--rate-limit`, `--max-per-host` — each take an **optional phase qualifier** (v0.4.5), repeatable and mixable with the bare form:
+
+```bash
+# Cap the nuclei phase without capping the ~200 native modules, which pace themselves
+vigolium scan -t https://example.com --rate-limit known-issue-scan=20
+
+# 50 rps everywhere, 20 for the nuclei phase
+vigolium scan -t https://example.com --rate-limit 50 --rate-limit kis=20
+```
+
+Qualifiers accept the same phase aliases `--only`/`--skip` do (`kis`, `cve`, `deparos`, `dast`, …). Resolution per phase is **phase-scoped → global → strategy/config default**. A qualifier naming a phase the run doesn't execute warns loudly rather than failing — a cap you believe is in force and isn't is worse than an error.
+
+<Warning>
+  **`--rate-limit` now applies at its documented default when you don't type it.** It used to be enforced only when explicitly passed, so *silence meant unlimited* while the help text advertised 100 — the fail-open direction on a safety knob. No cap now requires asking for it with `--rate-limit 0`; a negative value is a usage error (exit `2`), not "unlimited".
+</Warning>
+
+Under `--events ndjson`, `scan.started` reports the `pace` that actually applied plus a `phase_pace` table for any phase that differs, so you can **assert** what was in force rather than inferring it from the flags you passed.
+
+### Machine event stream
+
+`--events ndjson` on `scan` / `run` / `scan-url` / `scan-request` writes one JSON object per line to **stdout** while the scan runs. The human console keeps stderr byte-for-byte unchanged, so `2>/dev/null` yields clean NDJSON with zero non-JSON lines, and an interactive operator sees no difference.
+
+```bash
+vigolium scan -t https://example.com --events ndjson 2>/dev/null | jq -c .
+```
+
+```jsonc
+{"v":1,"ts":"…","scan_uuid":"…","type":"scan.started","target":"https://…","strategy":"lite","phases":["heuristics-check","discovery","dynamic-assessment"],"db_path":"/tmp/…","pace":{"rate_limit":20,"concurrency":10,"max_per_host":10}}
+{"v":1,"ts":"…","scan_uuid":"…","type":"phase.started","phase":"discovery"}
+{"v":1,"ts":"…","scan_uuid":"…","type":"phase.progress","phase":"discovery","requests_sent":1204,"findings":3}
+{"v":1,"ts":"…","scan_uuid":"…","type":"waf.block","host":"app.example.com","vendor":"cloudflare","status_code":403,"detail":"edge is filtering scan traffic — results for this host may be incomplete"}
+{"v":1,"ts":"…","scan_uuid":"…","type":"waf.pacing","host":"app.example.com","vendor":"akamai","concurrency_from":40,"concurrency_to":8}
+{"v":1,"ts":"…","scan_uuid":"…","type":"finding.new","severity":"high","confidence":"firm","module_id":"sqli-error-based","url":"…"}
+{"v":1,"ts":"…","scan_uuid":"…","type":"phase.finished","phase":"discovery","status":"completed","duration_ms":184000,"requests_sent":1544,"findings":3}
+{"v":1,"ts":"…","scan_uuid":"…","type":"error","phase":"spidering","message":"chromium launch failed"}
+{"v":1,"ts":"…","scan_uuid":"…","type":"scan.finished","status":"completed","duration_ms":903000,"findings_by_severity":{"high":3,"medium":11},"records_written":4820}
+```
+
+| Type | Read it for |
+|---|---|
+| `scan.started` | The canonical `phases[]` the aliases resolved to, the `db_path` to query afterwards, and the `pace` that actually applied |
+| `phase.started` / `phase.finished` | Phase boundaries, with `status`, `duration_ms`, `requests_sent`, `findings` |
+| `phase.progress` | Liveness. `requests_sent` every 5s is the real slope — a crawl that is working versus one that is wedged |
+| `waf.block` | The edge started filtering. Results for that host are **incomplete** — do not read a thin surface as a clean target |
+| `waf.pacing` | Vigolium slowed itself down on purpose. Attribute the slowdown here, not to the target |
+| `finding.new` | Metadata only. Evidence lives in `db_path`; query it with `finding -j --with-records` afterwards |
+| `error` | A phase failed and the scan **carried on** — non-fatal by construction. A failure that ends the run rides on `scan.finished{status:"failed"}` instead |
+| `scan.finished` | Terminal: `status`, `findings_by_severity`, `records_written` |
+
+Four contracts you can build on:
+
+- **Every line carries `scan_uuid`**, stamped centrally so no call site can forget it. A sweep is several `vigolium scan` invocations; this is how you attribute an event to one.
+- **`v` is the event-schema version.** Gate on it.
+- **`scan.finished` is always last**, including `status:"interrupted"` on SIGINT/SIGTERM.
+- **Its absence means the process was killed outright** (SIGKILL can't be caught). Treat a stream that stops without a terminal event as a hard kill, not a completed scan.
+
+This replaces scraping `vigolium log` for `[waf-block-detected]` / `[waf-pacing-armed]` markers — every notice that reaches the log also reaches the stream. The WAF notifiers are deliberately **not** gated on `--silent`: that flag asks for a quiet terminal, and a driver passing `--silent --events` wants exactly that.
+
+<Note>
+  `--events` is refused under `-P/--parallel`. Each child's stdout is captured to its own per-target console log, so the parent's stdout — the one you're reading — would receive nothing, and the NDJSON would contaminate a file meant to be a human transcript.
+</Note>
 
 ### Less common scan flags
 
@@ -229,7 +317,39 @@ cat urls.txt | vigolium ingest -i -
 
 # Send to a remote Vigolium server
 vigolium ingest -s http://server:9002 -i api.yaml -I openapi
+
+# After ingesting, scan the records (local mode only)
+vigolium ingest -t https://api.example.com -I openapi -i spec.yaml --scan-on-receive
 ```
+
+### Batch ingest — N sources, one process
+
+Since **v0.4.5** `-i` is repeatable and `--dir` walks a directory, so a folder of captures costs one process instead of N:
+
+```bash
+# Repeated -i, ingested in the order given
+vigolium ingest -i a.har -i b.har -i c.yaml
+
+# Or point at a directory (non-recursive, sorted, so re-runs are reproducible)
+vigolium ingest --dir ./captures --dir-glob '*.har' -I har
+```
+
+| Flag | Default | What it does |
+|---|---|---|
+| `--dir <path>` | — | Ingest every matching file in this directory, in one process |
+| `--dir-glob <pattern>` | `*` | Filename pattern for `--dir`, e.g. `'*.har'` |
+
+A failing source does **not** discard its siblings — one bad HAR in fifty must not cost the other forty-nine — but the command still exits non-zero and names how many failed. An empty `--dir` match is a **hard error**: "ingested 0 records" for a typo'd path is indistinguishable from an empty capture.
+
+<Note>
+  `--dir` is deliberately non-recursive. Walking subdirectories would silently widen what you pointed at, and record ids are assigned in ingest order.
+
+  Concurrent `vigolium ingest` processes against one SQLite file are safe anyway (every open sets `busy_timeout`, WAL, and an immediate write lock, so writers serialize rather than failing with `SQLITE_BUSY`). Batch mode is still the right shape — it pays one process start and one schema check, not N.
+</Note>
+
+<Warning>
+  **`-S` on `ingest` and `server` is a deprecated alias for `--scan-on-receive`** and warns. Everywhere else in the CLI `-S` means `--stateless`. Use the long `--scan-on-receive` spelling on these two commands.
+</Warning>
 
 ## Server
 
@@ -239,8 +359,8 @@ Start the REST API and ingest proxy.
 vigolium server                                              # Default host/port from config
 vigolium server --host 0.0.0.0 --service-port 8443
 vigolium server --no-auth                                    # Local use only — disables bearer auth
-vigolium server -t https://example.com --scan-on-receive     # Auto-scan ingested traffic (-S is shorthand for --scan-on-receive)
-vigolium server -S --passive-only                            # Passive modules only — no active traffic; includes secret detection
+vigolium server -t https://example.com --scan-on-receive     # Auto-scan ingested traffic (-S here is a deprecated alias for it)
+vigolium server --scan-on-receive --passive-only             # Passive modules only — no active traffic; includes secret detection
 vigolium server --mirror-fs ./mirror                         # Live-mirror ingested traffic + findings to a filesystem tree
 vigolium server --burp-bridge-url http://127.0.0.1:9009      # Merge live Burp Proxy history into GET /api/http-records
 
@@ -360,7 +480,13 @@ vigolium finding load --finding-file agent-output.json --scan-uuid 6f1c2b90-8b1e
 
 **Live proxy bridge.** With a running Burp Suite or Caido exposing the loopback bridge (default listener `http://127.0.0.1:9009`, from the [`burp-vigolium`](https://github.com/vigolium/burp-vigolium) extension or the [`caido-vigolium`](https://github.com/vigolium/caido-vigolium) plugin; env fallback `VIGOLIUM_BURP_BRIDGE_URL`), `vigolium traffic --burp-bridge-url <url>` merges the proxy's live history into the traffic view. `-B` and `--caido-bridge-url` are the same flag, and live rows are labelled with the vendor that answered (`source: burp` / `source: caido`), so `--source caido` selects exactly the traffic Caido served. Add `--save-to-vigolium-db` to persist those bridge rows into the DB (the current page, or every match with `--all`), or `--save-to-burp` to copy DB traffic **into** Burp's Target Site map (the two `--save-to-*` flags are mutually exclusive). See [Using Vigolium with Burp Suite](/getting-started/burp-suite) for bridge setup.
 
-**Push findings to Burp.** `vigolium finding --push-to-burp` (paired with `--burp-bridge-url`) hands the selected finding(s)' evidence request+response to Burp's Organizer — severity-coloured, one item per finding — for manual confirmation. `--to-repeater` opens the finding's request in a Repeater tab instead (Burp caps Repeater at ~30 tabs/min, so prefer `--push-to-burp` for a large selection), and `--send-via-burp` re-issues the request through Burp's engine to capture a fresh response (with `--http-mode auto|http1|http2|http2_ignore_alpn`). These honour the usual `finding` selectors (`--severity`, `--min-severity`, a fuzzy term, `--id`).
+**Push findings to Burp.** `vigolium finding --push-to-burp` (paired with `--burp-bridge-url`) hands the selected finding(s)' evidence request+response to Burp's Organizer — severity-coloured, one item per finding — for manual confirmation. `--to-repeater` opens the finding's request in a Repeater tab (Burp caps Repeater at ~30 tabs/min, so prefer `--push-to-burp` for a large selection), and `--send-via-burp` re-issues the request through Burp's engine to capture a fresh response (with `--http-mode auto|http1|http2|http2_ignore_alpn`). These honour the usual `finding` selectors (`--severity`, `--min-severity`, a fuzzy term, `--id`).
+
+Since **v0.4.5**, `--push-to-burp` and `--to-repeater` are independent destinations that **compose** — one invocation can file a finding in the Organizer *and* open it in Repeater, exactly as `replay --to-organizer --to-repeater` already did. They used to be mutually exclusive here and composable on `replay`: the same operation with two different rules.
+
+```bash
+vigolium finding --id 42 --push-to-burp --to-repeater -B http://127.0.0.1:9009
+```
 
 ```bash
 # Push all XSS findings' evidence into Burp's Organizer for manual confirmation
@@ -414,11 +540,23 @@ for f in scans/*.sqlite; do vigolium import --db combined.sqlite "$f"; done
 vigolium import ./scan-bundle.tar.gz
 vigolium import gs://<project-uuid>/imports/scan.tar.gz
 
-# One-shot persist of a running Burp Suite's live Proxy history into the DB
-vigolium import --burp-bridge-url http://127.0.0.1:9009
+# One-shot persist of a running Burp Suite's live Proxy history into the DB.
+# A filter is REQUIRED — see the warning below.
+vigolium import --burp-bridge-url http://127.0.0.1:9009 --host acme.test
+
+# Deliberate whole-history import, unattended
+vigolium import --burp-bridge-url http://127.0.0.1:9009 --all-hosts --yes
 ```
 
-`--burp-bridge-url <url>` (alias `--caido-bridge-url`) turns `import` into a one-shot persist of **all** of a running Burp's or Caido's live proxy history into the database (default listener `http://127.0.0.1:9009`; env fallback `VIGOLIUM_BURP_BRIDGE_URL`). It's an import *source*, so it cannot be combined with path arguments or `--glob-db`. Persisted rows keep the vendor they came from (`source=burp` / `source=caido`) and remain available after the proxy stops. See [Using Vigolium with Burp Suite](/getting-started/burp-suite) or [with Caido](/getting-started/caido-plugin).
+`--burp-bridge-url <url>` (alias `--caido-bridge-url`) turns `import` into a one-shot persist of a running Burp's or Caido's live proxy history into the database (default listener `http://127.0.0.1:9009`; env fallback `VIGOLIUM_BURP_BRIDGE_URL`). It's an import *source*, so it cannot be combined with path arguments or `--glob-db`. Persisted rows keep the vendor they came from (`source=burp` / `source=caido`) and remain available after the proxy stops. See [Using Vigolium with Burp Suite](/getting-started/burp-suite) or [with Caido](/getting-started/caido-plugin).
+
+<Warning>
+  **An unfiltered `import -B` is refused (exit 2) since v0.4.5.** Without a narrowing filter it used to copy **every host the operator had ever browsed — carrying those hosts' cookies and tokens** — into the destination database. Where that database is shared with an autonomous agent, that is a cross-engagement leak with nothing in front of it: banking sessions, internal tools, an unrelated client's work.
+
+  It now accepts the same filter set `traffic -B` has, spelled the same way: `--host` (wildcards), `--path`, `--method`, `--status`, `--search`, `--exclude-search`, `--from`/`--to`, `-n/--limit`. Pass `--all-hosts` to opt into the unfiltered form on purpose. A pre-flight prints how many records are about to cross **before anything is written** and asks for confirmation on a TTY; `--yes` skips the confirmation, never the refusal.
+</Warning>
+
+Import is **idempotent** either way — new requests are inserted, changed responses refresh the existing row, unchanged traffic is skipped — so re-running it during an engagement is safe.
 
 **Report metadata.** When `import` / `export` render an HTML report, three flags fill in header fields the source data can't supply: `--report-url <url>` sets the target of the report's "Raw Report URL" button (overriding `VIGOLIUM_REPORT_SHARED_URL`; also available on `scan` / `run`), `--report-duration "10h42m5s"` states the scan duration, and `--report-generated-at 2026-08-01T03:00:00Z` stamps the generation time. `import --upload` pushes the artifact to cloud storage, with `--upload-key` overriding the default `imports/<basename>-<ts>.<ext>` object key.
 
@@ -635,6 +773,64 @@ Every result carries `anomaly_score` and `anomaly_reasons`. `--anomaly-threshold
 <Note>
   `replay`'s `-m/--mutate` flag was **removed** — `replay` now re-sends stored traffic (verbatim, or with an exact-byte `--raw-request` override) and confirms, while `fuzz` owns wordlist-scale payload injection at an exact position. (The `pkg/replay` library and the agent's in-process `replay_request` tool still apply mutations.)
 </Note>
+
+## Kit (standalone utilities)
+
+`vigolium kit` exposes the scanner's internal primitives as one-shot, **stateless** tools — no database, no project scope, no scan pipeline. Added in v0.4.1. Full guide: [Utility Toolbox](/others/kit).
+
+```bash
+# Scan files, dirs, or stdin for leaked credentials
+vigolium kit secret-scan config.env .github/
+vigolium kit secret-scan -j --min-confidence high src/
+cat bundle.js | vigolium kit secret-scan -
+
+# Unminify / unpack a JS bundle (file, URL, or stdin)
+vigolium kit js-beautify https://target.example/main.abc.js
+vigolium kit js-beautify -j --extract app.min.js
+
+# Mint OOB callback URLs, then drain their interactions later
+vigolium kit oast new -n 2 --session run.yaml
+vigolium kit oast poll --session run.yaml --wait 30s -j
+vigolium kit oast poll --session run.yaml --deregister
+
+# Collect known URLs for a domain from public archives
+vigolium kit harvest target.example
+vigolium kit harvest --source wayback,commoncrawl target.example -j
+
+# Recover a JWT's HMAC signing secret
+vigolium kit jwt-crack -w /path/rockyou.txt eyJhbGciOiJIUzI1NiJ9...
+
+# Built-in wordlists and payload sets
+vigolium kit wordlist                    # list them
+vigolium kit wordlist fuzz > fuzz.txt    # print one
+vigolium kit payload --class sqli,xss
+```
+
+`secret-scan --fail-on-match` and `jwt-crack --fail-on-crack` exit `3` on a hit, for CI/agent gating.
+
+## Tool shims
+
+A coding agent reaching for `ffuf`, `nuclei`, `katana`, `gau` or `arjun` will often *find* them on the host — and then the whole run happens outside the pinned database, outside the phase model, invisible to every later `finding`/`traffic`/`replay` call. So Vigolium accepts each tool's own argv and routes it to the native phase, printing the translation before it runs:
+
+```bash
+$ vigolium ffuf -u https://target.example/FUZZ -w words.txt
+◆ routed to: vigolium run discovery -t https://target.example --discovery-wordlist words.txt
+```
+
+| Shim | Routes to |
+|---|---|
+| `vigolium ffuf -u <url>/FUZZ -w <list>` | `run discovery --discovery-wordlist` |
+| `vigolium nuclei -u <url> -severity high -tags cve` | `run known-issue-scan --known-issue-scan-*` |
+| `vigolium katana -u <url>` | `run spidering` |
+| `vigolium gau <domain>` | `run external-harvest` |
+| `vigolium arjun -u <url>` | `fuzz --fuzz param-name --anomaly` |
+
+Mapped flags include the pace knobs (`-t`/`-threads`/`-c` → `--concurrency`, `-rate`/`-rl` → `--rate-limit`), headers, proxy, and each tool's own selectors. Both `-u X` and `-u=X` parse.
+
+- **An unmapped argument is a hard error naming the native command**, never a silent drop — a dropped flag is a scan that ran with a scope nobody chose. `vigolium ffuf --mc 200` tells you to run `vigolium run discovery --help`.
+- **Where a concept doesn't exist, the shim says so rather than approximating.** `katana -d 3` errors: Vigolium's spider is a state machine over DOM snapshots, not a depth-limited link follower, so bound it with `--spider-max-time` instead.
+
+The shims are a redirect for muscle memory, not a full port — once you know the native form, prefer it. It takes every Vigolium flag; the shims take a subset.
 
 ## Strategies & Phases
 
@@ -919,9 +1115,21 @@ Every olium agent run (autopilot, swarm, query, `olium`) writes a Pi-compatible 
 ```bash
 vigolium log                       # Replay the most recent agentic session
 vigolium log <session-id>          # Replay a specific session
+vigolium log ls                    # Merged table of native + agentic sessions
 vigolium log --raw                 # Print the raw transcript JSONL verbatim instead of the rendered replay
 vigolium log --strip-ansi > run.txt   # Strip ANSI colour codes (for piping into a file or another tool)
+vigolium log -S --db ./scan.sqlite <uuid>   # Read the session from a standalone export
 ```
+
+Three v0.4.5 fixes worth knowing:
+
+- **`-S` works.** `log` used to reject it outright with `unknown shorthand flag` — a non-zero exit and no output, i.e. a control that looked live and could only ever report nothing. It now reads through the same path `finding`/`traffic` do, so `$VIGOLIUM_DB_PATH` or `-S --db <file>` reaches that session's database with project scoping off.
+- **`--follow` no longer hangs on a dead scan.** Auto-follow used to fire whenever the scan row said `running`, and a scan reaped by a deadline or SIGKILL says that *forever* — so an omitted `--follow` parked the read until the caller's own timeout, on precisely the runs that had already timed out. Now a non-TTY stdout never auto-follows, a row whose log hasn't been written to for ~2 minutes is treated as stale, and an explicit `--follow` / `--follow=false` still wins. `vigolium log <uuid> | cat` terminates promptly.
+- **WAF notices survive the tail window.** They fire *early* (the edge is fingerprinted on the first clean response), so the default 200-line tail was structurally the wrong end of the file for the most important thing in it. Any `[waf-block-detected]` / `[waf-pacing-armed]` line above the window is now reprinted above it under an "N earlier notice(s)" header.
+
+<Note>
+  For live progress from a **program**, prefer [`--events ndjson`](#machine-event-stream-events-ndjson) on the scan itself — a structured stream rather than a rendered log.
+</Note>
 
 ## Configuration
 

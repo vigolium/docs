@@ -28,8 +28,34 @@ vigolium scan -t $TARGET_URL --strategy lite --fail-on high --format jsonl -o re
 ```
 
 - Output is always written **before** the gate is evaluated, so your report and exit status stay consistent.
-- The gate is scoped to the scan it runs in. Under `-P/--parallel`, it is evaluated **per child process**.
+- The gate is scoped to the scan it runs in. Under `-P/--parallel`, it is evaluated **per child process**, and the parent batch fails only when every target fails.
 - It works on `scan`, `scan-url`, `scan-request`, and `run`.
+
+### The exit-code table
+
+Since **v0.4.5** the exit status distinguishes outcomes a pipeline has to react to differently:
+
+| Code | Meaning | What CI should do |
+|-----:|---------|-------------------|
+| `0` | Success | Continue |
+| `1` | Error — the command failed to do its job | Investigate: this is breakage, not a result |
+| `2` | Usage error — bad flag, bad value, rejected combination | Fix the invocation |
+| `3` | `fuzz --fail-on-match` matched | A fuzz gate fired |
+| `4` | A `--fail-on <severity>` gate tripped | **Fail the build on findings** |
+
+<Warning>
+  **Upgrading from v0.4.4 or earlier: check your `if` statements.** `--fail-on` used to exit `1`, the same code the scanner returns when it *crashes*. A pipeline written as `vigolium scan … || exit 1` treated an unreachable target, a bad flag, and a critical finding identically. Now a findings gate is `4`, so you can report the finding and escalate a genuine outage separately:
+
+  ```bash
+  vigolium scan -t "$TARGET_URL" --fail-on high --format sarif -o results.sarif
+  case $? in
+    0) echo "clean" ;;
+    4) echo "findings at or above high — failing the build"; exit 1 ;;
+    2) echo "bad invocation"; exit 1 ;;
+    *) echo "scanner error — this is an outage, not a finding"; exit 1 ;;
+  esac
+  ```
+</Warning>
 
 To keep a wrapping script or CI step from being interrupted while still surfacing the error on stderr, add `--soft-fail`, which forces exit code `0` even when `--fail-on` (or any other error) would otherwise fail the command:
 
@@ -39,6 +65,30 @@ vigolium scan -t $TARGET_URL --fail-on critical --soft-fail --format jsonl -o re
 ```
 
 If you need finer control than a single severity threshold, fall back to parsing JSONL with `jq` (see below).
+
+## Watching a scan from the pipeline (`--events ndjson`)
+
+A CI scan is opaque until it finishes. `--events ndjson` streams one JSON object per line to **stdout** while the scan runs, leaving the human console on stderr — so a log collector or a progress reporter can read structured events with `2>/dev/null` and get zero non-JSON lines:
+
+```bash
+vigolium scan -t "$TARGET_URL" --events ndjson 2>/dev/null | tee events.ndjson | jq -c 'select(.type=="finding.new")'
+```
+
+The types you'll care about in CI:
+
+| Type | Use it for |
+|---|---|
+| `scan.started` | The canonical `phases[]` the aliases resolved to, the `db_path` to query afterwards, and the `pace` that actually applied |
+| `phase.progress` | Liveness — `requests_sent` every 5s distinguishes a working crawl from a wedged one, so a job can time out on real evidence |
+| `waf.block` | The edge started filtering. **Results for that host are incomplete** — don't publish a thin surface as a clean bill of health |
+| `finding.new` | Metadata as findings land, for streaming to a dashboard |
+| `scan.finished` | Terminal: `status`, `findings_by_severity`, `records_written` |
+
+Three contracts worth building on: every line carries `scan_uuid` (a sweep is several invocations), `v` is the event-schema version, and `scan.finished` is **always last** — including `status:"interrupted"` on SIGINT/SIGTERM. Its *absence* means the process was killed outright (SIGKILL can't be caught), which is exactly what a CI timeout looks like; treat a stream that stops without a terminal event as a hard kill, not a completed scan.
+
+<Note>
+  `--events` is refused under `-P/--parallel`. Each child's stdout is captured to its own per-target console log, so the parent's stdout — the one you're reading — would receive nothing. Refusing beats silently producing an empty stream.
+</Note>
 
 ## JSONL Output for Parsing
 

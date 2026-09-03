@@ -153,6 +153,29 @@ CORS can be enabled via the `cors_allowed_origins` server config:
 
 Allowed methods: `GET`, `POST`, `PUT`, `DELETE`, `PATCH`, `OPTIONS`. Allowed headers: `Content-Type`, `Authorization`, `X-Project-UUID`, `X-User-Email`.
 
+<Note>
+  `PATCH` was missing from the preflight allowlist before **v0.4.2**, so a browser client could never reach `PATCH /api/findings/:id/status` — i.e. could never mark a finding triaged.
+</Note>
+
+---
+
+## Response Headers
+
+Every response carries the server banner and its companion author header:
+
+```
+Server: Vigolium v0.4.5
+X-Author: j3ssie
+```
+
+`X-Vigolium-Bridge-Source` additionally appears on `/api/http-records` when a Burp/Caido bridge answered, naming the vendor.
+
+---
+
+## Request Body Limits
+
+Request bodies are capped per route. Since **v0.4.2** a chunked body is capped at `limit + 1` bytes and **drained before the 413** is returned, rather than being read to completion — previously a chunked upload could grow the heap to the framework's 512 MB ceiling on a route whose own limit was 4 MB. `--debug` logging no longer buffers streamed uploads into memory on the large-upload routes either.
+
 ---
 
 ## Error Responses
@@ -173,7 +196,12 @@ All errors follow a consistent format:
 |------|----------------------------------------------|
 | 400  | Bad request (invalid JSON, missing fields)   |
 | 401  | Unauthorized (missing or invalid Bearer token) |
-| 404  | Not found (e.g. agent run ID not found)      |
+| 404  | Not found (e.g. agent run ID not found, or a missing storage object) |
 | 409  | Conflict (scan or agent already running)     |
+| 413  | Payload too large (per-route body limit exceeded) |
 | 500  | Internal server error                         |
 | 503  | Database not available                        |
+
+<Note>
+  **v0.4.2:** storage downloads used to answer a missing object with a *truncated stream* instead of a JSON 404 — a client saw a short file, not an error. They now return the standard error shape, and the storage read endpoints are reachable in `--view-only` mode.
+</Note>

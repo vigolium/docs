@@ -157,13 +157,13 @@ When you point Vigolium at a large target list, use `-P/--parallel N` to scan se
 vigolium scan -T list-of-targets.txt -P 3 \
   --stateless --split-by-host \
   --format jsonl,html --output prefix-output \
-  --fuzz-wordlist ~/Tools/contents/fast.txt
+  --discovery-wordlist ~/Tools/contents/fast.txt
 
 # Shared-DB fan-out: 4 targets at a time merged into one local.db, one unified output
 vigolium scan -T list-of-targets.txt -P 4 \
   --db-isolate --db local.db \
   --format jsonl,html --output report \
-  --fuzz-wordlist ~/Tools/contents/fast.txt
+  --discovery-wordlist ~/Tools/contents/fast.txt
 ```
 
 <Callout icon="circle-info" color="#3B82F6" iconType="regular">

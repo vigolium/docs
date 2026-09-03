@@ -152,7 +152,7 @@ vigolium import --db combined.sqlite --glob-db 'scans/*.sqlite'
 vigolium import --glob-db '*.jsonl'
 ```
 
-If you'd rather **read** a colleague's export without merging it into your own DB, open it in place with project scoping off. Point `-S` at a single file with `--db`, or read across **many** files at once with `--glob-db` (they're merged into one throwaway in-memory DB, so `--glob-db` implies `-S`):
+If you'd rather **read** a colleague's export without merging it into your own DB, open it in place with project scoping off. Point `-S` at a single file with `--db`, or read across **many** files at once with `--glob-db` (they're merged into one throwaway scratch DB, so `--glob-db` implies `-S`):
 
 ```bash
 # A single standalone export
@@ -164,6 +164,16 @@ vigolium finding --glob-db 'scans/*.sqlite'
 vigolium traffic --glob-db 'scans/*.sqlite'
 vigolium export --glob-db 'scans/*.sqlite' --format jsonl -o all.jsonl
 ```
+
+<Callout icon="gauge-high" color="#00b368" iconType="regular">
+  **Large globs are fine.** `--glob-db` is routinely pointed at hundreds of files — a per-host bug-bounty run of ~854 databases, 16 GB, 290k HTTP records. At that size the *merge*, not the query, is the whole cost: it runs before the first `WHERE`, so anything copied in is resident before any filter narrows it. **v0.4.4** made that bounded:
+
+  - The scratch database is a temp **file**, not `:memory:` — its working set pages against the OS cache instead of competing with the process heap (an `export` that previously reached 18.7 GB RSS and 149s of kernel paging without finishing).
+  - `finding` no longer copies every matched file's record corpus just to hydrate the findings on screen (20.4 GB). `--raw` / `--burp` / `--markdown` / `--with-records` / `--push-to-burp` / `--to-repeater` fetch evidence afterwards by UUID from each finding's own source file.
+  - `traffic --save-to-burp --glob-db` streams file-by-file instead of merging — it's the one mode that can't drop the bodies, since they're what gets sent (16 GB → 417 MB peak).
+  - A single-format `export` streams envelopes instead of materializing the whole set (6.1 GB).
+  - Scratch databases stranded by a killed run are reaped on the next open.
+</Callout>
 
 <Callout icon="circle-info" color="#3B82F6" iconType="regular">
   Merged rows keep their **original** `project_uuid`, so imported data stays scoped to whatever project it was scanned under. Importing the same database twice adds nothing the second time (dedup on natural keys). Requires a SQLite destination — a Postgres destination returns a clear error. To merge many **parallel** scans into one shared DB during scanning instead, use `--db-isolate` (see [section 5](#5-scan-a-large-list-of-targets-in-parallel)).
@@ -185,13 +195,13 @@ Point Vigolium at a large target list and use `-P/--parallel N` to scan several 
 vigolium scan -T list-of-targets.txt -P 3 \
   --stateless --split-by-host \
   --format jsonl,html --output prefix-output \
-  --fuzz-wordlist ~/Tools/contents/fast.txt
+  --discovery-wordlist ~/Tools/contents/fast.txt
 
 # Shared-DB fan-out: 4 targets at a time merged into one local.db, one unified output
 vigolium scan -T list-of-targets.txt -P 4 \
   --db-isolate --db local.db \
   --format jsonl,html --output report \
-  --fuzz-wordlist ~/Tools/contents/fast.txt
+  --discovery-wordlist ~/Tools/contents/fast.txt
 ```
 
 <Callout icon="circle-info" color="#3B82F6" iconType="regular">
@@ -448,15 +458,15 @@ vigolium scan -t https://example.com --only extension \
 
 ## 12. Content discovery only
 
-Run **only** the discovery/fuzzing phase, no crawling, no vulnerability modules. The most direct way is `vigolium run discover`, the phase runner: it executes a single named phase and nothing else. Point it at a wordlist with `--fuzz-wordlist`.
+Run **only** the discovery/fuzzing phase, no crawling, no vulnerability modules. The most direct way is `vigolium run discover`, the phase runner: it executes a single named phase and nothing else. Point it at a wordlist with `--discovery-wordlist`.
 
 ```bash
 # Discovery-only against a whole host (brute-force paths from a wordlist)
-vigolium run discover -S -t https://example.com --fuzz-wordlist ~/Tools/contents/fast.txt
+vigolium run discover -S -t https://example.com --discovery-wordlist ~/Tools/contents/fast.txt
 
 # Fuzz a SPECIFIC insertion point with an inline FUZZ marker in the URL —
 # each word replaces FUZZ (here: /api/<word>/users)
-vigolium run discover -S --fuzz-wordlist ~/Tools/contents/fast.txt \
+vigolium run discover -S --discovery-wordlist ~/Tools/contents/fast.txt \
   -t 'https://example.com/api/FUZZ/users'
 ```
 
@@ -465,10 +475,10 @@ The **`FUZZ` marker** works anywhere in the target path: put it where you want t
 ```bash
 # Same idea via `scan`: run every phase-gate off except discovery
 vigolium scan -t https://example.com --only discovery \
-  --discover --fuzz-wordlist ~/.vigolium/wordlists/fuzz.txt
+  --discover --discovery-wordlist ~/.vigolium/wordlists/fuzz.txt
 
 # Discovery as part of a full scan (fuzz, then keep going into vuln scanning)
-vigolium scan -t https://example.com --discover --fuzz-wordlist ~/.vigolium/wordlists/fuzz.txt
+vigolium scan -t https://example.com --discover --discovery-wordlist ~/.vigolium/wordlists/fuzz.txt
 ```
 
 Separately from path fuzzing, `scan` can sweep **alternate HTTP(S) ports** on the target hosts so a service on a non-standard port is discovered and scanned. The sweep runs at `--intensity deep` or with `--follow-subdomains`; `--port-sweep-ports` overrides which ports it probes (comma-separated, in addition to the standard `80`/`443`):
@@ -479,7 +489,7 @@ vigolium scan -t https://example.com --intensity deep --port-sweep-ports 80,443,
 ```
 
 <Callout icon="circle-info" color="#3B82F6" iconType="regular">
-  `vigolium run <phase>` runs one phase in isolation (`discover` is an alias for `discovery`; see [section 10](#10-run-only-specific-phases-or-skip-some) for the full phase/alias list). `-S/--stateless` keeps it throwaway (nothing written to your project DB); combine with `--format fs` or `-o` to persist the discovered surface for later scans. `--fuzz-wordlist` enables on-the-fly fuzzing; the `FUZZ` marker pins the exact insertion point. See [Discovery phase](/native-scan/phases/discovery).
+  `vigolium run <phase>` runs one phase in isolation (`discover` is an alias for `discovery`; see [section 10](#10-run-only-specific-phases-or-skip-some) for the full phase/alias list). `-S/--stateless` keeps it throwaway (nothing written to your project DB); combine with `--format fs` or `-o` to persist the discovered surface for later scans. `--discovery-wordlist` enables on-the-fly fuzzing; the `FUZZ` marker pins the exact insertion point. See [Discovery phase](/native-scan/phases/discovery).
 </Callout>
 
 ---
@@ -837,6 +847,42 @@ Output-shaping flags on `finding` / `traffic` / `db ls`:
 <Callout icon="circle-info" color="#3B82F6" iconType="regular">
   Under `--json`, bodies are **always** bounded regardless of `-S`. As of v0.2.1, `--markdown` also **compacts response bodies by default** — the response renders as a window around the finding's `matched_at`/evidence (or a leading preview) rather than a whole page, regardless of `-S`/`--compact`; pass `--full-body` to render bodies whole. The request is always shown whole (it carries the payload). On an interactive terminal the Markdown is syntax-highlighted; piped/redirected output stays plain, greppable Markdown. An agent run (`agent autopilot|swarm|audit`) under `--json` even prints a ready-made follow-up command in its summary: `vigolium finding --agentic-scan <uuid> --json --with-records`. Full guide: [Using Vigolium in your agent](/agentic-scan/using-vigolium-in-your-agent).
 </Callout>
+
+### The JSON envelope
+
+Since **v0.4.5** every `-j/--json` command emits the *same* outer object, so one parser handles all of them. Don't write key fallbacks.
+
+```jsonc
+{
+  "schema_version": 1,
+  "command": "traffic",
+  "project_uuid": "…",
+  "db_path": "/home/me/.vigolium/database-vgnm.sqlite",
+  "total": 39,
+  "offset": 0,
+  "limit": 100,
+  "items": [ … ],
+  "query": "vigolium replay -u <uuid>",
+  "generated_at": "2026-09-04T10:11:12.345Z",
+  "generated_at_ms": 1788453072345
+}
+```
+
+| Field | Why it is there |
+|---|---|
+| `schema_version` | Gate on it. Bumped on any breaking field change |
+| `items` | **Canonical** row array. Each command also writes its historical key (`records`, `findings`, `scans`, `rows`, `stats`) as a *deprecated alias* pointing at the same slice — parse `items`, not the alias |
+| `db_path` | The database this command actually opened. **Assert it**: the open order ends at one shared default file, so a silent fall-through mixes engagements |
+| `query` | A ready follow-up command for the obvious next step. Run it rather than composing your own |
+| `generated_at` / `_ms` | RFC3339 with **exactly 3** fractional digits, plus an epoch-millisecond sibling. Both compare safely against a JS `toISOString()`; the old microsecond form sorted `…785113Z` *before* `…785Z` |
+
+`db stats -j` uses this envelope too — it used to be the documented exception that dumped its raw struct, and a contract with a hole in it is one consumers special-case forever.
+
+Check the contract once at startup, so drift is a startup failure rather than a parse error in production:
+
+```bash
+vigolium version --json   # {version, commit, schema_version, db_schema_version}
+```
 
 ---
 

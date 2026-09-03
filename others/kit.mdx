@@ -1,0 +1,160 @@
+---
+title: "Utility Toolbox"
+description: "vigolium kit, the scanner's internal primitives exposed as standalone one-shot tools for shell pipelines and coding agents."
+icon: "toolbox"
+---
+
+`vigolium kit` is a family of small, **stateless** primitives carved out of the scanner's own engine — no database, no project scope, no scan pipeline. Each one is a single transform or probe: it reads files or stdin, honours `-j/--json` for machine output, and gates via exit codes.
+
+Added in **v0.4.1**. They exist because the useful parts of a scanner are often wanted *outside* a scan — grepping a repo for leaked credentials, unminifying one bundle, cracking one JWT — and shelling out to five separate tools to do it is the wrong shape.
+
+<Note>
+  These are **primitives**: they do one job and report raw output, never a vulnerability verdict. They touch no project database, so nothing is persisted — pipe the output where you need it. For findings that persist, use `vigolium scan` or the [agent modes](/agentic-scan/agent-mode).
+</Note>
+
+## The commands
+
+| I need to… | Use |
+|---|---|
+| Scan files/dirs/stdin for leaked credentials | `vigolium kit secret-scan <files\|dirs\|->` |
+| Unminify / unpack a JS bundle | `vigolium kit js-beautify <file\|url\|->` |
+| Mint OOB callback URLs and drain hits | `vigolium kit oast new` → `vigolium kit oast poll` |
+| Collect known URLs for a domain | `vigolium kit harvest <domain…>` |
+| Recover a JWT's HMAC signing secret | `vigolium kit jwt-crack <token>` |
+| List / print the built-in wordlists | `vigolium kit wordlist [name]` |
+| Emit built-in payloads by class | `vigolium kit payload --class <c>` |
+
+Every command reads `-` (or no argument) as stdin and takes `-j/--json` for a single structured object on stdout. Human notes go to stderr, so a pipe stays clean.
+
+---
+
+## `secret-scan`
+
+Scan bytes for leaked secrets with the embedded detection catalog (~12k kingfisher + Vigolium rules, pure Go, no network). Positional arguments are files or directories, walked recursively; `-` or no argument reads stdin.
+
+```bash
+vigolium kit secret-scan config.env .github/            # files + dirs
+cat bundle.js | vigolium kit secret-scan -              # stdin
+vigolium kit secret-scan -j --min-confidence high src/  # high-confidence JSON
+```
+
+| Flag | Effect |
+|------|--------|
+| `--min-confidence low\|medium\|high` | Threshold (default `low`) |
+| `--rule` / `--exclude-rule` | Allow/deny by rule ID (comma-separated) |
+| `--redact` | Mask the value, keeping a prefix/suffix. **The full value is shown by default** |
+| `--fail-on-match` | Exit **3** when any secret is found (CI/agent gate) |
+| `--max-file-size` | Skip files larger than N bytes (default 16 MiB) |
+
+JSON shape: `{files_scanned, count, matches:[{rule_id, rule_name, confidence, secret, entropy, file, line, start, end}]}`.
+
+Reports *where* a secret is, never whether it is exploitable. Obvious placeholders (`…EXAMPLE`, `123456…` sequences) are safelisted away, so test with realistic-looking values.
+
+## `js-beautify`
+
+Unminify and unpack minified or bundled JavaScript with the embedded jstangle tool (webcrack — no eval-based deobfuscation). The argument is a local file, an `http(s)://` URL that gets fetched, or `-`/no argument for stdin.
+
+```bash
+vigolium kit js-beautify app.min.js                     # local file
+vigolium kit js-beautify https://target.example/main.abc.js
+cat bundle.js | vigolium kit js-beautify -              # stdin
+vigolium kit js-beautify -j --extract app.min.js        # + extracted endpoints
+```
+
+By default it writes beautified source to stdout, emitting the input unchanged when it is neither minified nor bundled. `--extract` also runs endpoint extraction; under `-j` the result carries `{changed, format, module_count, content, endpoints?}`.
+
+## `oast` (`new` / `poll`)
+
+Generate interactsh out-of-band callback URLs, and later poll for the DNS/HTTP/SMTP interactions they received — the primitive behind blind SSRF/XXE/RCE/Log4Shell confirmation.
+
+State lives in a **session file**, so minting and polling are separate fire-and-forget invocations with no long-running process between them.
+
+```bash
+vigolium kit oast new -n 2 --session run.yaml             # mint 2 URLs, save session
+# ...inject the URL(s) somewhere, wait...
+vigolium kit oast poll --session run.yaml --wait 30s -j   # drain interactions as JSON
+vigolium kit oast poll --session run.yaml --deregister    # final drain + tear down
+```
+
+| Flag | Command | Effect |
+|------|---------|--------|
+| `-o/--session` | both | Session file path (default `oast-session.yaml`) |
+| `--server` / `--token` | `new` | interactsh server (default `oast.pro`) and auth for a self-hosted one |
+| `-n/--count` | `new` | Number of URLs to mint |
+| `--wait` / `--interval` | `poll` | How long to poll / cadence (auto-shrunk below `--wait`) |
+| `--deregister` | `poll` | After draining, destroy the session server-side and delete the file |
+
+`poll` JSON: `{server, session, count, interactions:[{protocol, unique_id, full_id, remote_address, timestamp, raw_request, raw_response}]}`.
+
+<Warning>
+  Callbacks to the default public `oast.pro` server are visible to whoever operates it. Point `--server`/`--token` at a self-hosted interactsh to keep them private.
+</Warning>
+
+## `harvest`
+
+Collect historically-known URLs for one or more domains from public archives and indexes — the same source set as the scan's [external-harvest phase](/native-scan/how-it-works). Wayback, Common Crawl, AlienVault OTX and Arquivo are keyless and on by default; urlscan and VirusTotal join when their key is configured under `external_harvester`.
+
+A URL argument is reduced to its host; `-` reads domains one per line from stdin.
+
+```bash
+vigolium kit harvest target.example                     # one domain
+vigolium kit harvest target.example shop.target.example -j
+cat domains.txt | vigolium kit harvest -                # stdin
+vigolium kit harvest --source wayback,commoncrawl target.example
+```
+
+Plain mode streams deduped URLs one per line, so it pipes straight into another tool. `-j` yields `{domains, sources, count, urls}`.
+
+## `jwt-crack`
+
+Brute-force a JWT's HMAC signing secret (HS256/384/512) against a wordlist. A token declaring an asymmetric algorithm (RS\*/ES\*/PS\*) is additionally tried under every HMAC variant — the algorithm-confusion attack — and a match is labelled as such. The token is a positional argument or `-`/stdin; a leading `Bearer ` is stripped.
+
+```bash
+vigolium kit jwt-crack eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ...
+echo "$TOKEN" | vigolium kit jwt-crack -
+vigolium kit jwt-crack -w /path/rockyou.txt -p s3cr3t eyJ...
+vigolium kit jwt-crack -j --fail-on-crack eyJ...
+```
+
+| Flag | Effect |
+|------|--------|
+| `-w/--wordlist` | Built-in name (see `kit wordlist`) or a file path. Defaults to the embedded `jwt.secrets.list`, ~104k entries |
+| `-p/--secret` | Inline candidate secret (repeatable) |
+| `--fail-on-crack` | Exit **3** when the secret is recovered |
+
+JSON: `{alg, cracked, secret, matched_alg, candidates_tried, wordlist, header, payload}`. The recovered secret is printed in full — that is the point of the command.
+
+## `wordlist`
+
+List the embedded wordlists, or print one to stdout so it can be piped into another tool.
+
+```bash
+vigolium kit wordlist               # list available lists with entry/byte counts
+vigolium kit wordlist -j            # the same, as JSON
+vigolium kit wordlist fuzz          # print the fuzz list to stdout
+vigolium kit wordlist jwt > jwt.txt # materialize (alias: jwt → jwt.secrets.list)
+```
+
+A name matches the embedded filename, its basename without extension, or the `jwt` alias. Built-ins: `dir-short`, `dir-long`, `file-short`, `file-long`, `fuzz`, `jwt.secrets.list`.
+
+## `payload`
+
+Print the built-in fuzzing payloads for one or more classes, one per line — the same catalog behind [`vigolium fuzz --class`](/others/cli-references#fuzz).
+
+```bash
+vigolium kit payload --list              # list classes
+vigolium kit payload --class sqli        # SQLi payloads
+vigolium kit payload --class sqli,xss -j # two classes, as JSON
+```
+
+Classes: `cmdi`, `crlf`, `lfi`, `open_redirect`, `path_traversal`, `sqli`, `ssrf`, `ssti`, `xss`, `xxe`, plus aliases (`sql` → `sqli`, `traversal` → `path_traversal`). JSON: `{classes, count, payloads}`.
+
+---
+
+## Gotchas
+
+- **Stateless by design.** Nothing lands in the project database — pipe or redirect the output yourself.
+- **`oast new` does not tear down the session.** Closing an interactsh client deregisters it server-side, so `new` mints, saves and exits *without* closing; the session stays alive for `poll`. Use `poll --deregister` to destroy it explicitly when you're done.
+- **`oast --interval` is auto-shrunk** below `--wait` (the poll ticker only fires after one full interval), so even a short `--wait` polls at least twice.
+- **`secret-scan` safelists placeholders.** `AKIA…EXAMPLE` and `123456`-sequence tokens are treated as benign.
+- **Exit 3 is a gate, not an error.** `secret-scan --fail-on-match` and `jwt-crack --fail-on-crack` exit `3` on a hit; otherwise the usual `0` success / `1` error / `2` usage error applies. See the [exit-code table](/others/cli-references#exit-codes).

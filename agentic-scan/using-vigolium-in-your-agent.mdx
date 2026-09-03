@@ -27,6 +27,57 @@ Replace `<agent-name>` with your agent (e.g., `claude-code`, `codex`).
 
 ---
 
+## The three machine contracts
+
+Whether or not you install the skill, these are the interfaces a program drives Vigolium through. They are additive — default human output is unchanged.
+
+| Contract | What it is | When to use it |
+|---|---|---|
+| `-j` / `--json` | **One compact envelope** per command, with token-bounded bodies | Triage: survey findings, pull one in detail |
+| `--format jsonl` / `vigolium export` | **Bulk, full-fidelity stream**, one object per line | Archival, handing a whole run to another tool |
+| `--events ndjson` | **A live stream while a scan runs** | Watching progress, reacting to a WAF block mid-run |
+
+### `--events ndjson`: watch a scan while it runs
+
+Don't poll the database and don't invent a patience message — ask for the stream. One JSON object per line on **stdout**, flushed per event, while the human console stays on stderr:
+
+```bash
+vigolium scan -t https://target.example --events ndjson 2>/dev/null | jq -c .
+```
+
+Available on `scan`, `run`, `scan-url`, `scan-request`. Types: `scan.started`, `phase.started|progress|finished`, `waf.block`, `waf.pacing`, `finding.new`, `error`, `scan.finished`.
+
+The three you should actually branch on:
+
+- **`waf.block`** — the edge started filtering. Results for that host are **incomplete**; do not read a thin surface as a clean target.
+- **`error`** — a phase failed and the scan **carried on**. Non-fatal by construction, so this is never a reason to abandon a run that is still producing findings. A failure that ends the run rides on `scan.finished{status:"failed"}` instead.
+- **`scan.finished`** — always last, including `status:"interrupted"` on SIGINT/SIGTERM. Its *absence* means the process was killed outright (SIGKILL can't be caught), so treat a stream that stops without it as a hard kill, not a completed scan.
+
+Every line carries `scan_uuid` (a sweep is several invocations) and `v`, the event-schema version. This replaces scraping `vigolium log` for `[waf-block-detected]` markers. Full event table: [CLI References](/others/cli-references#machine-event-stream).
+
+### `-j`: one envelope, every command
+
+```jsonc
+{ "schema_version": 1, "command": "traffic", "project_uuid": "…",
+  "db_path": "/home/me/.vigolium/database-vgnm.sqlite",
+  "total": 39, "offset": 0, "limit": 100,
+  "items": [ … ],
+  "query": "vigolium replay -u <uuid>",
+  "generated_at": "2026-09-04T10:11:12.345Z", "generated_at_ms": 1788453072345 }
+```
+
+Parse `items` — it is canonical. Each command also writes its historical row key (`records`, `findings`, `scans`, `rows`, `stats`) as a *deprecated alias* pointing at the same slice; don't write key fallbacks. **Assert `db_path`**: the database open order ends at one shared default file, so a fall-through silently mixes engagements. Run the `query` field rather than composing your own follow-up.
+
+Gate on the contract once at startup with `vigolium version --json`, which reports `schema_version` and `db_schema_version`.
+
+### Exit codes
+
+`0` success · `1` error · `2` usage error · `3` `fuzz --fail-on-match` · `4` `--fail-on` gate tripped.
+
+**`4` is not a failure.** The scan ran to completion, wrote its output, and found something at or above the threshold — the opposite outcome from `1`, where it never got that far. See the [full table](/others/cli-references#exit-codes).
+
+---
+
 ## What the Skill Does
 
 The skill teaches the AI agent how to:
@@ -57,6 +108,7 @@ public/skills/vigolium-scanner/
     ├── data.md                  # db, finding, traffic, module, ext, js, config, export
     ├── server.md                # vigolium server: REST API, recording/MITM proxy, live mirror
     ├── ingest.md                # vigolium ingest: local/remote, per-format input examples
+    ├── kit.md                   # vigolium kit: the standalone stateless primitives
     ├── extensions.md            # writing JS scanner modules against vigolium.*
     └── flags.generated.md       # generated from the command tree — grep by flag name
 ```

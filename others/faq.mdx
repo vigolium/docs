@@ -29,7 +29,7 @@ Answers to the questions that come up most often. For a system-level picture, st
     **Agentic scan** uses AI agents to drive or augment scanning (`vigolium agent <mode>`). Both write into the same database, so native and AI findings coexist and dedup together. See [Native Scan](/architecture/native-scan) and [Agentic Scan](/architecture/agentic-scan).
   </Accordion>
   <Accordion title="What Go version is required to build from source?">
-    Go 1.26+. The module path is `github.com/vigolium/vigolium`.
+    Go 1.27+. The module path is `github.com/vigolium/vigolium`.
   </Accordion>
 </AccordionGroup>
 
@@ -107,7 +107,9 @@ Answers to the questions that come up most often. For a system-level picture, st
   <Accordion title="How does multi-tenancy / project scoping work?">
     All scan data is partitioned by **project**, there is no separate database per project. Isolation is a `project_uuid` column on every major table, filtered on every read and stamped on every write. The default project is `00000000-0000-0000-0000-000000000001`, created during `vigolium init`.
 
-    Selection precedence: `--project-uuid` > `--project-name` > `VIGOLIUM_PROJECT_UUID` > `VIGOLIUM_PROJECT` (legacy) > default. On the server, the `X-Project-UUID` header plays the same role. See [Data & Storage](/architecture/data-and-storage).
+    Selection precedence: `--project-uuid` > `--project-name` > `VIGOLIUM_PROJECT_UUID` > `VIGOLIUM_PROJECT_NAME` > default. On the server, the `X-Project-UUID` header plays the same role. See [Data & Storage](/architecture/data-and-storage).
+
+    The legacy `VIGOLIUM_PROJECT` env var was **removed in v0.4.3** — a shell still exporting it now falls back to the default project. Use `VIGOLIUM_PROJECT_UUID` or `VIGOLIUM_PROJECT_NAME`.
   </Accordion>
   <Accordion title="I upgraded, what happens to my existing scan data?">
     Existing databases are migrated in place. The `project_uuid` column is added with the default-project UUID as its default, so pre-multi-tenancy data lands in the default project.

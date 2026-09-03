@@ -76,20 +76,50 @@ known_issue_scan:
 
 ## Runtime Defaults
 
-| Parameter | Default |
+| Parameter | Default (unattended) |
 |-----------|---------|
-| Concurrency | 50 |
-| Rate limit | 100 req/s |
+| Host concurrency | 10 |
+| Rate limit | 20 req/s |
 | Timeout | 30 minutes |
+
+<Warning>
+  **These defaults changed in v0.4.5 (was 50 / 100 req/s).** They apply when the operator says nothing, and they are this phase's only protection in that case — the old values opened wide *precisely because nobody passed a flag*.
+</Warning>
+
+## Pacing: why this phase is special
+
+`known-issue-scan` runs Nuclei as an in-process library **with its own HTTP stack**, so it is the one active phase outside `pkg/http.Requester`: no per-host AIMD back-off, no proactive WAF pacing, no `[waf-block-detected]` notice.
+
+The failure mode was silent *and* misleading. An unknown target opened at up to 100 req/s with no way to slow down, the edge started filtering, and the phase returned a thin surface — indistinguishable from a clean target.
+
+Nuclei's SDK exposes no response hook and no runtime-adjustable limiter, so v0.4.5 wires the phase to the shared objects instead:
+
+- **A pre-flight probe per host** goes through the shared requester before the phase starts. It is real traffic on the real path, so the block notice, the `waf.block` event and the limiter's WAF auto-arm all fire exactly as they do in discovery. A host that answers with a block is **dropped from the target list** — pushing template traffic through a wall of challenge pages yields nothing and arms the limiter further. A probe *error* is a transport failure, not a block, and keeps the host.
+- **Nuclei's own concurrency/rate knobs are sized to the limiter's per-host verdict**, taking the minimum across hosts (one invocation drives one engine) and applying the back-off as a *ratio* so your `--rate-limit` stays meaningful.
+- **A sentinel re-probes while the scan runs** and curtails the phase when a majority of hosts start filtering. That mid-run case is the one a pre-flight can't catch, and the one that silently hollows out results.
+
+Cap this phase alone without capping the ~200 native modules, which pace themselves:
+
+```bash
+vigolium scan -t https://example.com --rate-limit known-issue-scan=20
+vigolium scan -t https://example.com --rate-limit 50 --concurrency kis=5
+```
+
+See [Pace: per-phase rate limits](/others/cli-references#pace-per-phase-rate-limits).
 
 ## Phase Execution Detail
 
 1. Queries distinct paths from the database via `GetDistinctPaths()`.
 2. Builds target URLs, either path-enriched (default, `enrich_targets: true`) or host-level only.
-3. Runs Nuclei templates against enriched targets with the configured concurrency and rate limits.
-4. Runs Kingfisher secret scanning on stored response bodies.
-5. Each finding is saved to the database with `ModuleType: "known-issue-scan"` and `FindingSource: "known-issue-scan"`.
-6. **Post-phase dedup**: calls `DeduplicateFindings()` to group findings with identical `(module_id, severity, matched_at URL)`.
+3. **Pre-flight probes each target host** through the shared requester; hosts whose edge is already filtering are dropped and reported as `waf.block`.
+4. Runs Nuclei templates against the surviving targets, with concurrency and rate sized to the per-host limiter verdict.
+5. Runs Kingfisher secret scanning on stored response bodies.
+6. Each finding is saved to the database with `ModuleType: "known-issue-scan"` and `FindingSource: "known-issue-scan"`.
+7. **Post-phase dedup**: calls `DeduplicateFindings()` to group findings with identical `(module_id, severity, matched_at URL)`.
+
+<Note>
+  The first run clones the `nuclei-templates` repository, which takes a while. Since v0.4.5 it **announces itself** instead of looking like a hung scan, and `--templates-dir` pins an existing checkout per run so the clone is skipped entirely.
+</Note>
 
 ## CLI Usage
 

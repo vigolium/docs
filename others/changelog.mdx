@@ -14,6 +14,181 @@ package.
   the build you have installed, and `vigolium update` to upgrade.
 </Note>
 
+<Update label="v0.4.5" description="2026-09-04">
+
+A **machine-interface** release: Vigolium is now readable by a program *while it runs*, its safety dials do what their names say, and the shapes a driver parses stopped drifting per command. Sourced from a downstream driver's workaround list — every item below replaces code someone wrote to recover a fact Vigolium already knew. No module changes (registry stays at 207 active + 116 passive).
+
+<Warning>
+  **Two changes can break an existing pipeline.**
+
+  1. **Exit codes are a table now.** A `--fail-on` gate exits `4`, not `1`. A CI step written as "any non-zero means the scanner broke" will now mis-report a findings gate — see [CI/CD Integration](/guides/ci-cd-integration#the-exit-code-table) for the branch to write instead.
+  2. **`import -B` refuses an unfiltered pull.** A bare `vigolium import --burp-bridge-url <url>` now errors (exit `2`) instead of running. Pass a filter (`--host`, `--path`, …) or `--all-hosts`.
+</Warning>
+
+### Added
+
+- **`--events ndjson`** on `scan` / `run` / `scan-url` / `scan-request` — a live event stream on **stdout** while the scan runs (`scan.started`, `phase.started|progress|finished`, `waf.block`, `waf.pacing`, `finding.new`, `error`, `scan.finished`), while the human console keeps stderr byte-for-byte unchanged. Every line carries `scan_uuid`, `scan.finished` is always last (including `status:"interrupted"` on SIGINT/SIGTERM), and its *absence* means the process was killed outright. Refused under `-P/--parallel`, whose children own their own stdout. See [Machine event stream](/others/cli-references#machine-event-stream).
+- **Phase-qualified pace dials** — the three speed knobs take a repeatable phase qualifier: `--rate-limit known-issue-scan=20` caps Nuclei without capping the ~200 native modules that pace themselves. Resolution per phase is phase-scoped → global → strategy/config default, and qualifiers accept the same aliases `--only`/`--skip` do.
+- **Tool shims** — `vigolium ffuf|nuclei|katana|gau|arjun` take each tool's own argv, print the translation, and run the native phase into the pinned database. An unmapped argument is a hard error naming the native command, never a silent drop. See [Tool shims](/others/cli-references#tool-shims).
+- **Batch ingest** — `-i` is repeatable and `--dir` / `--dir-glob` walk a directory, so N specs cost one process instead of N. A failing source doesn't discard its siblings; an empty `--dir` match is a hard error.
+- **`vigolium version --json`** reports `schema_version` and `db_schema_version`, so a consumer fails on contract drift at startup instead of at parse time.
+- **`import -B` accepts the filter set `traffic -B` already had** (`--host`, `--path`, `--method`, `--status`, `--search`, `--from`/`--to`, `-n`), plus `--all-hosts` and `--yes`.
+
+### Fixed
+
+- **`import -B` no longer copies the operator's entire proxy history** — every host they have browsed, with those hosts' cookies and tokens — into the destination database. Where that database is shared with an autonomous agent, that was a cross-engagement leak with nothing in front of it. An unfiltered pull is now refused unless `--all-hosts` is passed, after a pre-flight count.
+- **`traffic -B --save-to-vigolium-db` silently truncated an import at 100 records**, because `-n`'s *listing* default also bounded the *write*. An untyped `-n` no longer caps the import; a typed one is honored and warns when it bit.
+- **`--rate-limit` was applied only when explicitly typed**, so silence meant *unlimited* while the help text advertised 100 — the fail-open direction on a safety knob. It now applies at its documented default; `--rate-limit 0` is how you ask for no cap, and a negative value fails instead of reading as unlimited.
+- **`--strategy lite` opened a crawl exactly as hard as `balanced`** — same concurrency, same per-host ceiling — and now carries a real pace ceiling (concurrency 10 / rate 20 / max-per-host 10) that only ever narrows.
+- **`known-issue-scan` ran Nuclei outside the shared requester** with no back-off and no block notice, so a filtered edge returned a thin surface indistinguishable from a clean target. It now pre-flight-probes each host through the shared requester (dropping hosts whose edge is already filtering), sizes Nuclei's knobs to the per-host limiter verdict, and re-probes mid-run. Unattended defaults drop from 100 rps / 50 concurrency to 20 / 10.
+- **`vigolium log` rejected `-S` outright** ("unknown shorthand flag"), and auto-followed forever on a `running` row left behind by a killed scan.
+- **WAF notices fire early in a scan**, so the default 200-line log tail was the wrong end of the file to look for them; earlier notices are now reprinted above the tail window.
+- **`$VIGOLIUM_DB_PATH` pointing at an unusable path silently fell through** to the shared default database.
+- Bumped `bytedance/sonic` v1.15.0 → v1.15.3 (and its loader), which was falling back to `encoding/json` with a warning on Go 1.27.
+
+### Changed
+
+- **Exit codes are a table:** `0` success, `1` error, `2` usage error, `3` `fuzz --fail-on-match`, `4` `--fail-on` gate tripped. `1` used to mean both "the scan crashed" and "the scan worked and found something" — opposite outcomes a CI job has to react to differently.
+- **One `-j` envelope for every command** — `{schema_version, command, project_uuid, db_path, total, offset, limit, items, query}`, with each command's old row key kept as a deprecated alias pointing at the same slice. `db stats -j` is no longer an exception; a contract with a documented hole is one consumers special-case forever.
+- **Machine-output timestamps carry exactly three fractional digits** plus an epoch-millisecond sibling. Microsecond precision isn't extra information to a JS `toISOString()` consumer — it's a broken comparison, since `…785113Z` sorts lexically *before* `…785Z`.
+- **`-S` means `--stateless` everywhere** and is accepted as a no-op where meaningless. On `server` / `ingest` it survives as a **deprecated alias** for `--scan-on-receive` and warns.
+- **`--fuzz-wordlist` is now `--discovery-wordlist`** (old spelling kept as a deprecated alias) — it collided in name with `vigolium fuzz -w`, which is a different knob entirely.
+- **`finding --push-to-burp` and `--to-repeater` compose** instead of being mutually exclusive, matching `replay`.
+- An over-long `replay --notes` is truncated with an ellipsis and warned about rather than failing the whole push.
+- The first-run `nuclei-templates` clone announces itself instead of looking like a hung scan; `--templates-dir` pins it per run.
+- **Every `-j` envelope and `scan.started` names the database it opened**, so a driver can assert the store rather than trust that a pin survived a subprocess chain.
+
+</Update>
+
+<Update label="v0.4.4" description="2026-08-30">
+
+A **large-result-set** release: reading a `--glob-db` glob of hundreds of scan databases (854 files / 16 GB / 290k records) no longer collapses into swap, plus the Go 1.27 toolchain bump. No module changes (registry stays at 207 active + 116 passive).
+
+At that size the *merge*, not the query, is the whole cost — it runs before the first `WHERE`, so anything copied in is resident before any filter narrows it.
+
+### Performance
+
+- **The `--glob-db` merge builds in a temp file instead of `:memory:`**, so its working set pages against the OS cache instead of competing with the process heap. The in-memory form reached 18.7 GB RSS and 149s of *kernel* paging on an `export` that never finished.
+- **`finding` no longer copies every matched file's record corpus** to hydrate the findings on screen (20.4 GB). `--raw` / `--burp` / `--markdown` / `--with-records` / `--push-to-burp` / `--to-repeater` fetch evidence afterwards by UUID from each finding's own source file.
+- **`traffic --save-to-burp --glob-db` streams file-by-file instead of merging**, bounding peak memory by the largest single file (16 GB → 417 MB). It's the one mode that can't drop the bodies — they're what gets sent.
+- **A single-format `export` streams envelopes** instead of materializing the whole set (6.1 GB); the summary tally is accumulated on the way past.
+- Scratch databases stranded by a killed run are reaped (age-based) on the next open.
+
+### Fixed
+
+- **`--glob-db` findings filters resolving through `finding_records`** (`--host`, `--path`, `--method`, `--status`, `--source`) silently returned nothing — or *everything*, for the negated forms — when the merge omitted the record table. Both failure directions were silent.
+- `make github-release` published no Windows artifact (the upload glob was `*.tar.gz`-only); the upload set is now cross-checked against `checksums.txt` and a gap is a hard error.
+- OpenAPI 3.1 spells `exclusiveMinimum` as a number rather than a boolean modifier, so generated examples ignored it and the target rejected the body built to probe it.
+- The fuzz anomaly detector's population snapshot handed out the live status/body-hash maps, racing a scoring goroutine against another worker's `observe`.
+- A Burp Site map save split across batches could report the 10-error cap once per batch; the cap now applies to the running total.
+
+### Changed
+
+- **Go 1.27 toolchain** across `go.mod`, both Dockerfiles, the e2e images and the docs; the CI golangci-lint pin moves v2.9.0 → v2.13.2.
+- `platform/` is excluded from linting — it holds external tooling and vendored node deps, including a stray Go package under `node_modules`.
+- `traffic --glob-db --save-to-burp` prints per-file progress, and carries dedup, `--offset` and the `-n` budget across files instead of over one merged table.
+
+</Update>
+
+<Update label="v0.4.3" description="2026-08-19">
+
+A **Windows support** release: Vigolium now ships a windows/amd64 build, and every path that quietly assumed POSIX (shell, browser discovery, installers, line endings) is platform-aware. No module changes (registry stays at 207 active + 116 passive).
+
+<Warning>
+  **Breaking: the legacy `VIGOLIUM_PROJECT` env var is gone.** Use `VIGOLIUM_PROJECT_UUID` or the new `VIGOLIUM_PROJECT_NAME`; an explicit `--project-uuid` / `--project-name` still wins. A shell still exporting the old name silently falls back to the **default** project. See [Projects & Multi-Tenancy](/others/projects).
+</Warning>
+
+### Added
+
+- **Windows (amd64) builds** across goreleaser, `make public-release`, and the npm package, shipped as a `.zip`. See [Installation](/getting-started/quickstart).
+- The embedded `vigolium-audit` and `jstangle` helpers are built and staged for Windows.
+- `procutil.ShellArgv` resolves the host shell: POSIX `bash`/`sh` elsewhere, an installed Git Bash / MSYS2 bash or PowerShell on Windows (WSL's `System32\bash.exe` is rejected).
+- CI cross-compiles and vets the tree for windows/amd64, then smoke-tests that artifact on a Windows runner.
+- `make sync-skills` mirrors `public/skills/` to the standalone skills repo; `make build-jstangle-target` stages one target triple.
+
+### Fixed
+
+- **Chrome was never found on Windows**: the candidate list was two bare `PATH` names, so every crawl silently downloaded Chrome for Testing instead.
+- `chrome.exe --version` prints nothing on Windows (GUI subsystem), so validation rejected every real install; it now stats the file.
+- `vigolium update` on Windows failed with a bare `bash: file not found` instead of naming the zip download path.
+- `doctor --fix` ran `curl … | bash` for bun and claude on Windows; it now uses each vendor's PowerShell installer.
+- `findBun` returned the extensionless candidate path, which fails to exec against `bun.exe`.
+- Two processes extracting the embedded audit binary raced on a shared `.tmp` name; extraction is now per-process and adopts an identical binary a peer already installed.
+- The audit blob platform guard read every PE image as "windows, unknown arch"; it now decodes the COFF machine field.
+- `vigolium.readFile()` kept the `\r` of a CRLF file on every line, which extensions then injected verbatim.
+- `build/npm/bin/vigolium.js` was swallowed by a `bin` ignore rule and never committed, so `make npm-build` failed on a fresh clone.
+
+### Changed
+
+- **windows/arm64 is not shipped** (Bun has no `bun-windows-arm64` target, which would leave the audit driver broken and jstangle stubbed out); the npm x64 package claims `arm64` so ARM hosts install and emulate.
+- The `vigolium-scanner` skill maps standalone recon tools (nuclei, ffuf, katana, gau, httpx) onto Vigolium phases and `kit`, and documents scan-vs-scan-url choice, scan duration, the strategy matrix, and the Caido bridge.
+- The duplicated skill tree under `platform/vigolium-audit/` was removed; `public/skills/` is the single source.
+
+</Update>
+
+<Update label="v0.4.2" description="2026-08-15">
+
+A **hardening and performance** release for the REST API server and the scan hot paths: bounded memory everywhere a caller could previously make the server allocate without limit, plus a cross-project record-scoping fix. No module changes (registry stays at 207 active + 116 passive).
+
+### Fixed
+
+- **`POST /api/scan-records` validated record UUIDs unscoped** — a leaked UUID could pull another project's traffic into a scan.
+- A failed agentic-scan registration leaked its concurrency slot, shrinking the agent pool on every repeat.
+- CORS preflight omitted `PATCH`, so a browser client could never mark a finding triaged.
+- `completed_with_errors` wasn't a terminal status: its log stream ran to the 2-hour cap and its row survived every retention sweep.
+- Storage downloads answered a missing object with a truncated stream instead of a JSON 404.
+- Storage read endpoints were unreachable in view-only mode.
+- The `Server:` header rendered as `Vigolium vv0.4.1`.
+- A chunked body could grow the heap to the 512 MB framework ceiling on a 4 MB route; now capped at `limit+1` and drained before the 413.
+- `--debug` logging drained streamed uploads into memory on the large-upload routes.
+- Crawl-path repair rescanned every edge in the graph on each duplicate transition.
+
+### Performance
+
+- **Nested insertion points share one base-request buffer**: a 98 KB request with 2,000 nested children retains ~0.9 MiB, was ~188 MiB.
+- The insertion-point cache is bounded by **retained bytes** (128 MiB) and per-entry size, not entry count alone.
+- The `Content-Length` rewrite layout is computed once per request instead of once per insertion point.
+- Scan and agent log endpoints return the last 2 MiB of `runtime.log` (`?max_bytes=` up to 64 MiB) instead of the whole file per poll.
+- Storage downloads stream to the client instead of buffering the whole object in memory.
+- Agent list endpoints read blob-free summaries; the SSE log follower polls the status column alone.
+- YAML extension matcher regexes are compiled once and cached, failures included.
+- DOM-XSS taint matching dropped its per-identifier regex compile (~50 µs → ~0.9 µs per statement, zero allocations).
+- `POST /api/scan-records` caps `record_uuids` at 10,000 and checks scan admission before enumerating.
+
+### Added
+
+- `X-Author` response header, the companion to the `Server:` banner.
+
+### Changed
+
+- Workbench moved to an ESLint flat config (`eslint .` replaces `next lint`); TypeScript stays on 6.x and ESLint on 9.x, since either bump breaks the lint run outright.
+- Workbench dependency bumps: Next 16.3, React 19.2.8, ag-grid 36.
+- Workbench header account links use `next/link`; the dead `ScanDetailPanel` was removed.
+
+</Update>
+
+<Update label="v0.4.1" description="2026-08-12">
+
+A **standalone utilities** release: a new `vigolium kit` command exposes the scanner's internal primitives as one-shot tools for coding agents and shell pipelines. No module changes (registry stays at 207 active + 116 passive).
+
+### Added
+
+- **[`vigolium kit`](/others/kit)** — standalone security utilities that reuse the scanner's own engines, usable outside a full scan. Stateless: no database, no project scope, no scan pipeline.
+- `kit secret-scan` — scan files, dirs, or stdin for leaked credentials via the built-in secret catalog (`--fail-on-match` exits `3`).
+- `kit js-beautify` — unminify and unpack a JavaScript bundle (file / URL / stdin) into readable source.
+- `kit oast new` / `poll` — mint OOB/OAST callback URLs and drain their received interactions, with state in a session file so the two halves are separate fire-and-forget invocations.
+- `kit harvest` — collect known URLs for a domain from public archives and indexes.
+- `kit jwt-crack` — recover a JWT's HMAC signing secret from a wordlist, including the algorithm-confusion case.
+- `kit wordlist` — list the built-in wordlists or print one to stdout.
+- `kit payload` — emit built-in payload sets by vulnerability class.
+
+### Changed
+
+- Extracted `jwtutil.CrackHMAC` from the `jwt_weak_secret` module so the passive scanner and `kit jwt-crack` share one crack loop.
+- Extracted `harvester.BuildSources` so `kit harvest` and the `external-harvest` runner phase share one source set.
+
+</Update>
+
 <Update label="v0.4.0" description="2026-08-11">
 
 A **multi-tenancy fix** release: scans, ingestion, and the `project` subcommands now honor the active project end-to-end, so non-default projects stop silently losing their findings and records. No module changes (registry stays at 207 active + 116 passive).

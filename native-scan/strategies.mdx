@@ -33,6 +33,12 @@ vigolium scan -t https://example.com --strategy lite
 
 Best for: quick checks, CI pipelines, known endpoints.
 
+<Note>
+  **Since v0.4.5, `lite` also carries a pace ceiling** — concurrency 10, rate limit 20 req/s, max-per-host 10 — on top of selecting fewer phases. Before that, `lite` and `balanced` opened a crawl *identically*: a name every operator reads as "gentler on the target" was gentler in module count alone.
+
+  The ceiling only ever **narrows**. An explicitly typed `--concurrency` / `--rate-limit` / `--max-per-host` overrules it (an operator overruling the preset is the point of having both), and a `scanning_pace` config already gentler than `lite` is not dragged up to it. `balanced` *is* the baseline and `deep` is explicitly the one that opens wide, so neither ships a ceiling.
+</Note>
+
 ### Balanced, Default
 
 Runs content discovery, browser spidering, known-issue-scan analysis, and audit.
@@ -179,9 +185,12 @@ vigolium scan -t https://example.com --known-issue-scan-tags cve,misconfig
 # Filter by severity
 vigolium scan -t https://example.com --known-issue-scan-severities critical,high
 
-# Custom templates directory
+# Custom templates directory (short alias: --templates-dir)
 vigolium scan -t https://example.com --known-issue-scan-templates-dir ~/nuclei-templates/
+vigolium scan -t https://example.com --templates-dir ~/nuclei-templates/
 ```
+
+Pinning it skips the one-time `nuclei-templates` clone into `~/nuclei-templates`. Since v0.4.5 that first-run clone announces itself rather than looking like a hung scan.
 
 ### Dynamic Assessment
 

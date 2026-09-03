@@ -25,7 +25,7 @@ Built-in defaults
 ```
 
 - **Default project**: `00000000-0000-0000-0000-000000000001`, created during `vigolium init`. Used whenever no project is selected.
-- **Selection precedence**: `--project-uuid` > `--project-name` > `VIGOLIUM_PROJECT_UUID` > `VIGOLIUM_PROJECT` (legacy) > default. On the server, the `X-Project-UUID` request header plays the same role.
+- **Selection precedence**: `--project-uuid` > `--project-name` > `VIGOLIUM_PROJECT_UUID` > `VIGOLIUM_PROJECT_NAME` > default. On the server, the `X-Project-UUID` request header plays the same role. The legacy `VIGOLIUM_PROJECT` env var was removed in v0.4.3.
 - **Project config** is a partial YAML overlay (same shape as a scanning profile) at `~/.vigolium/projects/<uuid>/config.yaml`; only the keys it sets are overridden.
 - **Access control**: a project is a data boundary, not an auth boundary — the server's API key authenticates, `X-Project-UUID` selects, and any authenticated caller can address any project. Isolate engagements with separate servers or databases. `VIGOLIUM_PROJECT_READONLY=true` disables the mutating `project` CLI subcommands.
 

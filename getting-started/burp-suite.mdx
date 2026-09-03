@@ -193,11 +193,26 @@ Two ways in, depending on how much you want:
 # The traffic your active filters selected (add --all for every match, not just this page)
 vigolium traffic --burp-bridge-url http://127.0.0.1:9009 --save-to-vigolium-db
 
-# One-shot bulk import of ALL Proxy history the bridge exposes
-vigolium import --burp-bridge-url http://127.0.0.1:9009
+# One-shot bulk import of the Proxy history for one host
+vigolium import --burp-bridge-url http://127.0.0.1:9009 --host acme.test
 ```
 
+<Warning>
+  **Name what you want — an unfiltered `import -B` is refused (exit 2) since v0.4.5.** Your Proxy history is everything you have browsed this session, and importing it wholesale drags every unrelated host you visited — with its cookies and tokens — into the database. Where that database is shared with a coding agent, that is a cross-engagement leak.
+
+  Use the same filters `traffic -B` takes: `--host` (wildcards), `--path`, `--method`, `--status`, `--search`, `--exclude-search`, `--from`/`--to`, `-n`. When you genuinely do want everything, say so with `--all-hosts` (add `--yes` to skip the pre-flight count confirmation).
+
+  ```bash
+  vigolium import -B http://127.0.0.1:9009 --host '*.acme.test' --method POST
+  vigolium import -B http://127.0.0.1:9009 --all-hosts --yes
+  ```
+</Warning>
+
 Bridge imports are **idempotent**: new requests are inserted, changed responses refresh the existing row, and unchanged traffic is skipped. Because the bridge is an import source in its own right, `--burp-bridge-url` can't be combined with a path argument or `--glob-db` in the same `import` invocation.
+
+<Note>
+  `traffic -B --save-to-vigolium-db` no longer silently truncates the write at 100 records. An untyped `-n` is a *listing* default and must not bound an import, so the import runs unlimited; a typed `-n` is honored as an explicit budget and warns when the cap actually bit.
+</Note>
 
 ### Push Vigolium traffic back into Burp
 
@@ -290,7 +305,7 @@ vigolium replay --record-uuid abc12345 --burp-bridge-url http://127.0.0.1:9009 \
                  --to-organizer --notes 'IDOR candidate' --highlight orange
 ```
 
-`--notes` accepts up to 200 characters. `--highlight` accepts `none`, `red`, `orange`, `yellow`, `green`, `cyan`, `blue`, `pink`, `magenta`, or `gray`.
+`--notes` longer than 200 characters is **truncated with an ellipsis and warned about**, never rejected — losing a note's tail beats losing the evidence. `--highlight` accepts `none`, `red`, `orange`, `yellow`, `green`, `cyan`, `blue`, `pink`, `magenta`, or `gray`.
 
 ### Push fuzz matches to the Organizer
 

@@ -34,7 +34,8 @@ Higher-precedence sources override lower ones. Within the config file, environme
 | Variable | Purpose |
 |---|---|
 | `VIGOLIUM_API_KEY` | API key for the REST server and ingestor client authentication |
-| `VIGOLIUM_PROJECT_UUID` | Default project UUID for CLI operations (equivalent to `--project-uuid`; `VIGOLIUM_PROJECT` is a legacy alias) |
+| `VIGOLIUM_PROJECT_UUID` | Default project UUID for CLI operations (equivalent to `--project-uuid`) |
+| `VIGOLIUM_PROJECT_NAME` | Default project *name* for CLI operations (equivalent to `--project-name`) |
 | `VIGOLIUM_PROXY` | HTTP/SOCKS proxy URL, used when `--proxy` is not set |
 | `VIGOLIUM_HOME` | Base directory for Vigolium data (used by the installer; defaults to `~/.vigolium`) |
 | `VIGOLIUM_DB_PATH` | Default for the global `--db` flag — pins a shell to one session database |
@@ -58,6 +59,12 @@ The variable carries one deliberate asymmetry. **Reads** additionally treat the 
 <Note>
   An explicit `--db` always wins. The variable is skipped until the file exists, so the first read of a not-yet-written session doesn't fail. And it never sets `--stateless` for you: on `scan` / `scan-url` / `scan-request` / `run` that flag means "scan into a throwaway temp database" and is mutually exclusive with `--db` — passing `-S` explicitly on one of those commands makes the variable a no-op.
 </Note>
+
+<Warning>
+  **A pinned path that exists but is unusable is now a hard error** (v0.4.5), not a silent fall-through to the shared default database. Previously a bad `VIGOLIUM_DB_PATH` quietly redirected every command to `~/.vigolium/database-vgnm.sqlite`, so a scan you believed was isolated to one engagement landed in the file every other engagement shares. If you need to confirm which store you actually got, read `db_path` off any `-j/--json` envelope or off the `scan.started` event.
+</Warning>
+
+`vigolium log` reads through this same path, so a pinned shell reaches that session's log with project scoping off, exactly like `finding` and `traffic`.
 
 Any environment variable can also be interpolated inside `vigolium-configs.yaml`:
 

@@ -515,6 +515,11 @@ Returns log entries for a scan, ordered by creation time ascending. Logs are cap
 | `offset`  | int    | 0       | Offset for pagination                                                                                         |
 | `level`   | string |         | Filter by log level: `trace`, `info`, `warn`, `error`. Use `trace` to replay raw console output.              |
 | `phase`   | string |         | Filter by scan phase: `config`, `heuristics`, `harvest`, `discovery`, `spidering`, `known-issue-scan`, `dynamic-assessment` (alias `audit`), `seed`. Use `config` to retrieve the scan configuration snapshot. |
+| `max_bytes` | int  | 2 MiB   | Cap on how much of `runtime.log` is read, up to 64 MiB (v0.4.2) |
+
+<Note>
+  **v0.4.2:** this endpoint returns the **last 2 MiB** of `runtime.log` by default rather than the whole file on every poll — a long-running scan's log grows without bound, and a dashboard polling it was re-reading all of it each time. Raise the window with `?max_bytes=` (hard cap 64 MiB).
+</Note>
 
 ```bash
 # Get all logs for a scan
@@ -782,8 +787,12 @@ Starts an asynchronous scan on specific HTTP records identified by UUID. Returns
 
 | Field            | Type     | Required | Description                               |
 |------------------|----------|----------|-------------------------------------------|
-| `record_uuids`   | string[] | Yes      | UUIDs of HTTP records to scan             |
+| `record_uuids`   | string[] | Yes      | UUIDs of HTTP records to scan (max **10,000**) |
 | `enable_modules` | string[] | No       | Restrict scan to specific module IDs      |
+
+<Warning>
+  **Fixed in v0.4.2:** record UUIDs were validated **unscoped**, so a leaked UUID could pull another project's traffic into a scan. They are now resolved within the requesting project only. The endpoint also caps `record_uuids` at 10,000 and checks scan admission *before* enumerating them, so a rejected request costs nothing.
+</Warning>
 
 ```bash
 # Scan specific records

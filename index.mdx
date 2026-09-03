@@ -72,11 +72,18 @@ The platform is built around three key components that work together to provide 
   cd vigolium
   make build
   ```
-  Requires Go 1.26+, Bun 1.3.11+, `git`, and `make`. Always use `make build` (not `go build`), it injects version metadata.
+  Requires Go 1.27+, Bun 1.3.11+, `git`, and `make`. Always use `make build` (not `go build`), it injects version metadata.
   </Tab>
 
-  <Tab title="Windows">
-    <Check>Vigolium only supports Linux and macOS natively. Windows users should use WSL or the Docker image.</Check>
+  <Tab title="Windows" icon="windows">
+  ```powershell
+  npm install -g @vigolium/vigolium
+  ```
+  Vigolium ships a native **windows/amd64** build since v0.4.3. The npm launcher is the easiest path; alternatively download `vigolium_<version>_windows_amd64.zip` from the [releases page](https://github.com/vigolium/vigolium/releases) and put `vigolium.exe` on your `PATH`.
+
+  <Note>
+    `curl | bash` and Homebrew are POSIX-only, and `vigolium update` cannot self-update on Windows — it prints the zip to download instead. Windows on ARM installs the x64 build and runs it under emulation.
+  </Note>
   </Tab>
 </Tabs>
 

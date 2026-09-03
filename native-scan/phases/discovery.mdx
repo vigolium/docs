@@ -117,7 +117,11 @@ SPA frameworks (Next.js/Nuxt/Vite/webpack/CRA) emit content-hash fingerprinted b
 | FUZZ | 12 | Template-based fuzzing (`FUZZ` marker replacement) |
 
 <Note>
-**Auto-fuzz on low-yield targets.** FUZZ fuzzing is normally opt-in (`--fuzz-wordlist`, `--intensity deep`, or a discovery-only `run discover`). On a full scan it also turns on **automatically** when the preceding Spidering phase comes up empty-handed — it found very few records, or it bounced off-host to an **SSO/login wall**. Such sites frequently still expose hidden routes that don't redirect, so vigolium brute-forces them anyway. The auto-fuzz always targets the **original `-t` host** (the off-host SSO/identity-provider domain is excluded from scope), and a console line announces it when it kicks in. Disable with `discovery.auto_fuzz_low_yield: false`.
+<Note>
+  **`--discovery-wordlist` was called `--fuzz-wordlist` before v0.4.5.** The old spelling still works as a deprecated alias, but it collided in name with `vigolium fuzz -w`, which is a completely different knob — that one is the payload list for the [fuzzing primitive](/others/cli-references#fuzz), this one seeds the discovery phase.
+</Note>
+
+**Auto-fuzz on low-yield targets.** FUZZ fuzzing is normally opt-in (`--discovery-wordlist`, `--intensity deep`, or a discovery-only `run discover`). On a full scan it also turns on **automatically** when the preceding Spidering phase comes up empty-handed — it found very few records, or it bounced off-host to an **SSO/login wall**. Such sites frequently still expose hidden routes that don't redirect, so vigolium brute-forces them anyway. The auto-fuzz always targets the **original `-t` host** (the off-host SSO/identity-provider domain is excluded from scope), and a console line announces it when it kicks in. Disable with `discovery.auto_fuzz_low_yield: false`.
 </Note>
 
 ## Deduplication

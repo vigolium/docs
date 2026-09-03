@@ -102,10 +102,14 @@ Several mechanisms select the active project, listed by precedence (highest firs
 | `--project-uuid` flag | `vigolium scan -t https://example.com --project-uuid a1b2c3d4-...` |
 | `--project-name` flag | `vigolium scan -t https://example.com --project-name my-engagement` |
 | `VIGOLIUM_PROJECT_UUID` env var | `export VIGOLIUM_PROJECT_UUID=a1b2c3d4-...` |
-| `VIGOLIUM_PROJECT` env var (legacy) | `export VIGOLIUM_PROJECT=a1b2c3d4-...` |
+| `VIGOLIUM_PROJECT_NAME` env var | `export VIGOLIUM_PROJECT_NAME=my-engagement` |
 | Default project | Used when no flag or env var is set |
 
-`--project-uuid` and `--project-name` are mutually exclusive (`--project-name` must match exactly one project).
+`--project-uuid` and `--project-name` are mutually exclusive (`--project-name` must match exactly one project). An explicit flag always beats an env var.
+
+<Warning>
+  **`VIGOLIUM_PROJECT` was removed in v0.4.3.** The legacy env var is gone, not deprecated — a shell still exporting it silently falls back to the **default** project. Rename it to `VIGOLIUM_PROJECT_UUID` (or use the new `VIGOLIUM_PROJECT_NAME` if you'd rather select by name).
+</Warning>
 
 <Warning>
   **Requires v0.4.0 or newer.** On earlier builds the selection above worked for
