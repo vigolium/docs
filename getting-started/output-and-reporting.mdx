@@ -67,6 +67,21 @@ vigolium scan --stateless -t https://example.com --ci-output-format -o findings
 
 See [CI/CD Integration](/guides/ci-cd-integration) for full pipeline examples.
 
+#### Narrowing the envelope with `--export-only`
+
+`--export-only` limits the `--format jsonl` envelope to chosen record types, reusing the `export --only` vocabulary (`http`, `findings`, `scans`, `modules`, `oast`, `source-repos`, `scopes`):
+
+```bash
+vigolium scan -t https://example.com --format jsonl --export-only findings
+vigolium run probe -T hosts.txt --format jsonl --export-only http,findings
+```
+
+The scope is passed explicitly to the shared export stream, so narrowing the jsonl envelope **cannot** reach the html, report, pdf, sarif, bundle, or console exports behind the same gate.
+
+<Note>
+  A **probe-only** run defaults to `--export-only http`: every finding a host sweep produces is a "Technology Detected" one, and that verdict is already on the record's own `technology` field, so emitting both says the same thing twice. Pass `--export-only http,findings` to restore them. See [Probe](/native-scan/phases/probe).
+</Note>
+
 ### HTML
 
 ```bash
@@ -335,6 +350,45 @@ vigolium finding -S --db ./scan.sqlite --json --with-records
 ```
 
 `-S/--stateless` turns project scoping **off**, so every row in the file is shown regardless of the `project_uuid` it carries. Nothing is written to your project database (a JSONL source is loaded into a throwaway in-memory SQLite). The source type is auto-detected by extension, falling back to a header sniff (`.jsonl`/`.ndjson` vs the `SQLite format 3` magic / `.sqlite`/`.sqlite3`/`.db`).
+
+<Note>
+  **Reading a source no longer modifies it (v0.4.6).** A read-write SQLite open is itself a write - the DSN sets `journal_mode=WAL` (changing an archive's hash), the open checkpoints main and sidecar, a background checkpointer truncates the WAL every five minutes, and `Close` writes `sqlite_stat1`. `--glob-db` sources are now opened and attached `mode=ro`, so browsing an archive leaves it byte-identical.
+
+  Attach paths are percent-encoded too: the SQLite driver parses **every** `ATTACH` filename as a URI, not only ones beginning with `file:`, so a `--glob-db` path containing `?` used to attach a different, empty database and report a successful merge having copied nothing. Such a path is now an explicit error.
+
+  A valid SQLite file that is not a Vigolium store reports `error.code: "source_incompatible"` rather than the generic `failed`.
+</Note>
+
+<Note>
+  **A wrong `--db` path fails instead of reading as empty (v0.4.7).** A pure read against an explicitly pinned `--db` or `$VIGOLIUM_DB_PATH` that is not there now exits `1` with `error.code: "source_missing"` and **creates nothing** — it used to create a 300-plus-KB database at the typo and report `total: 0` with exit `0`, so "the path is wrong" and "nothing was captured here" looked identical. A foreign SQLite file is `source_incompatible` (exit `1`) instead of quietly gaining Vigolium's tables.
+
+  This covers `finding`, `traffic`, `traffic body`, `traffic headers`, `db list`, `db stats`, `db export`, `log`, `log ls` and `export`. `replay` and `fuzz` are exempt (they record the traffic they send), and the built-in default database is still created on first use.
+
+  Use **`--read-only`** when the source is evidence: no directory creation, no journal-mode change, no WAL checkpoint, and — since v0.4.7 — no `-wal`/`-shm` siblings left beside the file and no `PRAGMA optimize` on close. The file survives the read byte-identical. It cannot migrate an old store, which is deliberate: that fails with a schema error rather than being upgraded in place.
+</Note>
+
+### Extracting One Stored Message
+
+`vigolium traffic body` and `vigolium traffic headers` read one side of one stored exchange without re-sending anything. Both take a single `--uuid` and a side — `--response` (default) or `--request`:
+
+```bash
+vigolium traffic body --uuid <uuid> -o response.json            # exact bytes, gzip-decoded
+vigolium traffic body --uuid <uuid> --representation stored -o body.gz
+vigolium traffic body --uuid <uuid> -j                          # receipt only: bytes, sha256, complete
+vigolium traffic headers --uuid <uuid> --name set-cookie -j     # ordered array, every match
+```
+
+`traffic headers` returns an **ordered array**, not a map, so duplicate `Set-Cookie` headers and the ordering that distinguishes a proxy-prepended header from an origin one both survive. A decode that would be partial fails with `body_incomplete` rather than writing a prefix (`--allow-incomplete` overrides), and a captured but genuinely zero-length body succeeds with `empty: true` — which is a different answer from `body_unavailable`. See [Extracting one message](/others/cli-references#extracting-one-message-traffic-body-traffic-headers).
+
+### Saving a `-j` Result to a File
+
+`traffic`, `finding` and `db ls` take `-o <path>` alongside `-j`. The document goes to the file, byte-identical to what would have been printed, and a receipt takes its place on stdout — useful when the result is larger than you want in a terminal or an agent transcript:
+
+```bash
+vigolium finding -j -n 500 -o findings.json
+```
+
+`complete: false` in the receipt means the file holds one page; raise `-n/--limit` (or `-a/--all` on `traffic`) for the whole set. `-o -` forces stdout. For a rendered report or a bulk dump, `vigolium export` is still the right command.
 
 ### Rendering a Finding or Record as Markdown
 

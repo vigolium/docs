@@ -14,6 +14,114 @@ package.
   the build you have installed, and `vigolium update` to upgrade.
 </Note>
 
+<Update label="v0.4.7" description="2026-09-18">
+
+A **read-surface correctness** release: search filters that mean what they say, a source pin that refuses a typo, and single-message extraction. No module changes - the registry stays at **207 active + 117 passive**.
+
+<Warning>
+  **Three changes can alter what an existing script sees.**
+
+  1. **A read against a missing `--db` now fails instead of reading as empty.** A pure read against an explicitly pinned `--db` or `$VIGOLIUM_DB_PATH` used to *create* the database and report `{"total":0,"items":[]}` with exit `0`. It now exits `1` with `error.code: "source_missing"` and creates nothing. A script that relied on the empty answer sees an error where it used to see zero rows - which is the point: "the path is wrong" and "nothing was captured here" were the same output.
+  2. **`--header` and `--body` no longer search the whole message.** Each now scans only its own region, so `--header password` stops matching response bodies and `--body Authorization` stops matching headers. Use `--search` when the location does not matter. Both also match **literally** now - `%` and `_` are ordinary characters, so `--body 'api_key'` no longer also matches `api-key` and `--body '%'` no longer returns everything.
+  3. **Default concurrency is 25**, from a single shared constant. The CLI, the `scanning_pace` config, the REST API and the discovery source had drifted to 50/40/50/50, so the same scan ran at different speeds depending on which one started it. Pass `-c 50` to keep the old CLI pace.
+</Warning>
+
+### Added
+
+- **[`vigolium traffic body`](/others/cli-references#extracting-one-message-traffic-body-traffic-headers)** and **`vigolium traffic headers`** - extract one side of one stored exchange to stdout or a file, with no re-send. Both take exactly one `--uuid` and one side (`--response`, the default, or `--request`), and open the source read-only. `--representation decoded` (default) strips supported content encodings; `stored` returns the captured bytes untouched. `traffic headers` emits an **ordered array**, so duplicate `Set-Cookie` headers and proxy-prepended ordering survive, unlike a map; `--name <header>` returns every matching entry, case-insensitively.
+- Four states that a filesystem export used to collapse into an empty file now carry their own `error.code`: `record_not_found`, `body_unavailable` (the record exists, that side was never captured), `body_decode_failed`, and `body_incomplete` (only a prefix is available; `--allow-incomplete` writes it anyway). A body that *was* captured and is genuinely zero-length **succeeds**, with `empty: true` in the receipt.
+- **`-o/--output` on `traffic -j`, `finding -j` and `db ls -j`** - writes the result document to a file, byte-identical to what the command would have printed, and puts a small receipt (`output`, `bytes`, `sha256`, `complete`) on stdout in its place. `complete: false` means the file holds one page. `-o -` forces stdout. The receipt never contains the document.
+- **`--url` on `traffic` and `db ls`** - exact URL selection, repeatable and OR-ed, applied **before** pagination so a match can never fall outside `-n`. No normalization or case folding; use `--path` or `--search` for substring matching.
+- `db stats` now reports the source it read: `path` is the file actually opened and `size` is its bytes **including the `-wal`/`-shm` siblings**. Both fields were declared and never filled, so every `db stats -j` reported `"path": "", "size": 0` for a database it had open. The human view carries the same as a `Source:` line under `Driver:`.
+- A capped body's `decoder_hint` now names `traffic body -o <file>` - one call for the exact bytes - instead of the whole-tree `db export --format fs`.
+
+### Fixed
+
+- **LIKE metacharacters in a search term were interpreted, not matched.** `--body '%'` returned every record and `--body 'api_key'` also matched `api-key`, because the term went into a `LIKE` pattern unescaped. Every substring filter now escapes the term and carries an `ESCAPE` clause. `--host` and `--path` stay patterns, where `*` is the wildcard.
+- **`--header` and `--body` searched the whole raw message.** Each now scans only its own region, in SQL, so `total` and pagination agree with the rows returned rather than with a wider match set.
+- **A read command pointed at a missing `--db`/`$VIGOLIUM_DB_PATH` created the database** and reported `total: 0`, exit `0` - indistinguishable from a target nobody had scanned, and leaving a stray 300-plus-KB file next to whatever the caller meant to read. It is now `source_missing` (exit `1`), and a foreign SQLite file is `source_incompatible` (exit `1`) instead of gaining Vigolium's tables. Covered commands: `finding`, `traffic`, `traffic body`, `traffic headers`, `db list`, `db stats`, `db export`, `log`, `log ls`, `export`. `replay` and `fuzz` are exempt - they send traffic and record what they send, so a fresh store is a legitimate outcome. The built-in default database is still created on first use.
+- **`--read-only` left `-wal`/`-shm` sidecars beside the file it promised not to touch**, and still ran `PRAGMA optimize` on close. The flag's guarantee is now the whole guarantee: the source survives the read byte-identical.
+- The flag suggester answered `--url` with "did you mean `--all`?" - a short name now has to be within one edit of a candidate, and a name with no near-miss points at the command's help instead of inventing a match.
+- An openai-compatible `base_url` written as a bare host (no `/v1`) POSTed to the root and 404'd. The `/v1` suffix is now resolved, the other spelling is retried once, and the winner is latched for the rest of the process.
+- `vigolium ol` printed two banners, and scripting `config set` printed one banner per key.
+- The `-j` error envelope was written into the `-o` file the caller expected results in.
+- `finding --path` was interpolated into SQL with hand-doubled quotes instead of bound as a parameter.
+- `atomicfile.Write` renamed without an `fsync`, so "atomic" covered the rename but not the bytes.
+
+### Changed
+
+- **Default concurrency is 25**, from one shared `types.DefaultConcurrency` (see the warning above). `scanning_pace.concurrency` in the generated config carries the same number, so the documented "generated config default 40; raw CLI fallback 50" discrepancy is gone.
+- `--search` stays the whole-exchange search, and is now documented as the flag to use when the location does not matter.
+- `humanBytes` moved to the shared `terminal.HumanBytes`, used by the storage listing and `db stats` alike.
+
+</Update>
+
+<Update label="v0.4.6" description="2026-09-13">
+
+A **CLI ergonomics** release, built to be driven from another agent - best used from inside a coding agent. A new [`vigolium run probe`](/native-scan/phases/probe) host sweep, redirects that are actually followed, `-T/--target-file` seeding the scan at last, and a deterministic attack-surface score on every record. Registry moves to **207 active + 117 passive**.
+
+<Warning>
+  **Two changes can break an existing pipeline.**
+
+  1. **The `-j` envelope no longer duplicates its rows.** The pre-envelope keys (`records`, `findings`, `scans`, `rows`, `stats`) are gone from the default output - they shipped a second full copy of every row on the wire. Read `items` instead. `--json-legacy-keys` (or `VIGOLIUM_JSON_LEGACY_KEYS=1`) restores the alias for a caller still migrating.
+  2. **`surface_score` is now a percentage of the signal set**, not ten points per signal across ten. **Scores from earlier scans are not comparable to new ones** - re-baseline any threshold you have hard-coded.
+</Warning>
+
+### Added
+
+- **[`vigolium run probe`](/native-scan/phases/probe)** - a host sweep: one request per target, passive fingerprinting only, no content discovery and no fuzzing, so `-T hosts.txt -c 20` reaches thousands of hosts instead of spending the budget on the first handful the way `run discover` does. Aliases: `probing`, `httpx`, `alive`, `sweep`.
+- Probe rows are labelled `probe` (`traffic --source probe`), so a sweep is separable from a real scan in the same project.
+- **`--tls-probe`** completes a TLS handshake per HTTPS endpoint and reports the negotiated version/cipher plus the leaf certificate - subject/CN, SANs, issuer, validity window, serial, MD5/SHA-1/SHA-256 fingerprints - under an httpx-shaped `tls` key. Validation is deliberately off: an expired or self-signed certificate *is* the result.
+- The probe phase resolves the whole target list's DNS before the first request, so `a`/`aaaa`/`cname` are reported inline in `-j`/JSONL output and the agent view. Only `ip` is stored - the rest is cheap to re-resolve and TTL-stale the moment it is written.
+- **`--redirect-mode off|same-host|same-apex|any`** (default `any`) replaces the `FollowRedirects`/`FollowHostRedirects` bool pair, which had no spelling for what a host sweep needs. `same-apex` follows `www.example.com → example.com` but not `example.com → tracker.example.net`, and fails closed to exact-host equality when either side has no registrable domain.
+- **`--record-redirect-chain`** stores each followed hop as its own `http_records` row, chained through the existing `parent_uuid` column (no schema change). On by default under `run probe`.
+- **`http_records.response_location`** stores a 3xx's `Location` header verbatim. `traffic --tree` reads the destination off the row (`↪ https://…`) instead of hydrating an 8 KiB response prefix - or, under `--glob-db`, reopening every source file the redirects came from. Older records fall back to parsing their stored bytes.
+- `--no-response` as an alias for `--omit-response`, which on a sweep is the bulk of every row.
+- **`http_records.surface_score`** - a deterministic attack-surface score, the percentage of a 17-signal set present, written by the new `surface-scoring` passive module. Absolute and reproducible, unlike `risk_score`'s per-batch rank. Every signal is readable from a single unauthenticated GET, which is what a host sweep has to rank on: an advertised authentication boundary, a non-standard port, a dynamic origin, permissive CORS, leaked internals (source maps, directory listings, dev-server banners, debug headers), API surface, and input surface the response advertises.
+- **`http_records.technology` is now written by a scan.** The `*_fingerprint` passive modules publish per host into the tech registry, and `surface-scoring`'s flush - the one point that knows both which records belong to a host and what all 26 fingerprint modules concluded - writes that stack onto every record of the host. Previously only a test seeder ever populated it.
+- `db ls --min-surface`, `surface_score` as a `db ls --sort` key and a `SURFACE` column in its listing, `min_surface`/`min_surface_score` on the [records API](/api-references/http-records), and the field in `-j` output, the CSV export and the agent's `inspect_record`.
+- **`--export-only`** on `scan`/`run` limits the `--format jsonl` envelope to chosen record types, reusing the `export --only` vocabulary. The scope is passed explicitly to the shared export stream, so narrowing the jsonl envelope cannot reach the html, report, pdf, sarif, bundle or console exports behind the same gate.
+- `spa` joins the known tech tags, so a module can gate on "this host client-side-routes".
+- **`traffic --group-by <field>`** counts matched records by `host`/`method`/`status_code`/`response_content_type`/`source`/`scan_uuid`/`ip`/`is_authenticated`, bounded by `--group-limit` with the tail reported as `other_groups`/`other_records`.
+- `error.code: "source_incompatible"` for a valid SQLite file that is not a Vigolium store, instead of the generic `failed`.
+
+### Fixed
+
+- **Redirects were never actually followed.** `doRequest` walked the response chain back to its *oldest* hop, so every caller of `Execute` received the first 3xx instead of the page behind it - a target that redirects to its real application was recorded as a bodyless 3xx and no module ever saw the application. The transport had been following the redirect the whole time.
+- **`response_time_ms` was always 0** - the requester truncated the duration to whole seconds, every caller discarded it, and the response model had nowhere to put it, so `db stats`' p50/p95/p99 were computed over a column of zeros. A measured duration is now floored at 1 ms, leaving 0 to mean unambiguously "not measured".
+- **Browsing a `--glob-db` source file modified it.** A read-write SQLite open is itself a write: the DSN sets `journal_mode=WAL` (changing an archive's hash), the open checkpoints main and sidecar, a background checkpointer truncates the WAL every five minutes, and `Close` writes `sqlite_stat1`. Sources are now opened and attached `mode=ro`.
+- **The SQLite driver parses every `ATTACH` filename as a URI**, not only ones beginning with `file:`, so a `--glob-db` path containing `?` attached a different, empty database and the merge reported success having copied nothing. Sources are now attached through a percent-encoded read-only URI; a path containing `?`, which no spelling can address, is an explicit error.
+- **Full-text search availability depended on how the database was opened.** `HasFTS` was set only by `SeedDefaults`, so `vigolium server` took the indexed path and every read command took the LIKE fallback on the same file - and the two did not return the same rows, FTS5 `MATCH` being token/prefix based where `LIKE` is substring. The capability is now discovered from the database, and the indexed path keeps the metadata `LIKE` predicates alongside `MATCH`.
+- **Migrating the legacy body-indexed FTS table left every existing record unsearchable.** The external-content replacement is created empty and filled by triggers, so only records written *after* the upgrade were indexed and search reported no error. The migration now rebuilds the index once, and restores the `AFTER UPDATE` trigger dropped years ago.
+- A `--fuzzy` term containing FTS5 expression syntax (`"`, `AND`, `NEAR`, `:`, `-`) was passed to `MATCH` unescaped, so it could mean something other than the term - or fail the whole listing with a syntax error.
+- **Deleting one of several records a finding cites deleted the finding**, leaving the junction rows for the survivors dangling. A finding is now removed only once nothing it links to survives, and findings with no HTTP record at all (audit and source-scan) are left alone.
+- **`surface-scoring` silently stopped scoring past 1000 distinct hosts.** The buffer was bounded on host count, the wrong dimension for a sweep that buffers one record per host: a 1041-host list left the rest at 0, indistinguishable from "no surface". The bound is now on total buffered entries (200k, roughly 20 MB).
+- Two scoring signals were near-constant or dead on exactly the corpus that needs ranking: `SignalAuthBearing` counted any `Set-Cookie` as identity (a CDN's `__cf_bm`, `_ga`, `AWSALB`) and now requires an `Authorization` header or a recognised session cookie; the input signal read only the request, so a bare-GET sweep could never fire it, and response-advertised input surface now earns its own signal.
+- `AppendRemarks` read a record's current remarks outside the transaction that wrote them back merged, so two concurrent analysis passes each overwrote the other's addition. The read now happens inside the write transaction, with row locking on PostgreSQL.
+- `clicommon.GetDB` leaked the connection pool (and, on a writable handle, a checkpointer goroutine) when it rejected an outdated schema.
+- Read commands (`traffic`, `finding`, `db ls`, `export`) migrate the schema on open instead of failing an old database's first read with a bare `no such column: r.surface_score`. A read-only handle cannot migrate, so it names the missing columns and how to proceed.
+- **`-T/--target-file` now seeds `Options.Targets`**, so `run spidering -T hosts.txt` crawls instead of finishing in 0s with a false "Targets: N" banner. Piped URL lists (including explicit `-I urls`) promote the same way, and `TargetSource` skips an unparseable line instead of aborting the scan on the first junk URL in a recon export.
+- `verbose_error_stacktrace` never matched a real Java, Node.js or .NET stack trace - every repeated-frame pattern required unindented frames, and all three runtimes indent theirs.
+- `db export --uuid --format fs` narrowed only the traffic half of the tree, writing the one selected `.req` beside every finding in the store; the identity selector now narrows both.
+
+### Changed
+
+- **A probe-only run gets its own defaults** - redirect hops recorded, `--redirect-mode same-apex`, the `sweep` transport profile, and **proactive WAF-edge pacing off** (a sweep sends one request per host, so there is no burst to pre-empt, while the pre-arm would switch adaptive feedback on for the whole run and print a pacing notice per host). Reactive back-off after an actual block is untouched. Its JSONL envelope also narrows to `http_record` objects, since every finding a sweep produces is a "Technology Detected" one now carried by the record's own `technology` field; `--export-only http,findings` restores them.
+- `surface_score` is a percentage of the signal set rather than ten points per signal across ten: no whole number of points divides 100 at the new signal count, and a clamped 10-point scheme would flatten the top band that ranking exists to separate. The count is derived from the signal block, so adding a signal cannot leave the scale behind. **Scores from earlier scans are not comparable to new ones.**
+- **A `--glob-db` merge no longer copies findings for a read that shows none.** `traffic` renders and filters by no finding, yet every source's findings, junction rows and OAST interactions were read into memory in full - inline request, response and evidence included - because those three tables need id remapping and so cannot be copied set-based.
+- **Record→source attribution is resolved for the page being printed, not the whole merged corpus.** The merge used to hold every inserted uuid in a `map[string]string` for the life of the command - hundreds of megabytes to answer a question about the few hundred rows that survive the `WHERE`. It now uses the per-file rowid ranges the merge already records.
+- The `--glob-db` scratch store defers the thirteen `http_records` read indexes until after the merge, so a bulk load maintains only the primary key, then builds them once over the finished table and refreshes planner statistics.
+- `traffic --tree`'s redirect lookup batched 400 uuids per query against SQLite's pre-3.32 999-parameter limit. Neither applies - bun renders list values as SQL literals - so the batch is 20x larger, and the unbounded `IN ()` lists in the record and finding delete/lookup paths are chunked for the same reason.
+- Stack-trace signatures move to `pkg/modules/infra/stacktrace` so `verbose_error_stacktrace` and `surface_scoring` read one table instead of two copies.
+- **The `-j` envelope no longer duplicates its rows** into the legacy `records`/`findings`/`scans`/`rows`/`stats` key, roughly halving every payload; `--json-legacy-keys` (or `VIGOLIUM_JSON_LEGACY_KEYS=1`) restores the alias for callers still migrating.
+- `finding --id` rejects a UUID with the flag that reads that namespace (`traffic --uuid`, `--agentic-scan`/`--scan-uuid`) instead of a bare `strconv` error.
+
+<Note>
+  New columns are added by the existing self-healing DDL path, so an existing database gains them on the next open with its rows untouched. `currentSchemaVersion` is deliberately **not** bumped - that would re-run the O(rows) backfills on every database in the field for columns that need no backfill.
+</Note>
+
+</Update>
+
 <Update label="v0.4.5" description="2026-09-04">
 
 A **machine-interface** release: Vigolium is now readable by a program *while it runs*, its safety dials do what their names say, and the shapes a driver parses stopped drifting per command. Sourced from a downstream driver's workaround list — every item below replaces code someone wrote to recover a fact Vigolium already knew. No module changes (registry stays at 207 active + 116 passive).

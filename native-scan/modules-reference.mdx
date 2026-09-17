@@ -1,10 +1,10 @@
 ---
 title: "Scanner Modules Reference"
-description: "Reference for Vigolium's 323 scanner modules, 207 active and 116 passive, covering the OWASP Top 10 and beyond."
+description: "Reference for Vigolium's 324 scanner modules, 207 active and 117 passive, covering the OWASP Top 10 and beyond."
 icon: "cubes"
 ---
 
-Vigolium ships with **323 scanner modules**, 207 active and 116 passive, covering the OWASP Top 10 and beyond. Run `vigolium module ls` for the up-to-date enabled list (the registry can grow between releases without a docs refresh).
+Vigolium ships with **324 scanner modules**, 207 active and 117 passive, covering the OWASP Top 10 and beyond. Run `vigolium module ls` for the up-to-date enabled list (the registry can grow between releases without a docs refresh).
 
 Active modules send modified requests to detect vulnerabilities; passive modules analyze existing request/response pairs without generating traffic. Recent additions include the v0.3.8 batch (`ssi-injection`, `server-side-js-injection`, `smtp-header-injection`, `react-rsc-rce`, `dependent-response`, `path-relative-stylesheet`), the GraphQL security suite, the Adobe Experience Manager (AEM) family, the SaaS data-exposure family (Salesforce / ServiceNow / Power Pages), the Model Context Protocol (MCP) suite, the expanded IIS family, the `dependency-confusion` and `js-beautify` passives, and the v0.2.1 batch (out-of-band SQLi, XPath injection, unauthenticated infra-service exposure, TLS protocol/cipher audit, session fixation, and the LLM-endpoint / payment-integration / DOM-clobbering / CSS-injection / cross-origin-isolation / reverse-tabnabbing passives) — filter the list by tag with `vigolium module ls graphql`, `vigolium module ls aem`, `salesforce`, `servicenow`, `powerpages`, `mcp`, or `iis` (the positional filter matches on id, name, description, and tag; `vigolium module ls --tags` dumps every known tag).
 
@@ -400,7 +400,7 @@ Audited against OWASP; every active probe gates on a reachable MCP endpoint (`pa
 
 ---
 
-## Passive Modules (116)
+## Passive Modules (117)
 
 Passive modules analyze existing request/response pairs without sending new traffic.
 
@@ -492,6 +492,11 @@ Passive modules analyze existing request/response pairs without sending new traf
 | Module ID | Name | Description | Severity | Confidence | Tags |
 |---|---|---|---|---|---|
 | `anomaly-ranking` | Anomaly Ranking | Statistical anomaly detection across per-host response batches; updates risk_score | Suspect | Tentative | `detection` |
+| `surface-scoring` | Attack Surface Scoring | Deterministic attack-surface score (0-100, percent of a 17-signal set present); writes `surface_score` and the host's `technology` stack onto every record | Info | Certain | `detection`, `recon` |
+
+<Note>
+  **`surface-scoring` writes columns, not findings.** It produces `http_records.surface_score` - an absolute, reproducible score you can rank a large sweep by - and flushes each host's detected stack into `http_records.technology`. Contrast `anomaly-ranking`, whose `risk_score` is a *rank within the batch a record was flushed alongside*, so it answers "is this unusual here" rather than "is this worth attacking". See [Probe → Attack-surface scoring](/native-scan/phases/probe#attack-surface-scoring).
+</Note>
 
 ### JS Framework Security (Runtime Analysis)
 

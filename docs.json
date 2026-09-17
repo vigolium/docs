@@ -84,6 +84,7 @@
             "group": "Native Scanning Phases",
             "icon": "layer-group",
             "pages": [
+              "native-scan/phases/probe",
               "native-scan/phases/discovery",
               "native-scan/phases/spidering",
               "native-scan/phases/known-issue-scan",

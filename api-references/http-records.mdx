@@ -20,11 +20,18 @@ Returns paginated HTTP request/response records stored in the database. Response
 | `status_code`  | string |         | Filter by status code (comma-separated)      |
 | `content_type` | string |         | Filter by response content type              |
 | `search`       | string |         | Search across URL and path                   |
-| `source`       | string |         | Filter by ingestion source (e.g. `ingest-server`, `cli`, `burp`, `caido`) |
-| `min_risk`     | int    |         | Filter by minimum risk score                 |
+| `source`       | string |         | Filter by ingestion source (e.g. `ingest-server`, `cli`, `burp`, `caido`, `probe`) |
+| `min_risk`     | int    |         | Filter by minimum risk score (a rank *within the batch* the record was flushed alongside) |
+| `min_surface`  | int    |         | Filter by minimum **attack-surface** score, 0-100 (alias `min_surface_score`). Absolute and reproducible - see below |
 | `remark`       | string |         | Filter by remark                             |
-| `sort`         | string | `created_at` | Sort field: `created_at`, `sent_at`, `method`, `path`, `status_code`, `response_time` |
+| `sort`         | string | `created_at` | Sort field: `created_at`, `sent_at`, `method`, `path`, `status_code`, `response_time`, `risk_score`, `surface_score` |
 | `order`        | string | `desc`  | Sort order: `asc` or `desc`                  |
+
+<Note>
+  **`min_surface` and `min_risk` answer different questions.** `surface_score` is the percentage of a 17-signal attack-surface set present on the record itself, so it is reproducible - the same record scores the same on every scan. `risk_score` is a rank-within-batch percentile, so it depends on what was flushed alongside it. Use `min_surface` to shortlist what is worth attacking, `min_risk` to find what is unusual. See [Surface score vs risk score](/others/cli-references#surface-score-vs-risk-score).
+
+  Scores written before v0.4.6 used a different scale and are not comparable to new ones.
+</Note>
 
 > **Note:** When the server is started with `--burp-bridge-url` (alias `--caido-bridge-url`, see [Running the Server](/server-mode/running-the-server#live-proxy-bridge)), live Burp or Caido proxy history rows are merged into this endpoint's results before sorting and pagination. Live rows are labelled `source: burp` or `source: caido` depending on which listener answered — filter to just those live rows with `?source=burp` / `?source=caido`. The response carries `X-Vigolium-Bridge-Source` naming the vendor. No separate public bridge endpoint is required.
 
@@ -75,7 +82,11 @@ curl -s 'http://localhost:9002/api/http-records?domain=*.example.com' | jq .
       "received_at": "2026-03-03T10:39:52.428708Z",
       "created_at": "2026-03-03T10:39:52.423708Z",
       "source": "seed",
-      "risk_score": 0
+      "risk_score": 0,
+      "surface_score": 43,
+      "technology": ["cloudflare", "nextjs"],
+      "response_location": "",
+      "parent_uuid": ""
     }
   ],
   "total": 1234,

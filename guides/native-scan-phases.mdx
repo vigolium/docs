@@ -30,6 +30,22 @@ vigolium scan -t https://example.com --discover --spider --external-harvest --kn
 
 Use `vigolium run <phase>` or `vigolium scan --only <phase>` to execute one phase in isolation.
 
+### Probe
+
+A host sweep: one request per target, passive fingerprinting and attack-surface scoring, no content discovery and no fuzzing. Built for host lists in the thousands, where `run discovery` would spend its whole budget on the first handful.
+
+```bash
+vigolium run probe -T hosts.txt -c 20
+```
+
+Sweep with JSONL on stdout and TLS certificates:
+
+```bash
+vigolium run probe -T hosts.txt --json --no-response --tls-probe
+```
+
+The aliases `probing`, `httpx`, `alive`, and `sweep` all work. A probe-only run flips its own defaults - redirect hops recorded, `--redirect-mode same-apex`, proactive WAF pacing off - see [Probe](/native-scan/phases/probe) for the full flag surface and the `surface_score` model.
+
 ### Discovery
 
 Discovers new endpoints through wordlist-based fuzzing and content probing:
@@ -142,14 +158,20 @@ Note: `--only` and `--skip` cannot be used together.
 
 ## Phase Aliases
 
-Several phases accept shorthand aliases. Canonical names are listed first.
+Every phase accepts shorthand aliases - the gerund, the internal engine name, and the vocabulary of the tool it replaces. Canonical names are listed first.
 
 | Canonical Phase | Aliases |
 |-----------------|---------|
-| `discovery` | `deparos`, `discover` |
-| `spidering` | `spitolas` |
-| `extension` | `ext` |
-| `dynamic-assessment` | `audit`, `dast`, `assessment` |
+| `ingestion` | `ingest`, `ingesting` |
+| `probe` | `probing`, `httpx`, `alive`, `sweep` |
+| `discovery` | `discover`, `discovering`, `deparos` |
+| `external-harvest` | `harvest`, `harvesting`, `external-harvester` |
+| `spidering` | `spider`, `spitolas`, `crawl`, `crawling`, `crawler` |
+| `known-issue-scan` | `cve`, `kis`, `known-issue`, `known-issues` |
+| `dynamic-assessment` | `dast`, `audit`, `assessment`, `assess` |
+| `extension` | `ext`, `extensions` |
+
+Run `vigolium strategy --json` for the authoritative list - it is generated from the same registry the flags are validated against, so `phases[].canonical` and `phases[].aliases` are exactly what `--only`, `--skip`, and `run <phase>` accept.
 
 ## Chaining Phases Manually
 
@@ -172,7 +194,7 @@ Override concurrency and rate limits for individual phases using the config file
 
 ```yaml
 scanning_pace:
-  concurrency: 50
+  concurrency: 25
   rate_limit: 100
 
   discovery:

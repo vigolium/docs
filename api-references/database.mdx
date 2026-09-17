@@ -8,6 +8,12 @@ Unified CRUD API for interacting with any database table. Returns raw JSON and s
 
 Read endpoints (GET) require **viewer** role or above. Write endpoints (POST, PUT, DELETE) require **admin** role.
 
+<Note>
+  **Full-text search is consistent with the CLI since v0.4.6.** FTS availability used to be set only when the database was seeded, so `vigolium server` took the indexed FTS5 path while every CLI read command took the `LIKE` fallback **on the same file** - and the two did not return the same rows, `MATCH` being token/prefix based where `LIKE` is substring. The capability is now discovered from the database itself, and the indexed path keeps the metadata `LIKE` predicates alongside `MATCH`.
+
+  The same release rebuilds the index when migrating from the legacy body-indexed FTS table. That replacement is created empty and filled by triggers, so before the fix only records written *after* the upgrade were searchable and search reported no error. If search has ever silently under-returned on an old database, one open on v0.4.6+ repairs it.
+</Note>
+
 Project-scoped tables (`scans`, `http_records`, `findings`, `source_repos`, `session_hostnames`, `oast_interactions`, `scan_logs`, `agentic_scans`, `scopes`) automatically filter by the `X-Project-UUID` header. Pass `?all_projects=true` to disable project scoping (admin use).
 
 ---

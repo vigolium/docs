@@ -1,0 +1,173 @@
+---
+title: "Probe - Host Sweep at Scale"
+description: "One request per target with passive fingerprinting and attack-surface scoring, built for host lists in the thousands."
+icon: "radar"
+---
+
+The probe phase is Vigolium's native host sweep: **one request per target**, passive technology fingerprinting and attack-surface scoring, and nothing else. No content discovery, no fuzzing, no crawling.
+
+It exists because `run discover` spends its whole budget on the first handful of hosts. A sweep has the opposite shape - you want a shallow answer about *thousands* of hosts, so you can decide which few deserve a real scan.
+
+```bash
+vigolium run probe -T hosts.txt -c 20
+```
+
+<Note>
+  Aliases: `probing`, `httpx`, `alive`, `sweep`. `vigolium run httpx -T hosts.txt` and `vigolium scan -T hosts.txt --only probe` are the same command.
+</Note>
+
+## When to use it
+
+| You want | Reach for |
+|----------|-----------|
+| "Which of these 4,000 hosts are alive, and what do they run?" | `run probe` |
+| "What endpoints exist under this one host?" | [`run discovery`](/native-scan/phases/discovery) |
+| "Crawl this app the way a browser would" | [`run spidering`](/native-scan/phases/spidering) |
+| "Actually test this target for vulnerabilities" | `vigolium scan` |
+
+The intended flow is probe first, rank by `surface_score`, then point a full scan at the top of that list.
+
+## Quick start
+
+```bash
+# Host sweep, JSONL on stdout, no raw bytes
+vigolium run probe -T hosts.txt --json --no-response
+
+# Add TLS certificates, 50 workers
+vigolium run probe -T hosts.txt --json --tls-probe -c 50
+
+# Keep the database for later triage
+vigolium run probe -T hosts.txt -S --format sqlite -o sweep
+```
+
+<Warning>
+  `-T/--target-file` reads its file as **one target URL per line**. A spec or an export goes through `-i/--input` instead - see [Input Modes](/others/cli-references#input-modes).
+</Warning>
+
+## Output
+
+**stdout is pure JSONL; human progress goes to stderr.** Pipe with `2>/dev/null`, or add `--silent` for a fully quiet run. One object per record:
+
+```json
+{"url":"https://www.example.com/","status_code":200,"response_time_ms":601,
+ "ip":"104.16.123.96","a":["104.16.123.96","104.16.124.96"],
+ "aaaa":["2606:4700::6810:7b60"],"cname":["origin.example.net"],
+ "response_title":"Example","response_content_type":"text/html",
+ "response_words":118,"surface_score":43,"technology":["cloudflare","nextjs"],
+ "source":"probe",
+ "tls":{"tls_version":"tls13","cipher":"TLS_AES_128_GCM_SHA256",
+        "subject_cn":"www.example.com","subject_an":["www.example.com"],
+        "issuer_cn":"YE2","not_after":"2026-12-02T07:35:03Z",
+        "fingerprint_hash":{"sha256":"cf80…"},"self_signed":false}}
+```
+
+Field names match httpx's (`a` / `aaaa` / `cname` / `tls`), so a consumer written against that output reads these unmodified.
+
+<Note>
+  **A sweep produces records, not findings.** A `0 findings` summary is the expected result - the answer lives in the record's `surface_score`, `technology`, and `status_code` columns.
+</Note>
+
+## Probe flags
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--probe` | bool | `false` | Enable the host-sweep phase inside a wider scan (same phase `vigolium run probe` runs alone) |
+| `--tls-probe` | bool | `false` | Complete a TLS handshake per HTTPS endpoint; report the negotiated version/cipher and the leaf certificate |
+| `--redirect-mode` | string | `any` | `off` \| `same-host` \| `same-apex` \| `any`. Applies to **every** phase, not just probe |
+| `--record-redirect-chain` | bool | `false` | Store each followed hop as its own `http_records` row, chained through `parent_uuid` |
+| `--no-response` | bool | `false` | Drop raw request/response bytes, keep every derived field (alias of `--omit-response`) |
+| `-c, --concurrency` | int | - | Request workers. DNS prefetch runs at `min(c * 4, 128)` |
+| `--export-only` | list | - | Limit the `--format jsonl` envelope to chosen record types (`http`, `findings`, …) |
+
+`--tls-probe` and `--record-redirect-chain` on a run that has no probe phase **warn that they are inert** rather than silently doing nothing.
+
+### `--tls-probe`
+
+Reports the negotiated TLS version and cipher plus the leaf certificate - subject/CN, SANs, issuer, validity window, serial, and MD5/SHA-1/SHA-256 fingerprints - under an httpx-shaped `tls` key.
+
+<Note>
+  **Validation is deliberately off.** An expired or self-signed certificate *is* the result you came for, so the handshake records it instead of refusing it.
+</Note>
+
+### `--redirect-mode`
+
+Replaces the old `FollowRedirects` / `FollowHostRedirects` bool pair, which had no spelling for what a host sweep actually needs.
+
+| Mode | Follows |
+|------|---------|
+| `off` | Nothing - the 3xx itself is the result |
+| `same-host` | Only an exact host match |
+| `same-apex` | Within the registrable domain: `www.example.com` -> `example.com` **yes**, `example.com` -> `tracker.example.net` **no** |
+| `any` | Every redirect (default outside a probe-only run) |
+
+`same-apex` fails closed to exact-host equality when either side has no registrable domain.
+
+### `--record-redirect-chain`
+
+Each followed hop becomes its own `http_records` row, chained through the existing `parent_uuid` column. `a.example` (301) -> `www.a.example` (302) -> the 200 that answered is three rows, not one.
+
+A 3xx also stores its `Location` header verbatim in `response_location`, so `traffic --tree` prints the destination (`↪ https://…`) off the row instead of hydrating response bytes.
+
+## Probe-only defaults
+
+A standalone probe run - `vigolium run probe`, `vigolium scan --only probe`, or REST `{"only": "probe"}` - flips its own defaults. **Each one yields to an explicit flag**, and none of them apply when the probe rides along inside a wider scan.
+
+| Default | Why |
+|---------|-----|
+| `--record-redirect-chain` on | The hop chain is most of what a sweep learns |
+| `--redirect-mode same-apex` | Follow `www.` -> apex, don't wander onto a tracker domain |
+| Many-hosts connection profile | Keep-alives off, short header timeout - one request per host reuses nothing |
+| **Proactive WAF pacing off** | A sweep sends one request per host, so there is no burst to pre-empt. The pre-arm would switch adaptive feedback on for the whole run and print a pacing notice *per host* |
+| JSONL envelope narrowed to `http_record` | Every finding a sweep produces is a "Technology Detected" one, already carried on the record's `technology` field |
+
+Reactive back-off after a **confirmed** WAF block is untouched. To restore either default: `--no-waf-pacing=false` re-enables proactive pacing, `--export-only http,findings` puts the findings back in the envelope.
+
+## Attack-surface scoring
+
+Every probed record gets a `surface_score`: **0-100, the percentage of a 17-signal set present on that exchange**. It is written by the `surface-scoring` passive module and is deterministic - the same record scores the same on every scan.
+
+Every signal is readable from a single unauthenticated GET, which is what a host sweep has to rank on:
+
+- An advertised authentication boundary, a session, a login surface
+- A non-standard port
+- A dynamic origin (versus edge-cached)
+- Permissive CORS
+- Leaked internals - source maps, directory listings, dev-server banners, debug headers
+- API markers and the input surface the response advertises
+
+<Warning>
+  **A bare sweep can't score everything.** `run probe` only ever observes a GET with no session, so signals that need a request *you* shaped - input carried, a mutating method, an upload, a session in hand - cannot fire. Probe scores top out well under 100. Compare them against each other, not against scores from a full scan.
+</Warning>
+
+`surface_score` is **not** `risk_score`. See [`--min-surface` vs `--min-risk`](/others/cli-references#surface-score-vs-risk-score) for the full comparison - the short version is that surface is absolute and reproducible, while risk is a rank within whichever batch the record was flushed alongside.
+
+## Reading a sweep back
+
+Probe rows are labelled `source: probe`, so a sweep is separable from a real scan in the same project:
+
+```bash
+# Rank a finished sweep by attackable surface
+vigolium traffic --source probe --sort surface_score -n 50
+
+# Just the columns that matter, as JSON
+vigolium traffic --source probe -j --fields url,status_code,surface_score,ip
+
+# Everything at or above half the signal set
+vigolium db ls --min-surface 50 --sort surface_score -n 20
+
+# How many hosts answered with what
+vigolium traffic --source probe --group-by status_code
+```
+
+<Warning>
+  **Host facts are output-only, not stored.** `a`, `aaaa`, `cname`, and `tls` are reported inline in the probe's own `--json` stream, but the schema keeps only the single `ip` column - a sweep writes several records per host, and storing the full answer per row would be many copies of one identical, TTL-stale blob. Reading the database back later shows `ip` alone; re-run the probe if you need the rest.
+
+  `surface_score`, `technology`, `response_time_ms`, `response_location`, and `parent_uuid` **are** stored and queryable.
+</Warning>
+
+## Related
+
+- [Scanning Modes Overview](/native-scan/scanning-modes-overview) - phase control, aliases, and `--only` / `--skip`
+- [Running Phases Independently](/guides/native-scan-phases) - chaining phases into a custom pipeline
+- [CLI Reference -> Scanning](/others/cli-references#scanning) - the full flag surface
+- [Discovery](/native-scan/phases/discovery) - the depth-first counterpart to this breadth-first sweep

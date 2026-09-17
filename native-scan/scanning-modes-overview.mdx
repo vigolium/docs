@@ -49,13 +49,16 @@ Phases execute in this order. Each strategy enables a subset of these phases:
 
 ```
 1. Heuristics Check     Pre-flight probe (detect WAF, redirects, tech stack)
-2. External Harvesting  Query Wayback, CommonCrawl, AlienVault OTX, URLScan, VirusTotal
-3. Discovery            Content discovery (brute-force dirs/files, JS analysis)
-4. Spidering            Browser-based crawling (Chromium), SPA support, form filling
-5. KnownIssueScan       Nuclei templates + Kingfisher secret scanning
-6. Dynamic-Assessment   Active + passive scanner modules against all discovered endpoints
+2. Probe                Host sweep: one request per target, passive fingerprinting only
+3. External Harvesting  Query Wayback, CommonCrawl, AlienVault OTX, URLScan, VirusTotal
+4. Discovery            Content discovery (brute-force dirs/files, JS analysis)
+5. Spidering            Browser-based crawling (Chromium), SPA support, form filling
+6. KnownIssueScan       Nuclei templates + Kingfisher secret scanning
+7. Dynamic-Assessment   Active + passive scanner modules against all discovered endpoints
                         (user-supplied JS/YAML extensions also dispatch here)
 ```
+
+The **probe** phase is off unless you ask for it (`--probe`, `--only probe`, or `vigolium run probe`). It is a breadth-first triage sweep for large host lists, not a step in a single-target scan - see [Probe](/native-scan/phases/probe).
 
 ## Strategy Comparison
 
@@ -71,17 +74,24 @@ Phases execute in this order. Each strategy enables a subset of these phases:
 
 ## Phase Aliases
 
-The canonical phase names are `discovery`, `spidering`, `dynamic-assessment`, and `extension`. The following aliases work with `--only` and `--skip`:
+Every phase accepts a set of alternative spellings - the gerund, the internal engine name, and the vocabulary of the tool each phase replaces. All of them work with `--only`, `--skip`, and `vigolium run <phase>`:
 
-| Alias | Canonical Phase |
-|-------|-----------------|
-| `deparos` | `discovery` |
-| `discover` | `discovery` |
-| `spitolas` | `spidering` |
-| `audit` | `dynamic-assessment` |
-| `dast` | `dynamic-assessment` |
-| `assessment` | `dynamic-assessment` |
-| `ext` | `extension` |
+| Canonical Phase | Aliases |
+|-----------------|---------|
+| `ingestion` | `ingest`, `ingesting` |
+| `probe` | `probing`, `httpx`, `alive`, `sweep` |
+| `discovery` | `discover`, `discovering`, `deparos` |
+| `external-harvest` | `harvest`, `harvesting`, `external-harvester` |
+| `spidering` | `spider`, `spitolas`, `crawl`, `crawling`, `crawler` |
+| `known-issue-scan` | `cve`, `kis`, `known-issue`, `known-issues` |
+| `dynamic-assessment` | `dast`, `audit`, `assessment`, `assess` |
+| `extension` | `ext`, `extensions` |
+
+<Note>
+  `vigolium strategy --json` prints this table as `phases[].canonical` / `phases[].aliases`, generated from the same registry the flags are validated against. That is the authoritative list if you are driving the CLI from a script - it cannot drift from what `--only` and `--skip` accept.
+</Note>
+
+`extension` is the one phase `--skip` does not accept: it is opt-in to begin with, so there is nothing to skip.
 
 ## Phase Control: `--only` and `--skip`
 
@@ -106,7 +116,7 @@ vigolium scan -t https://example.com --only extension --ext my-scanner.js
 vigolium scan -t https://example.com --only ext --ext my-scanner.js
 ```
 
-Valid values: `ingestion`, `discovery` (`deparos`/`discover`), `spidering` (`spitolas`), `external-harvest`, `known-issue-scan`, `dynamic-assessment` (`audit`/`dast`/`assessment`), `extension` (`ext`).
+Valid values: `ingestion`, `probe` (`httpx`/`alive`/`sweep`), `discovery` (`deparos`/`discover`), `external-harvest` (`harvest`), `spidering` (`spitolas`/`crawl`), `known-issue-scan` (`cve`/`kis`), `dynamic-assessment` (`audit`/`dast`/`assessment`), `extension` (`ext`). See [Phase Aliases](#phase-aliases) for the complete set.
 
 ### `--skip <phase>`: Skip Specific Phases
 

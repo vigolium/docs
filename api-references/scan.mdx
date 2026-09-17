@@ -143,7 +143,7 @@ Returns `202 Accepted` on success, `200 OK` for dry runs, or `409 Conflict` if a
 | `skip`                 | string[]          | No       | Skip specific phases (like `--skip`). Accepts aliases.                      |
 | `modules`              | string[]          | No       | Module IDs with fuzzy match (like `-m`)                                     |
 | `module_tags`          | string[]          | No       | Filter modules by tag (like `--module-tag`)                                 |
-| `concurrency`          | int               | No       | Number of parallel workers                                                  |
+| `concurrency`          | int               | No       | Number of parallel workers (default `25`, shared with the CLI since v0.4.7) |
 | `timeout`              | string            | No       | Request timeout as Go duration (e.g. `"30s"`)                               |
 | `max_per_host`         | int               | No       | Maximum concurrent requests per host                                        |
 | `rate_limit`           | int               | No       | Maximum request submissions per second                                      |
@@ -259,8 +259,8 @@ When a scan starts (via API or CLI), the runner logs a configuration summary to 
   ℹ Strategy: balanced
   ℹ Phases: ✓ ExternalHarvest (24m0s, x0.2) | ✓ Spidering (18m0s, x0.2) | ✓ Discovery
             ✓ KnownIssueScan (6h0m0s, x3.0) | ✓ Dynamic-Assessment (2h0m0s, x1.0)
-  ℹ Speed: concurrency=50 | rate-limit=100 | max-per-host=30
-  ℹ Modules: 207 active, 116 passive
+  ℹ Speed: concurrency=25 | rate-limit=100 | max-per-host=30
+  ℹ Modules: 207 active, 117 passive
 ```
 
 **Error responses:**
@@ -566,7 +566,7 @@ curl -s 'http://localhost:9002/api/scans/scan-abc123/logs?level=info&phase=disco
       "level": "info",
       "phase": "config",
       "message": "scan configuration snapshot",
-      "metadata": "{\"project_uuid\":\"my-project-uuid\",\"targets\":[\"https://example.com\"],\"strategy\":\"balanced\",\"concurrency\":50,\"rate_limit\":100,\"max_per_host\":30,\"active_modules\":201,\"passive_modules\":116,\"spidering_enabled\":true,\"discovery_enabled\":true,\"known_issue_scan_enabled\":false}",
+      "metadata": "{\"project_uuid\":\"my-project-uuid\",\"targets\":[\"https://example.com\"],\"strategy\":\"balanced\",\"concurrency\":25,\"rate_limit\":100,\"max_per_host\":30,\"active_modules\":207,\"passive_modules\":117,\"spidering_enabled\":true,\"discovery_enabled\":true,\"known_issue_scan_enabled\":false}",
       "created_at": "2026-02-16T15:00:00Z"
     },
     {
@@ -631,7 +631,7 @@ curl -s 'http://localhost:9002/api/scans/scan-abc123/logs?level=info&phase=disco
       "level": "info",
       "phase": "audit",
       "message": "phase started",
-      "metadata": "{\"active_modules\":201,\"passive_modules\":116}",
+      "metadata": "{\"active_modules\":207,\"passive_modules\":117}",
       "created_at": "2026-02-16T15:03:01Z"
     },
     {
@@ -725,7 +725,7 @@ curl -s 'http://localhost:9002/api/scans/scan-abc123/logs?level=info&phase=disco
       "level": "info",
       "phase": "config",
       "message": "scan configuration snapshot",
-      "metadata": "{\"project_uuid\":\"my-project-uuid\",\"targets\":[\"https://example.com\"],\"strategy\":\"balanced\",\"scanning_profile\":\"\",\"concurrency\":50,\"rate_limit\":100,\"max_per_host\":30,\"heuristics_check\":\"basic\",\"scope_origin_mode\":\"relaxed\",\"active_modules\":201,\"passive_modules\":116,\"spidering_enabled\":true,\"discovery_enabled\":true,\"known_issue_scan_enabled\":false,\"external_harvest\":false,\"skip_dynamic\":false}",
+      "metadata": "{\"project_uuid\":\"my-project-uuid\",\"targets\":[\"https://example.com\"],\"strategy\":\"balanced\",\"scanning_profile\":\"\",\"concurrency\":25,\"rate_limit\":100,\"max_per_host\":30,\"heuristics_check\":\"basic\",\"scope_origin_mode\":\"relaxed\",\"active_modules\":207,\"passive_modules\":117,\"spidering_enabled\":true,\"discovery_enabled\":true,\"known_issue_scan_enabled\":false,\"external_harvest\":false,\"skip_dynamic\":false}",
       "created_at": "2026-02-16T15:00:00Z"
     }
   ],
@@ -859,7 +859,7 @@ Returns `202 Accepted` on success, `200 OK` for dry runs, or `409 Conflict` if a
 | `dry_run`              | bool              | No       | Count matching records without launching the scan                          |
 | `modules`              | string[]          | No       | Module IDs with fuzzy match (like `-m`)                                     |
 | `module_tags`          | string[]          | No       | Filter modules by tag (like `--module-tag`)                                 |
-| `concurrency`          | int               | No       | Number of parallel workers                                                  |
+| `concurrency`          | int               | No       | Number of parallel workers (default `25`, shared with the CLI since v0.4.7) |
 | `timeout`              | string            | No       | Request timeout as Go duration (e.g. `"30s"`)                               |
 | `max_per_host`         | int               | No       | Maximum concurrent requests per host                                        |
 | `rate_limit`           | int               | No       | Maximum request submissions per second                                      |

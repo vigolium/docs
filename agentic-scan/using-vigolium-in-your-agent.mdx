@@ -66,7 +66,20 @@ Every line carries `scan_uuid` (a sweep is several invocations) and `v`, the eve
   "generated_at": "2026-09-04T10:11:12.345Z", "generated_at_ms": 1788453072345 }
 ```
 
-Parse `items` — it is canonical. Each command also writes its historical row key (`records`, `findings`, `scans`, `rows`, `stats`) as a *deprecated alias* pointing at the same slice; don't write key fallbacks. **Assert `db_path`**: the database open order ends at one shared default file, so a fall-through silently mixes engagements. Run the `query` field rather than composing your own follow-up.
+Parse `items` — it is **the** row array, and since v0.4.6 the only one. The historical row keys (`records`, `findings`, `scans`, `rows`, `stats`) are gone from the default output: they shipped a second full copy of every row, which on a 20-record compact read was 19,983 bytes against 7,884 of actual rows. `--json-legacy-keys` (or `VIGOLIUM_JSON_LEGACY_KEYS=1`) restores the alias for a caller still migrating, at that cost.
+
+**Assert `db_path`**: the database open order ends at one shared default file, so a fall-through silently mixes engagements. Run the `query` field rather than composing your own follow-up.
+
+<Note>
+  `query` is a ready-to-run follow-up pinned to the same store and scope, correctly shell-quoted:
+
+  ```bash
+  q=$(vigolium --db ./run.sqlite -S finding --limit 1 --json | jq -r .query)
+  eval "$q"    # reaches the same finding in the same database
+  ```
+
+  Finding IDs are per-database autoincrement integers, so the `--db` / `--stateless` / `--project-uuid` flags inside that string are load-bearing. Under `--glob-db` the field is **absent**, because the merged source is a temporary database that no argument list can reopen.
+</Note>
 
 Gate on the contract once at startup with `vigolium version --json`, which reports `schema_version` and `db_schema_version`.
 
@@ -74,7 +87,46 @@ Gate on the contract once at startup with `vigolium version --json`, which repor
 
 `0` success · `1` error · `2` usage error · `3` `fuzz --fail-on-match` · `4` `--fail-on` gate tripped.
 
-**`4` is not a failure.** The scan ran to completion, wrote its output, and found something at or above the threshold — the opposite outcome from `1`, where it never got that far. See the [full table](/others/cli-references#exit-codes).
+**`3` and `4` are completed results, not failures.** The output was written before the code was chosen. `--soft-fail` forces the process status to `0` for all of them while leaving the output intact — under `--json` the error object still reports the code that *would* have been used, plus `"soft_fail": true`. See the [full table](/others/cli-references#exit-codes).
+
+### One document per invocation
+
+Under `--json` you get **exactly one document**, whatever happens:
+
+- Flag order does not matter. `traffic --bad --json` and `traffic --json --bad` both emit one `usage_error` object.
+- A command that already wrote its result does not get an error object appended to it — the exit code carries the outcome.
+- Nothing else is ever written to stdout. Banners, prompts, progress, and warnings all go to stderr.
+
+Error codes worth branching on: `usage_error`, `source_missing`, `source_unreadable`, `source_incompatible` (a valid SQLite file that is **not** a Vigolium store — you are pointed at the wrong file), `gate_tripped`, `failed`. `traffic body` and `traffic headers` add four of their own: `record_not_found`, `body_unavailable`, `body_decode_failed`, `body_incomplete`.
+
+<Warning>
+  **A wrong `--db` path errors as of v0.4.7 — it no longer reads as empty.** A pure read (`traffic`, `finding`, `db ls`, `db stats`, `db export`, `export`, `log`, `traffic body/headers`) against an explicitly pinned `--db` or `$VIGOLIUM_DB_PATH` that is not there now fails `source_missing` (exit `1`) and **creates nothing**; another tool's SQLite file fails `source_incompatible` (exit `1`) **without Vigolium's tables being written into it**. Before v0.4.7 both returned `{"total":0,"items":[]}` with exit `0`, so "the path is wrong" and "nothing was captured here" were the same answer — and the wrong one looked like a finished task.
+
+  The built-in default database is still created on first use, and `replay`/`fuzz` are exempt because they record the traffic they send. If you must support older builds, keep asserting `db_path` and sanity-check `total` against a query you know matches.
+</Warning>
+
+Confirmation for a destructive command requires a terminal. Without one it refuses immediately with exit `2` rather than blocking or reading your data stream as the answer; pass `--force` to authorize it non-interactively. `--json` is **not** authorization. Reading stdin is bounded by `--input-read-timeout` (default `3m`, `0` disables), so a producer that never closes its end will not hang the process.
+
+### Discovering the interface
+
+Don't parse help text. Every registry that validates a flag can print itself:
+
+```bash
+vigolium strategy --json    # strategies, phase names + aliases, intensities,
+                            # agent modes, installed profiles
+vigolium config ls --json   # every setting (credentials redacted)
+vigolium scope view --json  # scope rules
+vigolium module ls --json   # module catalog
+vigolium doctor --json      # environment readiness
+```
+
+`strategy --json` is generated from the same registries the flags are validated against, so `phases[].canonical` and `phases[].aliases` are exactly what `--only`, `--skip`, and `run <phase>` accept.
+
+### Credentials
+
+`auth list` and `config ls` **redact secrets by default** — session tokens, auth headers, stored login requests, and login bodies. This applies under `--json` too, because `--json` output is the output most likely to end up in a transcript. `--show-secrets` reveals them and prints a warning to stderr.
+
+Redacted rows keep `has_session_token`, `header_names`, and a `session_token_fingerprint` (a short stable digest), so you can still tell two sessions apart or confirm a rotation landed without ever reading the secret.
 
 ---
 
@@ -1007,6 +1059,43 @@ vigolium traffic --from 2024-01-01 --to 2024-01-31
 vigolium traffic --body password
 ```
 
+<Note>
+  Since v0.4.7, `--body` searches **only** the body and `--header` **only** the header block; `--search` is the one that spans the whole exchange. Terms are matched literally, so `%` and `_` are ordinary characters (`--body 'api_key'` no longer also matches `api-key`). `--host`/`--path` stay patterns, where `*` is the wildcard.
+</Note>
+
+**Select one exact URL (not a substring):**
+```
+> Show the record for exactly https://api.example.com/v1/me
+```
+```bash
+vigolium traffic --url 'https://api.example.com/v1/me'
+```
+
+`--url` is equality, repeatable and OR-ed, and applied before pagination — the positional term is a substring search, and `--uuid` is identity.
+
+**Extract one message without re-sending it:**
+```
+> Save the response body of that record to a file
+```
+```bash
+vigolium traffic body --uuid <uuid> -o response.json          # exact bytes, gzip-decoded
+vigolium traffic body --uuid <uuid> --representation stored -o body.gz
+vigolium traffic body --uuid <uuid> -j                        # receipt only: bytes, sha256, complete
+vigolium traffic headers --uuid <uuid> --name set-cookie -j   # ordered array, every match
+```
+
+This is the answer to a `decoder_capped: true` body: pull it whole in one call rather than concluding a string is absent. Four failure states are distinguishable — `record_not_found`, `body_unavailable` (that side was never captured), `body_decode_failed`, `body_incomplete` (a prefix; `--allow-incomplete` writes it anyway) — and a captured, genuinely empty body **succeeds** with `empty: true`.
+
+**Keep a large result out of your context:**
+```
+> Save all high-severity findings to a file
+```
+```bash
+vigolium finding -j -n 500 --min-severity high -o findings.json
+```
+
+`-o` works on `traffic`, `finding` and `db ls` under `-j`. The file is byte-identical to what would have been printed; stdout gets `{"artifact":"json_result","output":…,"bytes":…,"sha256":…,"complete":true}`. `complete: false` means it holds one page.
+
 **Search in headers:**
 ```
 > Find traffic with JWT tokens in headers
@@ -1629,9 +1718,12 @@ These are examples of natural language prompts you can give to Claude Code or Co
 2. **Use strategies**: `lite` for quick checks, `balanced` for most cases, `deep` for full coverage, `whitebox` when you have source code.
 3. **Phase isolation**: Use `--only` or `vigolium run <phase>` to iterate on a single phase without re-running the entire pipeline.
 4. **Module tags**: Filter modules by technology (`spring`, `nodejs`) or vulnerability class (`xss`, `injection`) to reduce noise.
-5. **Watch mode**: Add `--watch 5s` to `traffic`, `finding`, or `db stats` for real-time monitoring during long scans.
-6. **Dry-run agents**: Always `--dry-run` first for agent commands to preview prompts before spending AI tokens.
-7. **Swarm over autopilot**: Use `agent swarm --discover` for structured scans (lower cost, reproducible). Use `agent autopilot` for exploratory, creative scanning.
-8. **Extensions for custom logic**: Write JS extensions instead of modifying core modules. They run alongside built-in modules with `--ext`.
-9. **Projects for isolation**: Use `vigolium project create` to keep scan data separate across engagements.
-10. **Export early**: Run `vigolium export --format html -o report.html` to share results as interactive reports.
+5. **Watch mode**: Add `--watch 5s` to `traffic`, `finding`, or `db stats` for real-time monitoring during long scans. Under `--json` it switches to **NDJSON** — one compact document per line, no clear-screen, no heading — and it is rejected on a command that writes.
+6. **Triage at scale first**: `vigolium run probe -T hosts.txt` sweeps thousands of hosts with one request each. Rank by `surface_score`, then point a real scan at the top of that list — don't send a full scan at a list you haven't triaged.
+7. **Count, don't dump**: `vigolium traffic --group-by status_code` runs the same filters the listing would and returns buckets. Never pull rows into your context just to count them.
+8. **Route bulk output to disk**: `-o findings.json` on a `-j` read puts the document in a file and a receipt on stdout. For one message, `traffic body`/`traffic headers` beat exporting a whole record tree.
+9. **Dry-run agents**: Always `--dry-run` first for agent commands to preview prompts before spending AI tokens.
+10. **Swarm over autopilot**: Use `agent swarm --discover` for structured scans (lower cost, reproducible). Use `agent autopilot` for exploratory, creative scanning.
+11. **Extensions for custom logic**: Write JS extensions instead of modifying core modules. They run alongside built-in modules with `--ext`.
+12. **Projects for isolation**: Use `vigolium project create` to keep scan data separate across engagements.
+13. **Export early**: Run `vigolium export --format html -o report.html` to share results as interactive reports.

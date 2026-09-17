@@ -10,7 +10,7 @@ Answers to the questions that come up most often. For a system-level picture, st
 
 <AccordionGroup>
   <Accordion title="What is Vigolium?">
-    Vigolium is a high-fidelity web vulnerability scanner written in Go. It combines deterministic, module-based scanning with AI-driven agentic analysis to provide broad and deep coverage of web application security issues. It ships 323 modules (207 active, 116 passive) covering injection flaws, misconfigurations, information disclosure, authentication issues, and more.
+    Vigolium is a high-fidelity web vulnerability scanner written in Go. It combines deterministic, module-based scanning with AI-driven agentic analysis to provide broad and deep coverage of web application security issues. It ships 324 modules (207 active, 117 passive) covering injection flaws, misconfigurations, information disclosure, authentication issues, and more.
   </Accordion>
   <Accordion title="What are the ways to run Vigolium?">
     Three operating modes:
@@ -81,7 +81,9 @@ Answers to the questions that come up most often. For a system-level picture, st
     Configure under `agent.olium` in `vigolium-configs.yaml`. See [Setting Up the Agent](/getting-started/setup-agent).
   </Accordion>
   <Accordion title="Can I use a local model (Ollama, LM Studio, vLLM)?">
-    Yes, use the `openai-compatible` provider, which speaks the OpenAI Chat Completions wire format. Set `custom_provider.base_url` to the endpoint (`/v1` root or full `/v1/chat/completions` URL, both work) and leave `api_key` empty for unauthenticated local servers.
+    Yes, use the `openai-compatible` provider, which speaks the OpenAI Chat Completions wire format. Set `custom_provider.base_url` and leave `api_key` empty for unauthenticated local servers.
+
+    All three spellings work as of **v0.4.7**: the full endpoint (`http://localhost:11434/v1/chat/completions`), the `/v1` root (`http://localhost:11434/v1`), and a **bare host** (`http://localhost:11434`), which gets `/v1` + the endpoint appended. A bare host used to POST to the root and 404. Because the last case is a guess — a server can mount its API anywhere — the other spelling is retried once on failure and the winner is latched for the rest of the process. The same resolution now applies to `anthropic-compatible` (`/v1/messages`), which used to answer the question differently from its OpenAI sibling.
 
     Note: OpenAI-style function tools are supported by the wire format but not by every model. Models that work well locally: `qwen2.5-coder`, `llama3.1` instruct, `mistral-nemo`. If the agent never calls tools, it's likely a model that silently ignores tool definitions, switch to a tool-trained model.
   </Accordion>

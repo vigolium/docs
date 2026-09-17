@@ -46,6 +46,7 @@ These work on every command (run `vigolium --help` for the authoritative list):
 | Flag | What it does |
 |---|---|
 | `-j, --json` | Machine-readable JSON for agent / programmatic use (compact bodies; pairs with `--fields` / `--compact` / `--full-body`). Every command emits the [same envelope](/getting-started/cheat-sheet#the-json-envelope) |
+| `--json-legacy-keys` | Restore the pre-envelope row aliases (`records`, `findings`, `scans`, `rows`, `stats`) alongside `items`. Since v0.4.6 they are **off by default** - they shipped a second full copy of every row on the wire. Env: `VIGOLIUM_JSON_LEGACY_KEYS=1` |
 | `-S, --stateless` | Run against a throwaway/standalone database. Since v0.4.5 it means the same thing on **every** command, and is accepted as a harmless no-op where it has none |
 | `--events ndjson` | *(scan / run / scan-url / scan-request)* Stream machine events on stdout while the scan runs |
 | `-v, --verbose` / `--debug` | Verbose logging / debug-level logging (debug also prints outgoing HTTP request lines) |
@@ -55,6 +56,8 @@ These work on every command (run `vigolium --help` for the authoritative list):
 | `--no-color` | Disable ANSI colour everywhere (also honoured via `NO_COLOR`) |
 | `--width <n>` | Maximum column width for table output (default `70`) |
 | `--ci-output-format` | CI-friendly output: JSONL findings only, no colour, no banners |
+| `-o, --output <path>` | *(read commands, with `-j`)* Write the result document to a file and print a receipt instead; `-` forces stdout. See [Saving a `-j` result](#saving-a-j-result-to-a-file) |
+| `--read-only` | Open the database without modifying it - no directory creation, no journal-mode change, no WAL checkpoint, and no `-wal`/`-shm` siblings left behind. Read commands only (exit `2` elsewhere); use it when the source file is evidence |
 | `--config <path>` / `--db <path>` | Override the config file / SQLite database path |
 | `--project-uuid` / `--project-name` | Scope every operation to a project (see [Projects](/others/projects)) |
 | `--scan-uuid <uuid>` | Pin the scan UUID for this session — use it to sync results across nodes |
@@ -67,8 +70,31 @@ These work on every command (run `vigolium --help` for the authoritative list):
 | `--soft-fail` | Always exit `0` (see above) |
 
 <Note>
-Mistype a long flag and Vigolium suggests the nearest match instead of a bare "unknown flag" error — e.g. `--module` yields `unknown flag: --module. Did you mean --modules? (run 'vigolium scan --help' for all flags)`. Added in v0.3.0.
+Mistype a long flag and Vigolium suggests the nearest match instead of a bare "unknown flag" error — e.g. `--module` yields `unknown flag: --module. Did you mean --modules? (run 'vigolium scan --help' for all flags)`. Added in v0.3.0. Since v0.4.7 a short name has to be within **one** edit of a candidate before it is offered, and a name with no near match points at the command's help rather than inventing one — `--url` used to be answered with "did you mean `--all`?".
 </Note>
+
+### Error codes under `-j`
+
+A failed command under `-j` writes a parseable object to stdout and exits non-zero. Branch on `error.code`, never on the message:
+
+| `error.code` | Exit | What it means |
+|---|---:|---|
+| `usage_error` | `2` | Bad flag, bad value, rejected combination. The message lists the valid set |
+| `source_missing` | `1` | Nothing at the pinned `--db` path. **Nothing is created** |
+| `source_unreadable` | `1` | Not a database, or corrupt |
+| `source_incompatible` | `1` | Valid SQLite that is **not** a Vigolium store — you are pointed at the wrong file. No tables are added to it |
+| `record_not_found` | `1` | *(`traffic body`/`headers`)* No record carries that `--uuid` |
+| `body_unavailable` | `1` | *(same)* The record exists, but that side was never captured |
+| `body_decode_failed` | `1` | *(same)* The announced encoding could not be undone — try `--representation stored` |
+| `body_incomplete` | `1` | *(same)* Only a prefix is available — `--allow-incomplete` takes it anyway |
+| `gate_tripped` | `4` | A `--fail-on <severity>` gate matched. Output was written first |
+| `failed` | `1` | Everything else |
+
+<Warning>
+  **A wrong `--db` path errors as of v0.4.7; it no longer reads as empty.** Opening a database used to create it, so a pure read against a typo'd or not-yet-scanned path returned `{"total":0,"items":[]}` with exit `0` — the same answer as a target nobody had scanned — and pointing `--db` at another tool's SQLite file wrote Vigolium's tables into it. Both now refuse, on `finding`, `traffic`, `traffic body`, `traffic headers`, `db list`, `db stats`, `db export`, `log`, `log ls` and `export`.
+
+  `replay` and `fuzz` are exempt: they send traffic and record what they send, so bringing a store into being is a legitimate outcome for them. The built-in default database is also still created on first use.
+</Warning>
 
 ## Scanning
 
@@ -99,11 +125,21 @@ vigolium scan -t https://example.com --skip discovery,spidering
 vigolium scan -t https://example.com -m xss-light-url-params,sqli-error-based
 vigolium scan -t https://example.com --module-tag spring --module-tag injection
 
+# Host sweep: one request per target, passive fingerprinting only (see `run probe`)
+vigolium run probe -T hosts.txt -c 20
+vigolium run probe -T hosts.txt --json --no-response --tls-probe
+vigolium scan -t https://example.com --probe                # ride the sweep along inside a wider scan
+
+# Redirect handling (every phase, not just probe)
+vigolium scan -t https://example.com --redirect-mode same-apex   # off|same-host|same-apex|any
+vigolium scan -t https://example.com --record-redirect-chain     # each hop becomes its own record
+
 # Output and reporting
 vigolium scan -t https://example.com --format jsonl -o results.jsonl
 vigolium scan -t https://example.com --format html -o report.html
 vigolium scan -S -t https://example.com --format sqlite -o scan      # standalone .sqlite (stateless only)
 vigolium scan -t https://example.com --format fs -o run             # browsable run-traffic/ + run-findings/ tree
+vigolium scan -t https://example.com --format jsonl --export-only http,findings   # narrow the jsonl envelope
 
 # Print results to stdout after the scan (pairs with -S --silent; also on scan-url/scan-request/run)
 vigolium scan-url -S -t https://example.com --silent --print-finding        # findings as Markdown
@@ -257,6 +293,7 @@ vigolium scan --resume                                              # auto-disco
 `vigolium run <phase>` is an alias for `scan --only <phase>`, useful when you want one specific stage of the pipeline.
 
 ```bash
+vigolium run probe -T hosts.txt                    # host sweep, one request per target
 vigolium run discover -t https://example.com
 vigolium run spidering -t https://example.com
 vigolium run dynamic-assessment -t https://example.com
@@ -268,6 +305,35 @@ vigolium run extension -t https://example.com --ext custom-check.js
 vigolium run deparos -t https://example.com
 vigolium run dast -t https://example.com
 ```
+
+Phase names accept generous aliases - `httpx`/`alive`/`sweep` reach the probe, `crawl` reaches spidering, `cve`/`kis` reach the known-issue scan. `vigolium strategy --json` prints the authoritative set as `phases[].canonical` / `phases[].aliases`; see [Phase Aliases](/native-scan/scanning-modes-overview#phase-aliases).
+
+### `run probe` - the host sweep
+
+`vigolium run probe` is the native prober: **one request per target**, passive technology fingerprinting and attack-surface scoring, no content discovery and no fuzzing. Built for host lists in the thousands, where `run discover` would spend its whole budget on the first handful.
+
+```bash
+vigolium run probe -T hosts.txt --json --no-response          # stdout = JSONL, stderr = progress
+vigolium run probe -T hosts.txt --json --tls-probe -c 50      # + TLS certificates
+vigolium run probe -T hosts.txt -S --format sqlite -o sweep   # keep the DB for triage
+```
+
+| Flag | Effect |
+|---|---|
+| `--probe` | Enable the sweep phase inside a wider scan |
+| `--tls-probe` | Handshake each HTTPS target; report version/cipher + the leaf certificate (subject/CN, SANs, issuer, validity, serial, fingerprints). Validation is deliberately off - an expired or self-signed cert *is* the result |
+| `--redirect-mode` | `off` \| `same-host` \| `same-apex` \| `any` (default `any`). Applies to **every** phase. `same-apex` follows `www.example.com` -> `example.com` but not `example.com` -> `tracker.example.net` |
+| `--record-redirect-chain` | Each followed hop becomes its own `http_records` row, chained by `parent_uuid` |
+| `--no-response` | Drop raw request/response bytes, keep every derived field (alias of `--omit-response`) |
+| `--export-only` | Limit the `--format jsonl` envelope to chosen record types (`http`, `findings`, `scans`, `modules`, `oast`, `source-repos`, `scopes`) |
+
+<Note>
+  **A probe-only run flips its own defaults** (`run probe`, `scan --only probe`): redirect hops recorded, `--redirect-mode same-apex`, the many-hosts connection profile, and **proactive WAF pacing off** - a sweep sends one request per host, so there is no burst to pre-empt and the pre-arm would print a pacing notice *per host*. Reactive back-off after a confirmed block still applies. Its JSONL envelope also narrows to `http_record` objects; `--export-only http,findings` restores the findings. Each default yields to an explicit flag, and none of them apply when the probe rides along inside a wider scan.
+
+  `--tls-probe` and `--record-redirect-chain` on a run with no probe phase **warn that they are inert** instead of silently doing nothing.
+</Note>
+
+Probe rows are labelled `source: probe`, so a sweep is separable from a real scan in the same project. Rank a finished sweep with `vigolium traffic --source probe --sort surface_score`. Full details on the [Probe phase page](/native-scan/phases/probe).
 
 ## Input Modes
 
@@ -288,6 +354,10 @@ An unknown `-I/--input-mode` value is **rejected up front** with a clear error (
 <Warning>
   **`-i/--input` vs `-T/--target-file` is not a free choice.** `-T` reads its file as one target URL per line, so a spec or an export must go through `-i` — pointing `-T` at a YAML spec makes every line of that file a target (and under `-S` fans out one child scan per line). The two exceptions are the formats that genuinely *are* target lists: `urls` and `burpscope`.
 </Warning>
+
+<Note>
+  **`-T` actually seeds the scan since v0.4.6.** It used to populate the input source but never `Options.Targets`, so `vigolium run spidering -T hosts.txt` finished in 0s printing a truthful-looking `Targets: N` banner and crawling nothing. Piped URL lists (including an explicit `-I urls`) promote the same way now, and an unparseable line is skipped rather than aborting the whole scan on the first junk URL in a recon export.
+</Note>
 
 ### `burpscope` — scan a bug-bounty scope file
 
@@ -426,6 +496,25 @@ vigolium finding --search sqli --exclude-search login            # keep sqli, dr
 vigolium traffic --exclude-header Authorization                  # drop rows carrying an Authorization header
 vigolium traffic --exclude-search .css --exclude-search .js      # repeatable — drop if ANY term matches
 
+# Select one exact URL (equality, repeatable, applied before pagination)
+vigolium traffic --url 'https://api.example.com/v1/me'
+vigolium traffic --url 'https://a.example/x' --url 'https://a.example/y'
+
+# Extract one stored message — no re-send
+vigolium traffic body --uuid <uuid> -o response.json
+vigolium traffic headers --uuid <uuid> --name set-cookie -j
+
+# Save a -j result to disk instead of into a transcript
+vigolium finding -j -n 500 -o findings.json
+
+# Count instead of listing — the same filters, a dozen integers back
+vigolium traffic --group-by status_code --host api.example.com
+vigolium traffic -j --group-by response_content_type --group-limit 5
+
+# Attack surface (see "Surface score vs risk score" below)
+vigolium db ls --min-surface 50 --sort surface_score -n 20
+vigolium traffic --source probe --sort surface_score -n 50
+
 # Read a standalone export directly (project scoping off, never writes to your DB)
 vigolium finding -S --db ./scan.jsonl --min-severity high
 vigolium traffic -S --db ./scan.sqlite --status 500 -n 20
@@ -459,6 +548,81 @@ vigolium db reset --force                          # delete + recreate the DB fi
 
 **Exclude filters.** `--exclude-search` / `--exclude-header` / `--exclude-body` (on `finding` and `traffic`) are the inverse of `--search` / `--header` / `--body`: they **drop** any row where the term appears. `--exclude-search` is repeatable, and a row is dropped if **any** term matches (contrast `--search`, whose repeated terms AND-narrow the kept set).
 
+### What each search flag actually searches
+
+Since **v0.4.7** the three text filters cover three different regions, and the difference is load-bearing:
+
+| Flag | Searches | Use it when |
+|---|---|---|
+| `--header` | **only** the header block of the request/response | you mean a header. `--header password` no longer matches a response body that happens to contain the word |
+| `--body` | **only** the request/response body | you mean body content, not a header name that resembles it |
+| `--search` | the whole exchange — URL, path, and the raw request/response | the location does not matter |
+
+The region split happens in SQL, so `total` and pagination agree with the rows you get back rather than with a wider match set. The same applies to `--exclude-header` / `--exclude-body`.
+
+<Warning>
+  **Search terms are matched literally.** `%` and `_` used to reach SQLite's `LIKE` unescaped and be interpreted as wildcards, so `--body '%'` returned every record and `--body 'api_key'` also matched `api-key` and `api.key`. Every substring filter now escapes the term and carries an `ESCAPE` clause.
+
+  `--host` and `--path` are the deliberate exceptions: they stay **patterns**, where `*` is the wildcard.
+</Warning>
+
+**Selecting an exact URL.** `--url` (on `traffic` and `db ls`) selects records whose stored URL matches **exactly**. It is repeatable and OR-ed, and applied *before* pagination, so a match can never be hidden by `-n/--limit`. There is no normalization or case folding — a trailing slash or a different query-parameter order is a different URL. For substring matching use `--path` or `--search`; for identity use `--uuid`.
+
+```bash
+vigolium traffic --url 'https://api.example.com/v1/me'
+vigolium db ls --url 'https://a.example/x' --url 'https://a.example/y' -j
+```
+
+### Extracting one message: `traffic body` / `traffic headers`
+
+Read one side of one stored exchange, without re-sending anything (that is `vigolium replay`). Both take exactly one `--uuid` and one side — `--response` (the default) or `--request` — and always open the source read-only.
+
+```bash
+# Save a response body to a file (atomic write, exact bytes)
+vigolium traffic body --uuid <uuid> -o response.json
+
+# Pipe it instead
+vigolium traffic body --uuid <uuid> | jq .
+
+# Just the receipt: size, sha256, completeness — no body in the output
+vigolium traffic body --uuid <uuid> -j
+
+# The request side, and the captured bytes with no decoding
+vigolium traffic body --uuid <uuid> --request -o request.txt
+vigolium traffic body --uuid <uuid> --representation stored -o body.gz
+
+# Headers as an ordered array — duplicates and ordering survive
+vigolium traffic headers --uuid <uuid> -j
+vigolium traffic headers --uuid <uuid> --name set-cookie -j
+```
+
+- **`--representation`** defaults to `decoded` (supported content encodings removed); `stored` returns the bytes exactly as captured. A body whose decode would be partial fails with `body_incomplete` rather than writing a prefix — pass `--allow-incomplete` to write it anyway, and the receipt keeps `complete: false`.
+- **`traffic headers` returns an ordered array**, not a map. A map loses the ordering that distinguishes a proxy-prepended header from an origin one, and collapses three `Set-Cookie` headers into one. `--name` matches case-insensitively and returns **every** matching entry, with `present: true|false` in the receipt.
+- **A zero-length body that was captured succeeds**, with `empty: true`. That is a different answer from `body_unavailable`, which means the side was never captured at all — the two used to be the same empty file.
+- Printing a binary body to a terminal is refused (write it with `-o`, pipe it, or pass `--force`).
+
+The [error codes](#error-codes-under-j) `record_not_found`, `body_unavailable`, `body_decode_failed` and `body_incomplete` distinguish the four failure states.
+
+### Saving a `-j` result to a file
+
+`traffic`, `finding` and `db ls` accept `-o <path>` alongside `-j`. The result document goes to the file — byte-identical to what the same command prints without `-o` — and a receipt takes its place on stdout:
+
+```bash
+vigolium finding -j -n 500 -o findings.json
+vigolium traffic -j --compact -n 1000 -o traffic.json
+```
+
+```json
+{ "artifact": "json_result", "output": "findings.json", "bytes": 66104,
+  "sha256": "…", "schema_version": 1, "complete": true }
+```
+
+`complete: false` means the file holds **one page** — raise `-n/--limit` (or `-a/--all` on `traffic`) for the whole set. `-o -` forces the document back to stdout. The receipt never contains the document; a caller who wants both can ask twice. For a rendered report or a bulk dump, `vigolium export -o <path> --format <fmt>` is still the right command.
+
+**Counting instead of listing.** `traffic --group-by <field>` counts the matched records by one field rather than printing them: `host`, `method`, `status_code`, `response_content_type`, `source`, `scan_uuid`, `ip`, or `is_authenticated`. An unknown name is a usage error (exit `2`) that lists the valid set. `--group-limit <n>` bounds the buckets, largest first (default `20`, `0` = every bucket); the tail is reported as a count, never dropped.
+
+It **runs the same filters the listing would**, so the buckets describe exactly the rows `traffic` would have shown - the answer to "how many records share this value" without paying for the records. Under `-j`, `items` is the bucket list (`{value, count}`), `total` is the number of buckets, and `total_records` / `other_groups` / `other_records` state what was counted and what the limit left out. It cannot be combined with a flag that renders records (`--raw`, `--burp`, `--markdown`, `--tree`, `--replay`, the `--save-to-*` pair): one counts, the other prints.
+
 **Source, risk & remark filters.** `--finding-source` (on `finding` and `db list`) filters findings by where they came from — `dynamic-assessment`, `spa`, `agent`, `oast`, `source-tools`, or `extension`. On `db list`, `--min-risk <n>` keeps only records whose risk score is at or above `n`, and `--remark <text>` matches text in a record's remarks.
 
 ```bash
@@ -467,6 +631,30 @@ vigolium finding --finding-source oast           # only out-of-band callback con
 vigolium db ls --min-risk 70                     # high-risk records first
 vigolium db ls --remark 'admin panel'
 ```
+
+**Which database am I looking at?** `db stats` names its source: the human view prints a `Source:` line under `Driver:`, and `db stats -j` fills `items.database.path` (the file actually opened) and `items.database.size` (its bytes, **including the `-wal`/`-shm` siblings** — on a WAL store the main file alone can be a fraction of what the store occupies). Both fields were declared and never filled before v0.4.7, so every `db stats -j` reported `"path": "", "size": 0` for a database it had open. Note that `items` here is an **object**, not a row array, so `total`/`offset`/`limit` describe the one report.
+
+### Surface score vs risk score
+
+`db ls --min-surface <n>` keeps only records whose **attack-surface** score is at or above `n`, and `surface_score` is a `--sort` key on both `db ls` (which also gains a `SURFACE` column) and `traffic`. It is a different question from `--min-risk`, so filtering on the wrong one quietly gives you the wrong shortlist:
+
+| | `--min-surface` (`surface_score`) | `--min-risk` (`risk_score`) |
+|---|---|---|
+| Asks | "is this record *worth attacking*?" | "is this record *unusual*?" |
+| Computed from | the record itself - the percentage of a 17-signal set present: input carried or advertised, method, uploads, the host's tech stack, legacy handlers, a session, a login boundary, a non-standard port, response shape, and origin posture (dynamic, permissive CORS, leaked internals, API markers) | a rank-within-batch percentile against whichever records were flushed alongside it |
+| Reproducible | **yes** - same record, same score, every scan | no - depends on the batch |
+| Reads back as | percent of surface signals present | a relative percentile |
+
+```bash
+vigolium db ls --min-surface 50 --sort surface_score -n 20
+vigolium traffic --source probe --sort surface_score -n 50
+```
+
+<Warning>
+  **Treat the number as a percentage, not a signal count.** The signal set grows between releases and the scale rescales with it, so a threshold ports across versions but "N of M signals" does not. **Scores written before v0.4.6 are not comparable to new ones** - the scale changed from ten points per signal to a percentage of the set.
+
+  A bare host sweep (`run probe`) only ever observes a GET with no session, so the signals that need a request *you* shaped cannot fire. Probe scores top out well under 100 - compare them against each other, not against a full scan's.
+</Warning>
 
 **Interactive TUI.** `finding`, `traffic`, `log ls`, `project list`, and `agent session` all take `--tui` to open an interactive browser (arrow keys navigate, enter opens details, `c` copies the id). `--no-tui` forces it off — an escape hatch for scripts, in case the TUI ever becomes the default for a command.
 

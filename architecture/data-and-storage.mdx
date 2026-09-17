@@ -52,12 +52,35 @@ The schema is intentionally **denormalized**, there are no separate hosts or par
 
 **`HTTPRecord`** (table `http_records`), the unit of ingested traffic:
 
-- *Identity*: `UUID` (PK), `RequestHash` (SHA-256 of the raw request, used for per-source dedup)
+- *Identity*: `UUID` (PK), `RequestHash` (SHA-256 of the raw request, used for per-source dedup), `ParentUUID` (chains a followed redirect hop to the record that produced it)
 - *Host*: `Scheme`, `Hostname`, `Port`, `IP`
 - *Request*: `Method`, `Path`, `URL`, `RequestHeaders` (JSONB), `RawRequest`, `RequestBody`
-- *Response*: `StatusCode`, `ResponseHeaders` (JSONB), `RawResponse`, `ResponseBody`, `ResponseTitle`, `ResponseWords`
-- *Derived*: `Parameters` (JSONB array of `EmbeddedParam`), `RiskScore`, `Remarks`
+- *Response*: `StatusCode`, `ResponseHeaders` (JSONB), `RawResponse`, `ResponseBody`, `ResponseTitle`, `ResponseWords`, `ResponseLocation` (a 3xx's `Location` header, verbatim), `ResponseTimeMs`
+- *Derived*: `Parameters` (JSONB array of `EmbeddedParam`), `RiskScore`, `SurfaceScore`, `Technology`, `Remarks`
 - *Metadata*: `Source`, `SentAt`, `ReceivedAt`, `CreatedAt`
+
+Four of those derived and response columns are worth calling out:
+
+| Column | Written by | Semantics |
+|---|---|---|
+| `RiskScore` | `anomaly-ranking` | A **rank within the batch** the record was flushed alongside. Answers "is this unusual here", so it is not comparable across scans |
+| `SurfaceScore` | `surface-scoring` | **0-100, the percentage of a 17-signal attack-surface set present.** Computed from the record alone, so it is absolute and reproducible |
+| `Technology` | `surface-scoring`'s flush | The host's detected stack. The `*_fingerprint` passive modules publish per host into a tech registry; the flush is the one point that knows both which records belong to a host and what all 26 fingerprint modules concluded, so it writes the settled stack onto every record of that host |
+| `ResponseLocation` | the requester | Lets `traffic --tree` print a redirect's destination off the row instead of hydrating an 8 KiB response prefix - or, under `--glob-db`, reopening every source file the redirects came from. Records predating the column fall back to parsing their stored bytes |
+
+**`host_observations`** is a per-host history table: a re-probe **appends** a row rather than overwriting what the last sweep saw, so a host's posture over time stays readable.
+
+<Note>
+  New columns arrive through the existing self-healing DDL path, so an existing database gains them on the next open with its rows untouched. `currentSchemaVersion` is deliberately not bumped for a column that needs no backfill - bumping it would re-run the O(rows) backfills on every database in the field.
+
+  Read commands (`traffic`, `finding`, `db ls`, `export`) migrate on open rather than failing an old database's first read with a bare `no such column`. A **read-only** handle cannot migrate, so it names the missing columns and how to proceed instead.
+</Note>
+
+<Note>
+  **Opening is not creating (v0.4.7).** A read-write open still writes — `mkdir -p` on the parent, a `journal_mode` PRAGMA, a WAL checkpoint — but a *pure read* against an explicitly pinned `--db` or `$VIGOLIUM_DB_PATH` no longer brings a store into existence: a missing path is `source_missing` and a foreign SQLite file is `source_incompatible`, both exit `1`. `replay` and `fuzz` are exempt, because they record the traffic they send, and the built-in default database is still created on first use.
+
+  `--read-only` now covers the whole promise: no journal-mode flip, no checkpoint, no `PRAGMA optimize` on close, and no `-wal`/`-shm` siblings left beside the file. The source's SHA-256 is unchanged after the read.
+</Note>
 
 **`Finding`** (table `findings`), a detected issue:
 

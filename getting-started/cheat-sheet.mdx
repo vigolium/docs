@@ -210,6 +210,35 @@ vigolium scan -T list-of-targets.txt -P 4 \
 
 ---
 
+## 5a. Sweep thousands of hosts before committing to a scan
+
+`vigolium run probe` is the triage pass: **one request per target**, passive technology fingerprinting and attack-surface scoring, no content discovery and no fuzzing. `run discover` would spend its whole budget on the first handful of hosts; a sweep answers shallowly about all of them, so you can pick the few worth a real scan.
+
+```bash
+# Host sweep, JSONL on stdout (progress stays on stderr)
+vigolium run probe -T hosts.txt --json --no-response -c 20
+
+# Add TLS certificates (version, cipher, subject/SANs, issuer, validity, fingerprints)
+vigolium run probe -T hosts.txt --json --tls-probe -c 50
+
+# Keep the database, then rank what answered by attackable surface
+vigolium run probe -T hosts.txt -S --format sqlite -o sweep
+vigolium traffic -S --db ./sweep.sqlite --source probe --sort surface_score -n 50
+
+# Feed the top of that list into a real scan
+vigolium run probe -T hosts.txt --json --no-response 2>/dev/null \
+  | jq -r 'select(.surface_score >= 40) | .url' > worth-scanning.txt
+vigolium scan -T worth-scanning.txt -P 4 --db-isolate --db local.db
+```
+
+The aliases `httpx`, `alive`, `sweep`, and `probing` all reach the same phase, and the JSONL field names match httpx's (`a` / `aaaa` / `cname` / `tls`) so an existing consumer reads them unmodified.
+
+<Callout icon="circle-info" color="#3B82F6" iconType="regular">
+  **A sweep produces records, not findings** — a `0 findings` summary is the expected result. The answer is in `surface_score` (0-100, the percentage of a 17-signal set present), `technology`, and `status_code`. `a`/`aaaa`/`cname`/`tls` are reported inline but **not stored**; only `ip` is. See [Probe](/native-scan/phases/probe).
+</Callout>
+
+---
+
 ## 6. Resume a large parallel scan
 
 A stateless parallel fan-out (`-S -T --split-by-host -P`) writes a tiny line-cursor manifest, `<output>.progress.json`, tracking the targets that completed cleanly. If the batch is interrupted (Ctrl-C, a crash, a CI timeout), re-run it with `--resume` to skip the finished targets and scan only the remainder, Vigolium also prints a copy-pasteable resume command on Ctrl-C/failure:
@@ -531,13 +560,17 @@ vigolium scan -T targets.txt -c 100 --rate-limit 200 --max-per-host 5
 | Flag | Default | Effect |
 |------|---------|--------|
 | `--scanning-max-duration` | `0` (use config) | Hard cap on total scan wall-clock time (e.g. `30m`, `1h`, `2h`) |
-| `-c` / `--concurrency` | `50` | Number of concurrent scan workers |
+| `-c` / `--concurrency` | `25` | Number of concurrent scan workers |
 | `-r` / `--rate-limit` | `100` | Maximum HTTP requests per second (global) |
 | `--max-per-host` | `50` | Maximum concurrent requests to any single host |
 | `--no-waf-pacing` | `false` (pacing on) | Disable proactive WAF/CDN pre-throttling (reactive back-off after a confirmed block still applies) |
 
 <Callout icon="circle-info" color="#3B82F6" iconType="regular">
   Lower `--rate-limit` and `--max-per-host` to stay gentle on fragile targets; raise `-c` and `--rate-limit` to go faster against robust infrastructure. Under `-P/--parallel`, each child keeps its own `--concurrency`, so real in-flight requests are roughly `P × --concurrency`.
+</Callout>
+
+<Callout icon="circle-info" color="#3B82F6" iconType="regular">
+  **The default concurrency changed to `25` in v0.4.7.** It now comes from one shared constant; the CLI, the `scanning_pace` config, the REST API and the discovery source had drifted to 50/40/50/50, so the same scan ran at a different speed depending on which one started it. Pass `-c 50` to keep the old CLI pace.
 </Callout>
 
 <Callout icon="circle-info" color="#3B82F6" iconType="regular">
@@ -871,12 +904,18 @@ Since **v0.4.5** every `-j/--json` command emits the *same* outer object, so one
 | Field | Why it is there |
 |---|---|
 | `schema_version` | Gate on it. Bumped on any breaking field change |
-| `items` | **Canonical** row array. Each command also writes its historical key (`records`, `findings`, `scans`, `rows`, `stats`) as a *deprecated alias* pointing at the same slice — parse `items`, not the alias |
+| `items` | **The** row array, and the only one. Since v0.4.6 the historical keys (`records`, `findings`, `scans`, `rows`, `stats`) are **gone from the default output** — they shipped a second full copy of every row on the wire, which on a 20-record compact read was 19,983 bytes against 7,884 of actual rows. `--json-legacy-keys` (or `VIGOLIUM_JSON_LEGACY_KEYS=1`) brings the alias back, at that cost, for a caller still migrating |
 | `db_path` | The database this command actually opened. **Assert it**: the open order ends at one shared default file, so a silent fall-through mixes engagements |
 | `query` | A ready follow-up command for the obvious next step. Run it rather than composing your own |
 | `generated_at` / `_ms` | RFC3339 with **exactly 3** fractional digits, plus an epoch-millisecond sibling. Both compare safely against a JS `toISOString()`; the old microsecond form sorted `…785113Z` *before* `…785Z` |
 
-`db stats -j` uses this envelope too — it used to be the documented exception that dumped its raw struct, and a contract with a hole in it is one consumers special-case forever.
+`db stats -j` uses this envelope too — it used to be the documented exception that dumped its raw struct, and a contract with a hole in it is one consumers special-case forever. Its `items` is an **object**, not a row array, and `items.database` names the file actually opened plus its on-disk size (WAL siblings included).
+
+**Saving it instead of reading it.** `traffic`, `finding` and `db ls` take `-o <path>` alongside `-j`: the document goes to the file, byte-identical to what would have been printed, and stdout gets a receipt instead — `{"artifact":"json_result","output":…,"bytes":…,"sha256":…,"complete":true}`. `complete: false` means the file holds one page, so raise `-n/--limit` (or `-a`) for the whole set; `-o -` forces stdout. The receipt never echoes the document, which is the point of the flag.
+
+```bash
+vigolium finding -j -n 500 -o findings.json   # ~65 KB to disk, a few lines to stdout
+```
 
 Check the contract once at startup, so drift is a startup failure rather than a parse error in production:
 
@@ -1033,7 +1072,36 @@ vigolium finding --since yesterday --min-severity high
 
 # Combine filters: POSTs to the API that returned 200 and leaked a token
 vigolium traffic --host api.example.com --method POST --body "token" --status 200
+
+# COUNT instead of listing — same filters, a dozen integers back
+vigolium traffic --group-by status_code --host api.example.com
+vigolium traffic --group-by host --group-limit 10
+vigolium traffic -j --group-by response_content_type
+
+# Rank by attackable surface (0-100, reproducible — unlike --min-risk's batch rank)
+vigolium traffic --sort surface_score -n 50
+vigolium db ls --min-surface 50 --sort surface_score -n 20
+
+# Select one exact URL — equality, repeatable, applied before pagination
+vigolium traffic --url 'https://api.example.com/v1/me'
+
+# Extract one stored message (no re-send) and save a -j result to disk
+vigolium traffic body --uuid <uuid> -o response.json
+vigolium traffic headers --uuid <uuid> --name set-cookie -j
+vigolium finding -j -n 500 -o findings.json
 ```
+
+<Callout icon="circle-info" color="#3B82F6" iconType="regular">
+  **`--header` and `--body` each search only their own half of the message** (since v0.4.7) — `--header password` no longer matches a response body. `--search` spans the whole exchange. And every search term is matched **literally**: `%` and `_` are ordinary characters, so `--body 'api_key'` does not also match `api-key`. `--host`/`--path` stay patterns, where `*` is the wildcard. See [What each search flag actually searches](/others/cli-references#what-each-search-flag-actually-searches).
+</Callout>
+
+<Callout icon="circle-info" color="#3B82F6" iconType="regular">
+  **Pull one message instead of a whole record.** `vigolium traffic body --uuid <uuid> -o resp.json` writes the exact bytes (gzip-decoded by default; `--representation stored` keeps them compressed), and `traffic headers --uuid <uuid> -j` returns an **ordered array** so duplicate `Set-Cookie` headers survive. Neither re-sends anything — that is `replay`. See [Extracting one message](/others/cli-references#extracting-one-message-traffic-body-traffic-headers).
+</Callout>
+
+<Callout icon="circle-info" color="#3B82F6" iconType="regular">
+  **Never dump rows just to count them.** `--group-by <field>` runs the same filters the listing would (`host`, `method`, `status_code`, `response_content_type`, `source`, `scan_uuid`, `ip`, `is_authenticated`), so the buckets describe exactly the rows `traffic` would have shown. Under `-j`, `items` is the bucket list (`{value, count}`) and `total_records` / `other_groups` / `other_records` say what was counted and what `--group-limit` left out.
+</Callout>
 
 <Callout icon="circle-info" color="#3B82F6" iconType="regular">
   `--from`/`--to` (aliases `--since`/`--until`) work the same on `finding`, `traffic`, `db ls`, `db export`, and `replay`. Bare dates and wall-clock times resolve in your **local** zone, and a bare date on the upper bound snaps to end-of-day — so `--from 2026-08-01 --to 2026-08-01` is the whole of Aug 1, not an empty range. See [Date filtering](/others/cli-references#date-filtering).
