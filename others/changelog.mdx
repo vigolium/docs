@@ -14,6 +14,36 @@ package.
   the build you have installed, and `vigolium update` to upgrade.
 </Note>
 
+<Update label="v0.4.8" description="2026-09-18">
+
+A **target-and-banner correctness** release: schemeless targets reach every phase, the banner prints the budget the phase will actually use, and composed flags stop failing a run over nothing. No module changes - the registry stays at **207 active + 117 passive**.
+
+<Warning>
+  **Vigolium is now MIT-licensed.** `LICENSE`, `THIRD_PARTY_NOTICES.md`, the npm package metadata and the server's `/server-info` header all moved from AGPL-3.0 to MIT. If you pinned `license_spdx` in a consumer of the [server API](/api-references/overview), it now reads `"MIT"`.
+</Warning>
+
+### Fixed
+
+- **A schemeless target silently skipped spidering.** `-t example.com`, or a `-T` file of bare hostnames, scanned fine under probe, discovery and known-issue-scan - `urlutil.ParseAbsoluteURL` accepts a bare host and the requester defaults the protocol to `http`. The browser phase does not get that leniency: `spitolas` parses its seed with `net/url`, where `example.com` is a *path* with no host and `example.com:8443` fails harder still on the colon. So spidering hard-failed per target on the exact host lists every other phase scanned, and because a failed crawl is reported as a completed one with 0 records, `scan --only spidering --soft-fail` exited `0` with an empty export. Every entry point now normalizes to an explicit scheme (`http` for scan targets, so the normalized form stays byte-identical to the request the HTTP path already built).
+- Normalization happens **before** the target dedup, so `example.com` and `http://example.com` collapse into one target instead of two, and the normalized spelling is what the banner prints.
+- **The banner advertised the `scanning_pace` slice instead of the real budget.** `--spider-max-time 5m` printed `6m0s` on the pre-scan banner while the phase crawled for 5m; `--discover-max-time` had the same gap. An explicit per-phase flag now wins on the banner exactly as it wins in the phase.
+- **`--db-isolate` alongside `-S/--stateless` aborted the run.** It is now ignored with a warning - `-S` keeps no database, so there is nothing left to merge anywhere. See the note below on why `-S` wins.
+- npm publish verification timed out at 300s on ~133 MB platform tarballs that landed minutes later, so a release needed several `make npm-publish` re-runs.
+
+### Changed
+
+- **Relicensed under MIT** (see the warning above).
+- Phase-budget rendering moved to one shared `runner.PhaseLabel`/`SpideringBudget` pair, so the pre-scan banner and the phase itself can no longer disagree about how long a phase gets.
+- `npm-verify-publish.sh version` polls for 15 minutes (90 x 10s); `dist-tag` keeps the short 300s budget.
+- The `gau` shim reuses the shared scheme helper - still defaulting to **https**, unlike scan targets' http, because `gau`'s own callers write bare domains for sites they reach over TLS.
+- Skills and generated flag docs updated for the new `-S` / `--db-isolate` precedence, plus the previously undocumented `agent autopilot -S`, `-o` and `--prompt-file`.
+
+<Note>
+  **Why `-S` wins over `--db-isolate`, and why the pair is a warning rather than an error.** Tools that compose Vigolium's flags pass both, and refusing to start stops a whole workflow over a flag that simply has nothing to do. Which side wins is not arbitrary: were `--db-isolate` to win, a run that asked for `-S` would begin merging into the operator's project database - the one thing `-S` promises will not happen. The flag is dropped outright rather than half-honored, so every remaining combination validates exactly as if it had never been typed: `-S --db-isolate --db` still reports the `--db` conflict, and `-S --db-isolate -P` still meets the `-P` isolation gate. A `--db` you named **by hand** stays a hard conflict with `-S`; only `--db-isolate`'s implicit destination is dropped.
+</Note>
+
+</Update>
+
 <Update label="v0.4.7" description="2026-09-18">
 
 A **read-surface correctness** release: search filters that mean what they say, a source pin that refuses a typo, and single-message extraction. No module changes - the registry stays at **207 active + 117 passive**.

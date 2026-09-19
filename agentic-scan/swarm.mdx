@@ -355,7 +355,7 @@ vigolium agent swarm -t https://app.example.com \
 | `--skill` | Force-load these skills by name into triage, bypassing planner selection (repeatable or comma-separated) |
 | `--skill-tag` | Force-load every skill carrying one of these tags into triage (e.g. `xss,idor`) |
 | `--no-skill-filter` | Load the full skill set into triage; ignore planner selection |
-| `--db-isolate` | Scan into a private temp DB, then merge results into `--db` at the end (SQLite only) |
+| `--db-isolate` | Scan into a private temp DB, then merge results into `--db` at the end (SQLite only). Ignored with a warning under `-S`, which keeps no database to merge |
 | `--max-iterations` | Triage rounds (preset-driven default) |
 | `--master-batch-size` | Records per master-agent batch (default 5) |
 | `--batch-concurrency` | Parallel master batches (`0` = auto, scaled to CPU count) |

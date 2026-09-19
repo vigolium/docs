@@ -44,6 +44,10 @@ vigolium run probe -T hosts.txt -S --format sqlite -o sweep
   `-T/--target-file` reads its file as **one target URL per line**. A spec or an export goes through `-i/--input` instead - see [Input Modes](/others/cli-references#input-modes).
 </Warning>
 
+<Note>
+  **Bare hostnames are fine.** A subdomain list with no schemes is normalized to `http://` per line before the sweep starts, so `hosts.txt` straight out of a recon tool needs no pre-processing. See [Schemeless targets](/others/cli-references#schemeless-targets).
+</Note>
+
 ## Output
 
 **stdout is pure JSONL; human progress goes to stderr.** Pipe with `2>/dev/null`, or add `--silent` for a fully quiet run. One object per record:

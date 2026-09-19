@@ -197,7 +197,7 @@ vigolium agent autopilot -t https://staging.example.com \
 | `--skill` |, | Force-load these skills by name, bypassing the pre-flight selection (repeatable or comma-separated) |
 | `--skill-tag` |, | Force-load every skill carrying one of these tags (e.g. `xss,idor`) |
 | `--no-skill-filter` | false | Load the full skill set; skip the pre-flight skill selection |
-| `--db-isolate` | false | Scan into a private temporary database, then merge results into `--db` at the end (lets parallel runs share one DB; SQLite only) |
+| `--db-isolate` | false | Scan into a private temporary database, then merge results into `--db` at the end (lets parallel runs share one DB; SQLite only). Ignored with a warning under `-S`, which keeps no database to merge |
 | `-S, --stateless` | false | Run the whole autopilot into a throwaway temporary database, then materialize `--format` outputs from it. Mirrors `vigolium scan -S`. See [Throwaway runs and reports](#throwaway-runs-and-reports--s---stateless). |
 | `--format` | `console` | Comma-list of outputs to write from a `-S` run: `console`, `jsonl`, `html`, `report`, `pdf`, `sarif`, `sqlite`, `fs`. A file-producing format is an error without `-S`. |
 | `-o, --output` | `vigolium-result/vigolium-autopilot` | Shared base path for the `-S` export; each `--format` appends its own extension. Only applies with `-S`. |
@@ -248,7 +248,7 @@ The operator's own `vigolium` subprocesses inherit the throwaway database (via `
   ```
 </Warning>
 
-`-S` is rejected alongside `--db`, `--db-isolate`, and `--resume` — a resumed run restores its target, scratchpad, and prior findings from the project database, which a throwaway one does not have. Under a multi-app natural-language prompt, every app runs into the same scratch database and the combined result is exported once.
+`-S` is rejected alongside `--db` and `--resume` — a database you name by hand is never silently discarded, and a resumed run restores its target, scratchpad, and prior findings from the project database, which a throwaway one does not have. `--db-isolate` is the exception: since v0.4.8 it is **ignored with a warning** rather than rejected, because its destination is implicit and `-S` keeps no database to merge from. Under a multi-app natural-language prompt, every app runs into the same scratch database and the combined result is exported once.
 
 ---
 

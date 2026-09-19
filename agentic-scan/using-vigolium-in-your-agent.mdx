@@ -252,6 +252,10 @@ vigolium scan -t https://example.com -t https://api.example.com
 vigolium scan -T targets.txt
 ```
 
+<Note>
+  **Do not pre-prefix a hostname list.** Since v0.4.8 a schemeless target — `example.com`, `example.com:8443`, or a whole `-T` file of bare hostnames — is normalized to `http://` at every entry point (CLI, REST API, agent swarm, `scan-url`), *before* the dedup, so `example.com` and `http://example.com` count as one target. Before v0.4.8 such lists scanned fine under probe, discovery and known-issue-scan but silently produced **zero** spidering records, and `--only spidering --soft-fail` still exited `0`. See [Schemeless targets](/others/cli-references#schemeless-targets).
+</Note>
+
 **Scan with a specific strategy:**
 ```
 > Do a deep scan of https://example.com with discovery and spidering

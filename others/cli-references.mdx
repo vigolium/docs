@@ -283,8 +283,8 @@ vigolium scan -T targets.txt -P 4 --stateless --split-by-host --format jsonl -o 
 vigolium scan --resume                                              # auto-discover *.progress.json in cwd
 ```
 
-- `-P, --parallel N` — scan up to N targets concurrently as isolated child processes. Requires either `-S --split-by-host` (per-host outputs) or `--db-isolate` (merge into one `--db`). Real in-flight requests ≈ `N × --concurrency`.
-- `--db-isolate` — scan into a private temporary SQLite DB and merge results into `--db` at the end (SQLite only; not combinable with `--stateless`).
+- `-P, --parallel N` — scan up to N targets concurrently as isolated child processes. Requires one of two isolation shapes, never a mix: `-S -T --split-by-host` (per-host output files, nothing persisted) **or** `--db-isolate -T` (every target merges into one shared `--db`). Real in-flight requests ≈ `N × --concurrency`.
+- `--db-isolate` — scan into a private temporary SQLite DB and merge results into `--db` at the end (SQLite only). Under `--stateless` it is **ignored with a warning** since `-S` keeps no database to merge from; before v0.4.8 the pair aborted the run.
 - `--split-by-host` — in stateless multi-target mode, write a separate `base-<host>.<ext>` output file per target.
 - `--resume` — resume a prior `-S -T --split-by-host -P` run from its `<output>.progress.json` manifest, scanning only the targets that didn't finish. Run bare (no other flags) to auto-discover the manifest in the current directory and relaunch the saved run.
 
@@ -358,6 +358,25 @@ An unknown `-I/--input-mode` value is **rejected up front** with a clear error (
 <Note>
   **`-T` actually seeds the scan since v0.4.6.** It used to populate the input source but never `Options.Targets`, so `vigolium run spidering -T hosts.txt` finished in 0s printing a truthful-looking `Targets: N` banner and crawling nothing. Piped URL lists (including an explicit `-I urls`) promote the same way now, and an unparseable line is skipped rather than aborting the whole scan on the first junk URL in a recon export.
 </Note>
+
+#### Schemeless targets
+
+A target without a scheme — `example.com`, `example.com:8443`, or a `-T` file of bare hostnames straight out of a subdomain tool — is normalized to **`http://`** before anything else runs:
+
+```bash
+vigolium scan -t example.com          # scanned as http://example.com
+vigolium run probe -T subdomains.txt  # every bare hostname normalized
+```
+
+`http` rather than `https` keeps the normalized form byte-identical to the request the HTTP path already built for a bare host; a host that only answers on 443 redirects there on the first hop, which [`--redirect-mode`](/native-scan/phases/probe) follows. Normalization runs **before** the target dedup, so `example.com` and `http://example.com` are one target, not two, and the normalized spelling is what the banner prints. A target that already names a scheme is left untouched, whatever that scheme is.
+
+<Note>
+  **Before v0.4.8 a bare hostname silently skipped spidering.** Probe, discovery and known-issue-scan tolerated it, but the browser phase parses its seed with stricter rules — `example.com` reads as a *path* with no host, and `example.com:8443` fails harder still on the colon. Spidering therefore hard-failed per target on the exact host lists every other phase scanned, and because a failed crawl is reported as a completed one with 0 records, `scan --only spidering --soft-fail` exited `0` with an empty export. If you have a pipeline that quietly produced no crawl results from a hostname list, this was why.
+</Note>
+
+<Tip>
+  The `gau` [tool shim](#tool-shims) is the one exception: it defaults a bare domain to **`https://`**, because `gau`'s own callers write bare domains for sites they reach over TLS.
+</Tip>
 
 ### `burpscope` — scan a bug-bounty scope file
 

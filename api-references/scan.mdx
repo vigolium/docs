@@ -135,7 +135,7 @@ Returns `202 Accepted` on success, `200 OK` for dry runs, or `409 Conflict` if a
 
 | Field                  | Type              | Required | Description                                                                 |
 |------------------------|-------------------|----------|-----------------------------------------------------------------------------|
-| `targets`              | string[]          | Yes*     | Target URLs (like `-t`).                                                    |
+| `targets`              | string[]          | Yes*     | Target URLs (like `-t`). Since v0.4.8 a schemeless entry (`example.com`) is normalized to `http://` by the runner, so an API caller need not prefix a hostname list. |
 | `urls`                 | string[]          | Yes*     | Alias for `targets`. Both fields are merged if provided.                    |
 | `dry_run`              | bool              | No       | Validate params and create scan record without launching the runner         |
 | `strategy`             | string            | No       | Strategy preset: `lite`, `balanced`, `deep`                                  |

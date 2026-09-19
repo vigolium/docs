@@ -205,7 +205,7 @@ vigolium scan -T list-of-targets.txt -P 4 \
 ```
 
 <Callout icon="circle-info" color="#3B82F6" iconType="regular">
-  `--db-isolate` is SQLite-only and cannot be combined with `--stateless` (they are two different ways to avoid write contention). Pressing `Ctrl-C` during a `-P` batch is treated as an operator stop: un-started and cut-short targets are reported as "not scanned" rather than failures.
+  `--db-isolate` is SQLite-only. Passing it alongside `--stateless` is **not** an error: `-S` wins and `--db-isolate` is ignored with a warning, since a stateless run keeps no database to merge from (before v0.4.8 the pair aborted the run). A `--db` you name by hand stays a hard conflict with `-S`. Pressing `Ctrl-C` during a `-P` batch is treated as an operator stop: un-started and cut-short targets are reported as "not scanned" rather than failures.
 </Callout>
 
 ---
@@ -235,6 +235,10 @@ The aliases `httpx`, `alive`, `sweep`, and `probing` all reach the same phase, a
 
 <Callout icon="circle-info" color="#3B82F6" iconType="regular">
   **A sweep produces records, not findings** — a `0 findings` summary is the expected result. The answer is in `surface_score` (0-100, the percentage of a 17-signal set present), `technology`, and `status_code`. `a`/`aaaa`/`cname`/`tls` are reported inline but **not stored**; only `ip` is. See [Probe](/native-scan/phases/probe).
+</Callout>
+
+<Callout icon="circle-info" color="#3B82F6" iconType="regular">
+  **Bare hostnames need no pre-processing (since v0.4.8).** A `hosts.txt` straight out of a subdomain tool — `api.example.com`, `example.com:8443` — is normalized to `http://` per line before anything runs, and the normalization happens before the dedup, so `example.com` and `http://example.com` are one target rather than two. Before v0.4.8 those lists scanned fine under probe and discovery but silently produced **zero** crawl results under `--only spidering`. See [Schemeless targets](/others/cli-references#schemeless-targets).
 </Callout>
 
 ---
@@ -571,6 +575,10 @@ vigolium scan -T targets.txt -c 100 --rate-limit 200 --max-per-host 5
 
 <Callout icon="circle-info" color="#3B82F6" iconType="regular">
   **The default concurrency changed to `25` in v0.4.7.** It now comes from one shared constant; the CLI, the `scanning_pace` config, the REST API and the discovery source had drifted to 50/40/50/50, so the same scan ran at a different speed depending on which one started it. Pass `-c 50` to keep the old CLI pace.
+</Callout>
+
+<Callout icon="circle-info" color="#3B82F6" iconType="regular">
+  **Trust the banner's per-phase budget (since v0.4.8).** `--spider-max-time` and `--discover-max-time` now win on the pre-scan `Phases:` line exactly as they win in the phase. Before v0.4.8 the banner rendered the `scanning_pace` slice instead, so `--spider-max-time 5m` printed `6m0s` next to **Spidering** while the phase crawled for the 5m you asked for.
 </Callout>
 
 <Callout icon="circle-info" color="#3B82F6" iconType="regular">

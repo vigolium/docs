@@ -236,6 +236,10 @@ vigolium scan -t https://example.com --strategy deep \
   --spider-max-time 10m
 ```
 
+<Note>
+  **The pre-scan banner prints the budget the phase will actually use (v0.4.8).** An explicit `--spider-max-time` / `--discover-max-time` wins on the banner exactly as it wins in the phase. Before v0.4.8 the banner rendered the `scanning_pace` slice instead, so `--spider-max-time 5m` printed `6m0s` next to **Spidering** while the phase crawled for the 5m you asked for. Both now come from one shared budget resolver, so the two can no longer disagree.
+</Note>
+
 ### Scanning Pace (Config File)
 
 The `scanning_pace` section in `vigolium-configs.yaml` provides centralized speed control. Common values serve as a baseline inherited by all phases; per-phase subsections override specific values.

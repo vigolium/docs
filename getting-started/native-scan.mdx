@@ -167,7 +167,7 @@ vigolium scan -T list-of-targets.txt -P 4 \
 ```
 
 <Callout icon="circle-info" color="#3B82F6" iconType="regular">
-  `--db-isolate` is SQLite-only and cannot be combined with `--stateless` (they are two different ways to avoid write contention). Pressing `Ctrl-C` during a `-P` batch is treated as an operator stop: un-started and cut-short targets are reported as "not scanned" rather than failures.
+  `--db-isolate` is SQLite-only. Passing it alongside `--stateless` is **not** an error: `-S` wins and `--db-isolate` is ignored with a warning, since a stateless run keeps no database to merge from (before v0.4.8 the pair aborted the run). A `--db` you name by hand stays a hard conflict with `-S`. Pressing `Ctrl-C` during a `-P` batch is treated as an operator stop: un-started and cut-short targets are reported as "not scanned" rather than failures.
 </Callout>
 
 ### Resuming an interrupted fan-out
