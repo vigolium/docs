@@ -14,6 +14,100 @@ package.
   the build you have installed, and `vigolium update` to upgrade.
 </Note>
 
+<Update label="v0.5.0" description="2026-09-22">
+
+A **trustworthy-output** release: two finding families that were entirely false positives now need evidence the transport can actually produce, the hardening advisories move off the default intensity, a run that fails to write a requested artifact exits non-zero, and scans stop leaking temp scratch. No module changes - the registry stays at **208 active + 117 passive**.
+
+<Warning>
+  **Three changes alter what an existing pipeline sees.**
+
+  1. **The 14 [`hygiene`-tagged](/native-scan/modules-reference#hardening-advisories-hygiene) hardening advisories no longer run at the default intensity.** Missing security headers, weak TLS protocol/cipher policy, cookie and session-cookie attributes, the CSP/HSTS/SRI/Permissions-Policy/COOP audits - each fires on nearly every response, so a crawl of any size buried the exploitable findings under one near-identical Info/Low row per URL. They now need `--intensity deep`, `--module-tag hygiene`, or `dynamic-assessment.hygiene_modules: true`. A report that counted on those rows will come back shorter.
+  2. **A requested artifact that was never written now fails the run.** An export failure used to exit `0`, report `scan.finished status=completed` and leave no file. `scan`, `run`, `scan-url`, `scan-request` and an agentic `-S` run now exit `1` with `error.code: "export_failed"` - and that outranks the `--fail-on` gate, because a `4` whose artifact is missing sends a CI job to read a file that is not there. Each `--format` is still attempted independently; the **Exports** summary on stderr lists the ones that landed.
+  3. **`ssi-injection` in-band findings are Medium, not High.** The echo oracle proves directive evaluation, not the file read or the RCE behind it.
+</Warning>
+
+### Added
+
+- **`vigolium kit tmp-clean`** - collect Vigolium scratch left in the system temp directory by interrupted runs. `--max-age` (default `6h`) governs what counts as abandoned; `--max-age 0` collects everything not currently held by a running scan. Only names Vigolium itself allocates are touched.
+- The **`hygiene` module tag**, selectable with `--module-tag hygiene` or `--module-id <id>`.
+- **`dynamic-assessment.hygiene_modules`** - force the hardening advisories on at any intensity, or off even at `deep`. Naming a module explicitly always wins over the key.
+- **`scans.scope_origin_mode`** - the resolved host-scope mode, carried through `--format jsonl`, [`vigolium export`](/getting-started/output-and-reporting) and the [REST scan object](/api-references/scan).
+- `config.ResolveCLIOriginMode`, the one fallback chain the matcher, banner, summary, snapshot and scan row all read.
+- A [**Host scope**](/native-scan/scan-scope#host-scope) reference section documenting how `--scope-origin` also selects *stored* records, not only new traffic.
+
+### Fixed
+
+- **All 12 request-smuggling findings in an engagement were false positives.** `net/http` dropped `Transfer-Encoding` and rewrote `Content-Length`, so every probe reached the wire as a well-formed POST identical to its control. Probes now go out as verbatim bytes, the gate is probe-vs-control (3x **and** a 2s margin **and** a 5s floor) against the median of three controls re-measured after each probe, and hosts are skipped when an edge/auth gate answers, when traffic is not HTTP/1.1, or when the server sends `Connection: close`.
+- **`ssi-injection` filed ~113 high-severity false positives.** The oracle proved evaluation by the *absence* of directive markup, so a WAF, an SSO gate or a denial page read as a hit. It now brackets `<!--#echo var="DATE_GMT"-->` between two fresh tags and requires a server-owned value, rules out a comment-stripping sanitizer with a control round, and skips blocked/redirect/404 responses. A quadratic needle scan (8.5s on a 900 KB page) is bounded to 64 bytes.
+- **`-t`/`-T` no longer wait on stdin.** An inherited pipe - a CI runner, an agent harness, a `| tee` - makes `HasStdin()` true, so scans blocked for the full `--input-read-timeout`, and `ingest -t` hung indefinitely, before using targets already on the command line. A typed `-i -` still wins.
+- **A failed SQLite export no longer destroys the previous one.** `VACUUM INTO` refuses to overwrite, so the destination was deleted first; the copy is now staged beside it and renamed into place.
+- **Scans clean up after themselves.** Every temporary store - dedup LevelDBs, `deparos` caches, ephemeral sitemaps, jstangle jobs, stateless SQLite, the spidering Chromium profile - lives under one per-process directory that teardown removes whole, and scratch abandoned by a killed run is collected on a later scan.
+- **The spidering browser stranded its Chromium profile on every launch**: `Browser.Close` never called go-rod's `launcher.Cleanup()`. One workstation held 3,384 profiles totalling 104 GB.
+- Reading a `.jsonl` artifact re-read all of `os.TempDir()` (55-170 ms on every `traffic` / `finding` / `export` and every `--glob-db` merge), and fastdialer's write-only dial history swept the whole temp directory at startup (~180 ms per invocation). Both are gone.
+- The config snapshot logged `scope_origin_mode: ""` for any run that took the default.
+
+### Changed
+
+- **The hardening advisories move to `deep`** (see the warning above). `express-session-audit` joins them; Info-tier fingerprints, endpoint/param observers, `surface-scoring` and `clickjacking-detect` are unaffected - their output feeds tech tags, scoring and active-module targeting. The scan banner reports how many were suppressed.
+- **Startup is about 20 ms faster** (`go-runewidth` v0.0.27 → v0.0.30, whose `init` no longer builds a 2.2 MB width table rune by rune).
+- **A single-phase stateless scan is several times faster** - `vigolium run probe -t <host> -S` goes from ~0.78s to ~0.12s. Dedup sets keep a bounded in-memory tier and allocate a LevelDB only past it, so a one-host probe opens none where it opened seventeen; the executor's post-EOF drain backs off instead of ticking; stderr-capture teardown waits for its reader rather than sleeping 50 ms.
+- **Phases that never contact the target no longer build infrastructure for traffic they will not send** - `vigolium run external-harvest --auth-file` used to authenticate against a host it was only going to query archives about.
+- `--scope-origin` help text states the default and what `balanced` admits, on `scan`, `run` and `ingest`; `-S/--stateless` is documented as the [isolation lever](/guides/stateless-scan), not just a CI one.
+
+<Note>
+  **Why the hygiene gate is an intensity tier rather than a severity filter.** The advisories are not wrong - a missing `Strict-Transport-Security` header really is missing. They are *uninformative per URL*: the answer is a property of the host, and repeating it once per crawled page is what pushed the real findings off the first page of a report. Gating them on `deep` keeps the whole family available for the compliance-shaped runs that want it, while `--module-tag hygiene` turns just this family back on without also raising every other module's aggressiveness tier.
+</Note>
+
+</Update>
+
+<Update label="v0.4.9" description="2026-09-20">
+
+A **source-map recovery and redirect-lineage** release: exposed `.map` files are parsed, secret-scanned and fed back into the scan, redirected records finally name the server the bytes came from, and every phase stops at a login/SSO wall. Registry moves to **208 active + 117 passive**.
+
+<Warning>
+  **Three changes alter what an existing scan reaches.**
+
+  1. **The default `--scope-origin` is now `balanced`, not `relaxed`.** `relaxed` matches the target's keyword against the *candidate's* registrable label, so a scan of `app.example.net` admitted `example.com`, `example.io` and anything else whose label contained "example" - in practice an organization's SSO/IdP and marketing estate, someone else's infrastructure, never the thing under test. `balanced` admits hosts sharing the target's eTLD+1. Pass `--scope-origin relaxed` for deliberate brand-wide recon.
+  2. **Redirects stop at a login/SSO wall under every `--redirect-mode`**, whatever the wall's host, and the 3xx is recorded instead of the page behind it. A walled scan used to spend its whole budget crawling - and credential-POSTing - a third-party identity provider.
+  3. **A redirected record now pairs the request with the response that actually answered it.** The original request used to be filed against the *final* response, so the destination's body, technology and findings landed under the target's own URL, and an out-of-scope destination was scanned under an in-scope name. Anything keyed on the old pairing sees different URLs.
+</Warning>
+
+### Added
+
+- **`sourcemap-ingest`** active module - fetches an exposed source map, secret-scans the recovered originals and ingests their routes back into the scan.
+- Shared `jstangle/sourcemap` package: one definition of a map reference, a sibling candidate and a parsed map.
+- Source-map detection now covers CSS, `eval` strings, `SourceMap` / `X-SourceMap` headers, and unreferenced `<bundle>.map` siblings that nothing links to.
+- **`http_records.target`, `root_uuid` and `chain_truncated`** - the submitted target, the chain root in O(1), and whether the chain stopped short. See the [records API](/api-references/http-records).
+- Each phase reports the auth walls it hit, with an example target.
+- A **schemeless probe target resolves its scheme by TCP connect** - plus a TLS handshake on a non-standard port - before the sweep requests it.
+- `vigolium kit js-beautify` gains `-o`, `--modules`, `--profile`, `--unpack-modules`, `--max-ast-nodes`, `--max-input-mb` and `--deadline`; `-j` adds `status`, `diagnostics` and per-endpoint provenance. See [kit](/others/kit#js-beautify).
+
+### Fixed
+
+- **The source-map pipeline was dead code.** The prefix breaker dropped referenced `.map` URLs and link extraction won the request cache, so the only parsing branch was always deduped away.
+- **Nothing called `discovery.SetLogger`**, so every discovery, jstangle, asset-graph and source-map log line went to a no-op logger.
+- A source map served as `application/octet-stream` - the static-host default for `.map` - failed the text-MIME test and was skipped by every secret-scan caller.
+- **A large bundle returned zero endpoints**: the AST node budget ended the run before `bundleModuleScan`, the stage written for exactly that case, could run.
+- The regex fallback replaced the whole engine result instead of merging into it, discarding a beautified document and artifacts that were real.
+- Recovered `.scss` / `.less` sources had no record to anchor to and were dropped; they now anchor to their origin's record.
+- The fallback extractor stamped `GET` on every unresolved request, making a guess indistinguishable from a resolved verb to the replay gate. An empty `method` now means unresolved.
+- `response_time_ms` reported `0` for rows that were never timed (redirect hops, records rebuilt from stored bytes) instead of omitting the field.
+- The probe summary's "attempted" count omitted targets the prefetch stage found closed on every port.
+- `make update-ui` deleted the report template before a build that could not produce it, and the workbench build's `rm -rf dist/__next.*` killed the home page's segment-cache prefetch (root `/__next._tree.txt` 404).
+
+### Changed
+
+- `pkg/spitolas/loginsig` moved to `pkg/authsig` - the transport, the runner phases and three modules now share the crawler's login signatures.
+- `IsRedirectStatus` has one definition in `pkg/httpmsg`; four packages carried four spellings of it.
+- **Recorded chains collapse canonical hops** - scheme upgrade, trailing slash, `www.`, default port - into their destination row, and cap at 4 rows with both ends kept.
+- `--record-redirect-chain` no longer gates the request/response re-pairing, only the hop rows. `vigolium run probe` defaults `--redirect-mode` to `same-apex`.
+- jstangle `maxBundleModules` default is 512 (was 64), modules are ordered by endpoint likelihood before the cap, and each sub-scan gets its own node budget. New `max_unpack_input_mb` (16 MiB) bounds the source-level unpack pass independently of the AST ceiling.
+- `nextjs_chunk_audit` fetches through the shared `modkit.FetchAssetBytes`, so the catch-all / echo-server guards live in one place.
+- npm publish verification polls every 30s: 30m for `version`, 10m for `dist-tag`. `make update-ui` runs `bun install` and refuses to replace `public/ui/` when the workbench build produced no `index.html`.
+- Workbench deps bumped (next 16.3.5, react 19.3, vitest 5, ag-grid 36.2); `jsdom` and `@vitest/ui` dropped.
+
+</Update>
+
 <Update label="v0.4.8" description="2026-09-18">
 
 A **target-and-banner correctness** release: schemeless targets reach every phase, the banner prints the budget the phase will actually use, and composed flags stop failing a run over nothing. No module changes - the registry stays at **207 active + 117 passive**.

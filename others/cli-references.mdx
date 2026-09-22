@@ -87,8 +87,15 @@ A failed command under `-j` writes a parseable object to stdout and exits non-ze
 | `body_unavailable` | `1` | *(same)* The record exists, but that side was never captured |
 | `body_decode_failed` | `1` | *(same)* The announced encoding could not be undone — try `--representation stored` |
 | `body_incomplete` | `1` | *(same)* Only a prefix is available — `--allow-incomplete` takes it anyway |
+| `export_failed` | `1` | The run finished but a requested artifact was not written. **Retry the export, not the scan** |
 | `gate_tripped` | `4` | A `--fail-on <severity>` gate matched. Output was written first |
 | `failed` | `1` | Everything else |
+
+<Warning>
+  **A requested artifact that was never written fails the run (v0.5.0).** An export failure — an unwritable `-o`, a query that failed mid-stream — used to exit `0`, report `scan.finished status=completed` and leave no file: three success signals at once. `scan`, `run`, `scan-url`, `scan-request` and an agentic `-S` run now exit `1` with `error.code: "export_failed"`.
+
+  **`export_failed` outranks `gate_tripped`.** The gate's whole premise is that the output was written before the code was chosen; when it wasn't, exit `4` would send a CI job to read a file that does not exist. Each `--format` is attempted independently, so with `--format jsonl,sqlite` one of them may well be on disk — the **Exports** summary on stderr lists the ones that landed. The findings reached the database either way.
+</Warning>
 
 <Warning>
   **A wrong `--db` path errors as of v0.4.7; it no longer reads as empty.** Opening a database used to create it, so a pure read against a typo'd or not-yet-scanned path returned `{"total":0,"items":[]}` with exit `0` — the same answer as a target nobody had scanned — and pointing `--db` at another tool's SQLite file wrote Vigolium's tables into it. Both now refuse, on `finding`, `traffic`, `traffic body`, `traffic headers`, `db list`, `db stats`, `db export`, `log`, `log ls` and `export`.
@@ -994,6 +1001,7 @@ cat bundle.js | vigolium kit secret-scan -
 # Unminify / unpack a JS bundle (file, URL, or stdin)
 vigolium kit js-beautify https://target.example/main.abc.js
 vigolium kit js-beautify -j --extract app.min.js
+vigolium kit js-beautify --modules ./out app.min.js   # one file per module
 
 # Mint OOB callback URLs, then drain their interactions later
 vigolium kit oast new -n 2 --session run.yaml
@@ -1011,9 +1019,13 @@ vigolium kit jwt-crack -w /path/rockyou.txt eyJhbGciOiJIUzI1NiJ9...
 vigolium kit wordlist                    # list them
 vigolium kit wordlist fuzz > fuzz.txt    # print one
 vigolium kit payload --class sqli,xss
+
+# Collect scratch left in the temp dir by interrupted runs (v0.5.0)
+vigolium kit tmp-clean                   # idle for 6h or more
+vigolium kit tmp-clean --max-age 0       # everything not currently held
 ```
 
-`secret-scan --fail-on-match` and `jwt-crack --fail-on-crack` exit `3` on a hit, for CI/agent gating.
+`secret-scan --fail-on-match` and `jwt-crack --fail-on-crack` exit `3` on a hit, for CI/agent gating. `js-beautify` never exits non-zero for a *degraded* analysis — read its `status` and `diagnostics` fields, not the exit code.
 
 ## Tool shims
 

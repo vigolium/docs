@@ -45,7 +45,7 @@ vigolium run probe -T hosts.txt -S --format sqlite -o sweep
 </Warning>
 
 <Note>
-  **Bare hostnames are fine.** A subdomain list with no schemes is normalized to `http://` per line before the sweep starts, so `hosts.txt` straight out of a recon tool needs no pre-processing. See [Schemeless targets](/others/cli-references#schemeless-targets).
+  **Bare hostnames are fine.** A subdomain list with no schemes is normalized per line before the sweep starts, so `hosts.txt` straight out of a recon tool needs no pre-processing. Since v0.4.9 a schemeless probe target **resolves its scheme by TCP connect** - plus a TLS handshake on a non-standard port - rather than defaulting to `http://` and recording a redirect to the real one. See [Schemeless targets](/others/cli-references#schemeless-targets).
 </Note>
 
 ## Output
@@ -106,11 +106,17 @@ Replaces the old `FollowRedirects` / `FollowHostRedirects` bool pair, which had 
 
 `same-apex` fails closed to exact-host equality when either side has no registrable domain.
 
+<Warning>
+  **Every mode also stops at a login/SSO wall (v0.4.9)**, whatever host the wall lives on, and records the 3xx instead of following it. A walled scan used to spend its entire budget crawling - and credential-POSTing - a third-party identity provider. Each phase reports the walls it hit, with an example target.
+</Warning>
+
 ### `--record-redirect-chain`
 
 Each followed hop becomes its own `http_records` row, chained through the existing `parent_uuid` column. `a.example` (301) -> `www.a.example` (302) -> the 200 that answered is three rows, not one.
 
 A 3xx also stores its `Location` header verbatim in `response_location`, so `traffic --tree` prints the destination (`↪ https://…`) off the row instead of hydrating response bytes.
+
+Since v0.4.9 the flag gates **only the hop rows**: the request/response re-pairing happens regardless, so a redirected record always names the server whose bytes it carries. Stored chains also **collapse canonical hops** - scheme upgrade, trailing slash, `www.`, default port - into their destination row and cap at **4 rows**, keeping both ends; `chain_truncated` on the record marks the ones that hit the cap, and `root_uuid` resolves the chain's first hop in O(1). See the [records API](/api-references/http-records#redirect-lineage-v049).
 
 ## Probe-only defaults
 

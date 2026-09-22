@@ -1229,6 +1229,42 @@ What you get under each `<base>-traffic/<host>/` and `<base>-findings/<host>/`:
 
 ---
 
+## 28. "Where did my missing-security-header findings go?"
+
+As of **v0.5.0** the 14 modules tagged `hygiene` do not run below `--intensity deep`. They report a *missing best-practice control* rather than an exploitable condition — absent security headers, weak TLS protocol and cipher policy, cookie and session-cookie attributes, the CSP / HSTS / SRI / Permissions-Policy / COOP audits — and they fire on nearly every response, so on a crawl of any size they contributed one near-identical Info/Low row per URL and buried the findings worth triaging.
+
+```bash
+# Turn them back on, three ways
+vigolium scan -t https://example.com --intensity deep          # per scan
+vigolium scan -t https://example.com --module-tag hygiene      # just this family
+vigolium config set dynamic-assessment.hygiene_modules true    # every scan
+
+# One of them, by name
+vigolium scan -t https://example.com --module-id security-headers-missing
+```
+
+<Callout icon="circle-info" color="#3B82F6" iconType="regular">
+  `--module-tag hygiene` is usually what you want for a compliance-shaped report: it turns this family back on **without** also raising every other module's aggressiveness tier the way `--intensity deep` does. `dynamic-assessment.hygiene_modules: false` suppresses them even at `deep`. The scan banner reports how many were suppressed, and the [full list](/native-scan/modules-reference#hardening-advisories-hygiene) is in the module reference. The Info-tier fingerprints, endpoint/param observers, `surface-scoring` and `clickjacking-detect` are **not** in this set and still run at every intensity.
+</Callout>
+
+---
+
+## 29. Reclaim disk from interrupted scans
+
+Every scan allocates its scratch under one root and removes the whole thing on exit, so a run that finishes — or is interrupted — cleans up after itself. `vigolium kit tmp-clean` (**v0.5.0**) collects what is *already* there: scratch from runs that were killed, and the loose per-store directories earlier versions wrote straight into the system temp directory.
+
+```bash
+vigolium kit tmp-clean                   # collect scratch idle for 6h or more
+vigolium kit tmp-clean --max-age 0       # collect everything not currently held
+vigolium kit tmp-clean -j                # the same, as JSON
+```
+
+<Callout icon="circle-info" color="#3B82F6" iconType="regular">
+  The backlog gets large: one workstation had 71,614 leftover dedup directories totalling 108 GB, plus 3,384 stranded Chromium profiles worth 104 GB from the spidering browser. It was also a **startup cost** — Vigolium's dependencies used to sweep the whole temp directory on every invocation, so the litter slowed down every command in proportion to how much of it there was. Only names Vigolium itself allocates are touched, and only entries untouched for `--max-age`, so a scan running right now never loses its scratch. See [the toolbox](/others/kit#tmp-clean).
+</Callout>
+
+---
+
 <Callout icon="key" color="#8B5CF6" iconType="regular">
   **Oh dear, you actually read to the end.** Here's the secret the config file
   kept nudging you toward: by default every Vigolium request announces itself

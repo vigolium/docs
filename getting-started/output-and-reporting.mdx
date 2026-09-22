@@ -193,6 +193,12 @@ vigolium export --format html,markdown,bundle -o gs://{project-uuid}/exports/sca
 
 If one format fails, the others are still written and the command exits non-zero naming the format that failed.
 
+<Warning>
+  **An artifact that was never written fails the run (v0.5.0).** An export failure on `scan`, `run`, `scan-url`, `scan-request` or an agentic `-S` run used to exit `0`, report `scan.finished status=completed` and leave no file — three success signals for a missing artifact. It now exits `1` with `error.code: "export_failed"`, and that **outranks the `--fail-on` gate**: a `4` whose artifact is missing would send a CI job to read a file that is not there. The findings still reached the database, so retry the export, not the scan. The **Exports** summary on stderr lists the formats that landed.
+
+  Relatedly, **a failed SQLite export no longer destroys the previous one.** `VACUUM INTO` refuses to overwrite, so the destination used to be deleted first and a failed copy took the prior artifact with it. The copy is now staged beside the destination and renamed into place.
+</Warning>
+
 <Note>
   `vigolium db export -f` remains single-valued. On the scan commands, `--format` selects live output writers (the formats above under [Output Formats](#output-formats)) rather than export renderers.
 </Note>

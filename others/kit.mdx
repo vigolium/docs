@@ -23,6 +23,7 @@ Added in **v0.4.1**. They exist because the useful parts of a scanner are often 
 | Recover a JWT's HMAC signing secret | `vigolium kit jwt-crack <token>` |
 | List / print the built-in wordlists | `vigolium kit wordlist [name]` |
 | Emit built-in payloads by class | `vigolium kit payload --class <c>` |
+| Collect scratch left behind in the temp dir | `vigolium kit tmp-clean` |
 
 Every command reads `-` (or no argument) as stdin and takes `-j/--json` for a single structured object on stdout. Human notes go to stderr, so a pipe stays clean.
 
@@ -59,9 +60,34 @@ vigolium kit js-beautify app.min.js                     # local file
 vigolium kit js-beautify https://target.example/main.abc.js
 cat bundle.js | vigolium kit js-beautify -              # stdin
 vigolium kit js-beautify -j --extract app.min.js        # + extracted endpoints
+vigolium kit js-beautify --modules ./out app.min.js     # one file per module
 ```
 
-By default it writes beautified source to stdout, emitting the input unchanged when it is neither minified nor bundled. `--extract` also runs endpoint extraction; under `-j` the result carries `{changed, format, module_count, content, endpoints?}`.
+By default it writes beautified source to stdout, emitting the input unchanged when it is neither minified nor bundled. `--extract` also runs endpoint extraction.
+
+| Flag | Effect |
+|------|--------|
+| `--extract` | Also run endpoint extraction (a full analysis pass); included in `-j` output |
+| `--modules <dir>` | Write each recovered module to its own file under `<dir>`, at its recovered path |
+| `-o, --output <file>` | Write the beautified source to a file instead of stdout (`-` means stdout) |
+| `--profile <p>` | `beautify` \| `endpoints` \| `discovery` \| `discovery-lite` \| `full` \| `inspect` \| `dom-security` \| `legacy`; default depends on `--extract` |
+| `--unpack-modules` | Unpack a bundle and re-scan each module for endpoints (implies `--extract`) |
+| `--max-ast-nodes` | AST node budget before the analysis degrades to a per-module scan (0 = engine default, 500k) |
+| `--max-input-mb` | **Lowers** the input ceiling only; it cannot raise it above the service limit |
+| `--deadline` | Analysis deadline (0 = engine default, 60s) |
+| `--timeout` | Fetch timeout for a URL argument (default 30s) |
+
+JSON shape: `{source, status, changed, format, module_count, module_paths?, bytes_in, bytes_out, content, endpoints?, diagnostics?, output_path?, modules_dir?, modules_written?}`. Endpoints carry `{url, method, params, body, headers, cookies, extractor, confidence, module_path?}`.
+
+<Warning>
+  **Read `status` before trusting `endpoints`.** `complete` is a clean AST pass. `partial` means some stages did not run, and the `diagnostics` codes say which. `failed` means the analysis produced nothing of its own. The exit code is **0** either way — a degraded analysis is never non-zero, so `status` and `diagnostics` are the only signal.
+</Warning>
+
+**A big bundle returns `partial`, and that is the good outcome.** A script dense enough to blow the AST budget cannot be parsed whole, so the engine unpacks it and analyzes each module separately (`ast_budget_recovered_by_module_scan`). Those endpoints carry `extractor: "bundle-module"` and a `module_path`, with real methods, headers and body templates. A `partial` from that path is far better data than a `complete` from a small file.
+
+**An empty `method` means unresolved, not `GET`.** The `large-input-string-fallback` extractor is a regex sweep over source no analyzer could parse; it recovers URLs only. Treat `confidence: "low"` plus an empty method as a lead to confirm, never as a request to replay.
+
+For a bundle of any size, prefer `--modules <dir>` over reading `content`: a 400-module document is one 5 MB blob, and a directory is greppable.
 
 ## `oast` (`new` / `poll`)
 
@@ -149,6 +175,30 @@ vigolium kit payload --class sqli,xss -j # two classes, as JSON
 
 Classes: `cmdi`, `crlf`, `lfi`, `open_redirect`, `path_traversal`, `sqli`, `ssrf`, `ssti`, `xss`, `xxe`, plus aliases (`sql` → `sqli`, `traversal` → `path_traversal`). JSON: `{classes, count, payloads}`.
 
+## `tmp-clean`
+
+Remove the temporary scratch Vigolium left in the system temp directory. Added in **v0.5.0**.
+
+```bash
+vigolium kit tmp-clean                   # collect scratch idle for 6h or more
+vigolium kit tmp-clean --max-age 0       # collect everything not currently held
+vigolium kit tmp-clean -j                # the same, as JSON
+```
+
+| Flag | Effect |
+|------|--------|
+| `--max-age <d>` | Only remove scratch untouched for at least this long (default `6h`; `0` removes everything not held by a running scan) |
+
+JSON shape: `{temp_dir, scratch_root, abandoned_removed, legacy_removed, total_removed, duration}`.
+
+As of v0.5.0 every scan allocates its scratch under one root and removes the whole thing on exit, so a run that finishes — or is interrupted — cleans up after itself. This command is for what is **already** there: scratch from runs that were killed, and the loose per-store directories that earlier versions allocated straight into the temp directory.
+
+<Note>
+  **That backlog gets large, and it is also a startup cost.** One workstation had accumulated 71,614 leftover dedup directories totalling 108 GB, and separately 3,384 stranded Chromium profiles worth 104 GB — the spidering browser never called go-rod's `launcher.Cleanup()`. Vigolium's own dependencies used to sweep the whole temp directory at startup, so the litter made every invocation slower in proportion to how much of it there was.
+
+  Only names Vigolium itself allocates are touched, and only entries untouched for `--max-age`, so scratch belonging to a scan running right now is never taken.
+</Note>
+
 ---
 
 ## Gotchas
@@ -157,4 +207,6 @@ Classes: `cmdi`, `crlf`, `lfi`, `open_redirect`, `path_traversal`, `sqli`, `ssrf
 - **`oast new` does not tear down the session.** Closing an interactsh client deregisters it server-side, so `new` mints, saves and exits *without* closing; the session stays alive for `poll`. Use `poll --deregister` to destroy it explicitly when you're done.
 - **`oast --interval` is auto-shrunk** below `--wait` (the poll ticker only fires after one full interval), so even a short `--wait` polls at least twice.
 - **`secret-scan` safelists placeholders.** `AKIA…EXAMPLE` and `123456`-sequence tokens are treated as benign.
+- **`js-beautify` never exits non-zero for a degraded analysis.** A bundle that only half-analyzed still exits `0`; `status` and `diagnostics` are the only signal.
+- **`js-beautify --max-input-mb` cannot raise the ceiling.** The service takes the lower of this and its own limit (10 MiB by default), so a larger value is silently ignored. Raise `jstangle.hard_input_mb` in config instead.
 - **Exit 3 is a gate, not an error.** `secret-scan --fail-on-match` and `jwt-crack --fail-on-crack` exit `3` on a hit; otherwise the usual `0` success / `1` error / `2` usage error applies. See the [exit-code table](/others/cli-references#exit-codes).

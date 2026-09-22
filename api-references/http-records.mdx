@@ -85,8 +85,11 @@ curl -s 'http://localhost:9002/api/http-records?domain=*.example.com' | jq .
       "risk_score": 0,
       "surface_score": 43,
       "technology": ["cloudflare", "nextjs"],
+      "target": "https://example.com",
       "response_location": "",
-      "parent_uuid": ""
+      "parent_uuid": "",
+      "root_uuid": "",
+      "chain_truncated": false
     }
   ],
   "total": 1234,
@@ -97,6 +100,25 @@ curl -s 'http://localhost:9002/api/http-records?domain=*.example.com' | jq .
 ```
 
 > **Note:** The fields `raw_request`, `raw_response`, `request_body`, `response_body`, `request_headers`, and `response_headers` are excluded from list responses for performance. Use `GET /api/http-records/:uuid` to access the full record including headers and bodies. Fields with empty values (e.g. `request_content_type`, `parameters`, `remarks`) are omitted from the JSON response.
+
+### Redirect lineage (v0.4.9)
+
+Four fields describe where a record sits in a followed redirect chain:
+
+| Field | Meaning |
+|---|---|
+| `target` | The target as **submitted** — the `-t` / `-T` entry the chain started from, before any normalization or hop |
+| `parent_uuid` | The hop immediately before this one |
+| `root_uuid` | The chain's first hop, resolvable in O(1) instead of by walking `parent_uuid` back |
+| `chain_truncated` | `true` when the chain stored fewer rows than it actually had |
+
+<Note>
+  **A redirected record now pairs the request with the response that answered it.** Before v0.4.9 the original request was filed against the *final* response, so the destination's body, technology and findings landed under the target's own URL — and an out-of-scope destination was scanned under an in-scope name.
+
+  Stored chains **collapse canonical hops** — scheme upgrade, trailing slash, `www.`, default port — into their destination row, and cap at **4 rows** with both ends kept; `chain_truncated` marks the ones that hit the cap. `response_time_ms` is now *omitted* rather than reported as `0` for rows that were never timed (redirect hops, records rebuilt from stored bytes).
+
+  Chains also **stop at a login/SSO wall** under every `--redirect-mode`, recording the 3xx rather than the wall behind it. See [Host scope](/native-scan/scan-scope#host-scope).
+</Note>
 
 ---
 

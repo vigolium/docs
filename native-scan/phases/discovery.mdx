@@ -81,12 +81,19 @@ Every newly discovered directory is probed with ALL observed values as high-prio
 
 ### 3. JavaScript Intelligence
 
-Two layers of JS analysis feed endpoints back into the discovery queue:
+Three layers of JS analysis feed endpoints back into the discovery queue:
 
 - **jstangle** (embedded binary): Deobfuscates bundled JS, resolves string concatenation, traces variable assignments, and extracts `fetch()` / `XMLHttpRequest` / `$.ajax` call sites into full HTTP request specs.
 - **Spider extractors**: Parse inline `<script>` tags and JS string literals for URL patterns.
+- **Source maps** (v0.4.9): An exposed `.map` is fetched and parsed, its original pre-build sources are secret-scanned, and the routes they reveal are ingested. Minification obscures identifier names, unreferenced admin routes and hardcoded credentials; the map gives them all back.
 
 Extracted endpoints become priority-0 tasks - tested before any wordlist fuzzing.
+
+<Note>
+  **Source-map detection covers more than the `sourceMappingURL` comment.** CSS files, `eval` strings, `SourceMap` / `X-SourceMap` response headers, and the conventional `<bundle>.map` sibling that nothing links to are all checked - stripping the comment leaves the map served. A map returned as `application/octet-stream`, the static-host default for `.map`, is handled too.
+
+  `sourcemap-detect` (passive) finds the reference; [`sourcemap-ingest`](/native-scan/modules-reference) (active) fetches, parses and feeds it back. Before v0.4.9 this chain existed but was dead code: the prefix breaker dropped referenced `.map` URLs and link extraction won the request cache, so the only parsing branch was always deduped away.
+</Note>
 
 ### 4. Dynamic Wordlist Growth
 

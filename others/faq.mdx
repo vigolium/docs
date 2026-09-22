@@ -10,7 +10,7 @@ Answers to the questions that come up most often. For a system-level picture, st
 
 <AccordionGroup>
   <Accordion title="What is Vigolium?">
-    Vigolium is a high-fidelity web vulnerability scanner written in Go. It combines deterministic, module-based scanning with AI-driven agentic analysis to provide broad and deep coverage of web application security issues. It ships 324 modules (207 active, 117 passive) covering injection flaws, misconfigurations, information disclosure, authentication issues, and more.
+    Vigolium is a high-fidelity web vulnerability scanner written in Go. It combines deterministic, module-based scanning with AI-driven agentic analysis to provide broad and deep coverage of web application security issues. It ships 325 modules (208 active, 117 passive) covering injection flaws, misconfigurations, information disclosure, authentication issues, and more.
   </Accordion>
   <Accordion title="What are the ways to run Vigolium?">
     Three operating modes:
@@ -52,6 +52,16 @@ Answers to the questions that come up most often. For a system-level picture, st
   </Accordion>
   <Accordion title="What input formats can I feed a scan?">
     URLs, OpenAPI/Swagger, WSDL/SOAP service descriptions (`wsdl`, incl. live `.svc`/`.asmx` endpoints), Postman collections, cURL commands, Burp raw requests, Burp XML exports, Burp project-config scope exports (`burpscope`), HAR captures, Nuclei JSONL output, and Deparos discovery output. Run `vigolium --list-input-mode` for every supported format with examples.
+  </Accordion>
+  <Accordion title="Where did my missing-security-header findings go?">
+    As of **v0.5.0**, the 14 modules tagged `hygiene` do not run below `--intensity deep`. They report a *missing best-practice control* rather than an exploitable condition — absent security headers, weak TLS protocol and cipher policy, cookie and session-cookie attributes, the CSP / HSTS / SRI / Permissions-Policy / COOP audits — and they fire on nearly every response, so a crawl of any size produced one near-identical Info/Low row per URL and buried the findings worth triaging.
+
+    Turn them back on with `--intensity deep`, `--module-tag hygiene` (just this family, without raising every other module's aggressiveness tier), or `vigolium config set dynamic-assessment.hygiene_modules true`. The scan banner reports how many were suppressed. See the [full list](/native-scan/modules-reference#hardening-advisories-hygiene).
+  </Accordion>
+  <Accordion title="Why is my scan touching hosts I never named?">
+    `--scope-origin` is not only a filter on new traffic — it decides which **stored** records a scan picks up. Every assessment phase resolves its work set from the database (distinct origins in the project that pass the scope matcher), and `http_records` carries no scan id, so there is no "this scan only" filter. At the default `balanced` mode, a project database holding earlier scans means every sibling host sharing the target's eTLD+1 gets re-scanned — and sorted *ahead* of the host you just named, because the work set is ordered `risk_score DESC, created_at ASC`.
+
+    Use `--scope-origin strict` for exactly the host named, or `-S/--stateless` for a throwaway database with nothing pre-existing in it. See [Host scope](/native-scan/scan-scope#host-scope).
   </Accordion>
   <Accordion title="Why am I seeing duplicate-looking findings collapsed together?">
     By design. Vigolium has three levels of deduplication: request-level (the `DedupManager`), inline finding-level (the `finding_hash` unique constraint with `INSERT ON CONFLICT DO NOTHING`), and post-phase grouping (`DeduplicateFindings()` merges findings sharing the same module/severity/URL, folding extra request/response pairs into the survivor's `AdditionalEvidence`, capped at 10). See [Native Scan → Deduplication](/architecture/native-scan).

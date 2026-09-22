@@ -218,12 +218,16 @@ Scope filtering applies across all phases. Use `--scope-origin` to control host 
 # Strict: exact host match only
 vigolium run discovery -t https://api.example.com --scope-origin strict
 
-# Balanced: same eTLD+1 (*.example.com)
+# Balanced (default): same eTLD+1 (*.example.com)
 vigolium run discovery -t https://api.example.com --scope-origin balanced
 
-# Relaxed (default): host contains target keyword
+# Relaxed: candidate's registrable label contains the target's - brand-wide recon
 vigolium run discovery -t https://api.example.com --scope-origin relaxed
 ```
+
+<Warning>
+  **The default is `balanced` as of v0.4.9** (it was `relaxed`), and `--scope-origin` also decides which **stored** records a phase picks up, not just which new traffic is allowed. On a project database that already holds earlier scans, `balanced` re-scans every sibling host sharing the target's eTLD+1 - and sorts them *ahead* of the target you just named. See [Host scope](/native-scan/scan-scope#host-scope) for the full table and the isolation options.
+</Warning>
 
 ## Adding Authentication
 

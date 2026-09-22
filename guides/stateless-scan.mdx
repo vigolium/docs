@@ -10,11 +10,15 @@ Vigolium offers several ways to scan a target and get results in a single comman
 
 ## Quick Scan with `scan-url`
 
-The fastest way to scan a single URL. No database, no phases -- just direct module execution:
+The fastest way to scan a single URL: no phases, just direct module execution.
 
 ```bash
 vigolium scan-url https://example.com/api/users?id=1
 ```
+
+<Note>
+  **"Stateless" is a statement about the database's lifetime, not about its absence.** Every result Vigolium produces is written through a database. Without `-S` the run persists into the project database like any other; with `-S` it runs into a throwaway file that is exported and then deleted. Dropping `-S` is therefore not a way to make a run cheaper - and under `-S` a failed export is a failed run (exit `1`, `error.code: export_failed`), because the artifact is the only copy that survives.
+</Note>
 
 JSON output for scripting:
 
@@ -109,6 +113,18 @@ vigolium scan --stateless \
 ```
 
 This produces both `results.jsonl` and `results.html`.
+
+### Reach for `-S` for isolation, not just for CI
+
+The other half of what `-S` buys you is an **empty database**. A scan against the persisted database resolves its work set from every origin already in the project that passes the scope matcher (see [Host scope](/native-scan/scan-scope#host-scope)), so repeated scans into the default store silently grow what each run touches - and records from earlier scans sort *ahead* of the target you just named.
+
+`-S` removes that variable entirely, which makes it the right default for a measurement run, a coverage comparison, or any scan whose result set you intend to read as "what this target looks like".
+
+`-o` is **optional, not required**: without it the run warns that results will be discarded with the temp database and continues. The warning is suppressed under `--silent`, `--split-by-host`, `-j` and `--ci-output` - the last two stream every record to stdout as it is written, so nothing is actually lost.
+
+<Warning>
+  **A requested artifact that was never written fails the run (v0.5.0).** An export failure used to exit `0`, report `scan.finished status=completed` and leave no file. It now exits `1` with `error.code: "export_failed"`, which outranks the `--fail-on` gate - a `4` whose artifact is missing would send a CI job to read a file that is not there. Each `--format` is attempted independently, so with `--format jsonl,sqlite` one of them may still be on disk; the **Exports** summary on stderr lists what landed.
+</Warning>
 
 ## Output Formats
 

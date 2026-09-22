@@ -18,6 +18,10 @@ const (
 
 Scopes are a bitmask. A module can declare multiple scopes (e.g., `ScanScopeRequest | ScanScopeInsertionPoint`).
 
+<Note>
+  This is **module dispatch** scope, not host scope. For which *hosts* a scan is allowed to touch - the `--scope-origin` flag - jump to [Host scope](#host-scope) at the bottom of this page.
+</Note>
+
 ---
 
 ## Overview Diagram
@@ -583,3 +587,51 @@ func New() *Module {
     }
 }
 ```
+
+---
+
+## Host scope
+
+A separate question from module dispatch: **which hosts is this scan allowed to touch at all?**
+
+| Mode | A host is in scope when… | `-t https://app.example.com` also admits |
+|------|--------------------------|------------------------------------------|
+| `strict` | the hostname matches the target exactly | nothing else |
+| `balanced` **(default)** | the hostname shares the target's eTLD+1 | `sub.example.com`, `www.example.com`, … |
+| `relaxed` | the candidate's registrable *label* contains the target's | `example.io`, `examplegroup.com`, … |
+| `all` | always | every host in the project |
+
+Resolution is `--scope-origin` → `scope.cli_origin_mode` in config → `balanced`. IP targets always match exactly, whatever the mode.
+
+<Warning>
+  **The default changed from `relaxed` to `balanced` in v0.4.9.** `relaxed` matches the target's keyword against the *candidate's* registrable label, which admits every brand domain on every TLD - a scan of `app.example.net` pulled in `example.com`, `example.io` and anything else whose label contained "example". In practice those hosts are an organization's SSO/IdP and marketing estate: someone else's infrastructure, never the thing under test. `relaxed` stays available for deliberate brand-wide recon.
+</Warning>
+
+### It also decides which *stored* records a scan picks up
+
+This is not only a filter on new traffic. Every assessment phase resolves its work set from the database: distinct origins in the project, minus those the scope matcher rejects, minus those whose `(scheme, port)` does not match a target's. There is no "this scan only" filter, because `http_records` carries no scan id.
+
+So on a database that already holds traffic from earlier scans:
+
+```bash
+# Target is ONE host, but at the default balanced mode this also (re)scans every
+# https:443 *.example.com host already in the project - live requests, not replay.
+vigolium scan -t https://app.example.com --only dynamic-assessment
+```
+
+Worse, it scans them **first**: the work set is ordered `risk_score DESC, created_at ASC`, so older records outrank the one the seed phase just wrote for your actual target. Under a tight `--scanning-max-duration` the host you named can go untouched.
+
+### Pick deliberately
+
+| Want | Use |
+|------|-----|
+| Exactly the host named, but keep its stored history | `--scope-origin strict` |
+| Nothing pre-existing at all | [`-S` / `--stateless`](/guides/stateless-scan) (throwaway database) |
+| Keep state, but separate from other work | `--db <file>` or a distinct `--project` |
+| Deliberate brand-wide recon | `--scope-origin relaxed` |
+
+The resolved mode is echoed in the `Scope:` line of the scan banner on stderr and recorded as `scope_origin_mode` on the `scan` object, so it is visible in `--format jsonl`, `vigolium export` and the [REST scan endpoints](/api-references/scan). Before v0.5.0 a run that took the default recorded `""` there.
+
+<Note>
+  **Auth walls subtract from scope (v0.4.9).** When a redirect lands on a login or SSO wall, the scan stops at the 3xx and records it, whatever `--redirect-mode` says and whatever host the wall lives on. Before this, a walled scan could spend its entire budget crawling - and credential-POSTing - a third-party identity provider. Each phase reports the walls it hit, with an example target.
+</Note>

@@ -327,6 +327,8 @@ dynamic-assessment:
     active_modules: ["all"]         # ["all"] or list of module IDs
     passive_modules: ["all"]
 
+  # hygiene_modules: true           # unset = follow intensity (see below)
+
   extensions:
     enabled: false
     extension_dir: ~/.vigolium/extensions/
@@ -337,6 +339,23 @@ dynamic-assessment:
       max_memory_mb: 128
 ```
 
+#### Hardening advisories (`hygiene_modules`)
+
+Fourteen modules report a *missing best-practice control* rather than an exploitable condition - absent security headers, weak TLS protocol and cipher policy, cookie and session-cookie attributes, and the CSP / HSTS / SRI / Permissions-Policy / COOP audits. They are cheap to run and fire on nearly every response, so on a crawl of any size they contribute one near-identical Info/Low row per URL and bury the findings worth triaging.
+
+**Below `--intensity deep` they do not run** (v0.5.0). The gated set is every module tagged `hygiene`; see the [full list](/native-scan/modules-reference#hardening-advisories-hygiene).
+
+```bash
+vigolium scan -t https://example.com --intensity deep          # per scan
+vigolium scan -t https://example.com --module-tag hygiene      # just this family
+vigolium scan -t https://example.com --module-id security-headers-missing
+vigolium config set dynamic-assessment.hygiene_modules true    # every scan
+```
+
+`hygiene_modules` sets the default for a broad (`["all"]`) selection: `true` runs them at every intensity, `false` suppresses them even at `deep`. Naming them explicitly with `--module-tag` or `--module-id` always wins, the same way an explicit selection already bypasses the intensity tier ceiling.
+
+The Info-tier fingerprints, the endpoint/param observers and `surface-scoring` are *not* in this set - their output feeds tech tags, scoring and active-module targeting, so they run at every intensity. Neither is `clickjacking-detect`, which stays on at Medium.
+
 ### `scope`
 
 Defines what is in scope for scanning. Exclude rules take priority over include rules.
@@ -344,7 +363,7 @@ Defines what is in scope for scanning. Exclude rules take priority over include 
 ```yaml
 scope:
   applied_on_ingest: false       # enforce scope during ingestion (not just scanning)
-  cli_origin_mode: relaxed       # relaxed | all | balanced | strict
+  cli_origin_mode: balanced      # balanced (default) | all | relaxed | strict
   ignore_static_file: true       # skip images, fonts, video, audio, etc.
   max_request_body_size: 1048576     # 1 MB
   max_response_body_size: 524288000  # 500 MB
@@ -372,6 +391,10 @@ scope:
     include: []
     exclude: []
 ```
+
+<Warning>
+  **`cli_origin_mode` defaulted to `relaxed` before v0.4.9.** `relaxed` matches the target's keyword against the *candidate's* registrable label, so a scan of `app.example.net` admitted `example.com`, `example.io` and anything else whose label contained "example" - in practice an organization's SSO/IdP and marketing estate. The default is now `balanced` (hosts sharing the target's eTLD+1). This setting also decides which **stored** records a scan picks up, not just which new traffic is allowed; see [Host scope](/native-scan/scan-scope#host-scope).
+</Warning>
 
 ### `server`
 

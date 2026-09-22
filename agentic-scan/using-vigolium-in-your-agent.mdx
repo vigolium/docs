@@ -87,6 +87,8 @@ Gate on the contract once at startup with `vigolium version --json`, which repor
 
 `0` success · `1` error · `2` usage error · `3` `fuzz --fail-on-match` · `4` `--fail-on` gate tripped.
 
+`3` and `4` are *completed results*, not failures: the output was written before the code was chosen. When it was **not** written, the run is `1` with `error.code: "export_failed"`, and that outranks the gate.
+
 **`3` and `4` are completed results, not failures.** The output was written before the code was chosen. `--soft-fail` forces the process status to `0` for all of them while leaving the output intact — under `--json` the error object still reports the code that *would* have been used, plus `"soft_fail": true`. See the [full table](/others/cli-references#exit-codes).
 
 ### One document per invocation
@@ -97,7 +99,13 @@ Under `--json` you get **exactly one document**, whatever happens:
 - A command that already wrote its result does not get an error object appended to it — the exit code carries the outcome.
 - Nothing else is ever written to stdout. Banners, prompts, progress, and warnings all go to stderr.
 
-Error codes worth branching on: `usage_error`, `source_missing`, `source_unreadable`, `source_incompatible` (a valid SQLite file that is **not** a Vigolium store — you are pointed at the wrong file), `gate_tripped`, `failed`. `traffic body` and `traffic headers` add four of their own: `record_not_found`, `body_unavailable`, `body_decode_failed`, `body_incomplete`.
+Error codes worth branching on: `usage_error`, `source_missing`, `source_unreadable`, `source_incompatible` (a valid SQLite file that is **not** a Vigolium store — you are pointed at the wrong file), `export_failed` (the run finished but a requested artifact was not written — retry the export, not the scan), `gate_tripped`, `failed`. `traffic body` and `traffic headers` add four of their own: `record_not_found`, `body_unavailable`, `body_decode_failed`, `body_incomplete`.
+
+<Warning>
+  **A requested artifact that was not written is exit `1`, code `export_failed` (v0.5.0)** — even when the scan itself ran clean, and even when it would otherwise have tripped the `--fail-on` gate. The gate's whole premise is that the output was written before the code was chosen; when it wasn't, exit `4` would send you to read a file that does not exist.
+
+  Retry the export, not the scan: the findings reached the database, they just did not reach your `-o`. Formats are attempted independently, so with `--format jsonl,sqlite` one of them may well be on disk — the **Exports** summary on stderr lists what actually landed. Before v0.5.0 this state was exit `0` with `scan.finished status=completed` and no file.
+</Warning>
 
 <Warning>
   **A wrong `--db` path errors as of v0.4.7 — it no longer reads as empty.** A pure read (`traffic`, `finding`, `db ls`, `db stats`, `db export`, `export`, `log`, `traffic body/headers`) against an explicitly pinned `--db` or `$VIGOLIUM_DB_PATH` that is not there now fails `source_missing` (exit `1`) and **creates nothing**; another tool's SQLite file fails `source_incompatible` (exit `1`) **without Vigolium's tables being written into it**. Before v0.4.7 both returned `{"total":0,"items":[]}` with exit `0`, so "the path is wrong" and "nothing was captured here" were the same answer — and the wrong one looked like a finished task.
