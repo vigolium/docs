@@ -72,11 +72,19 @@ curl -s -X POST http://localhost:9002/api/scan-url \
 }
 ```
 
+<Warning>
+  **A target the scope refuses is `422`, not an accepted scan (v0.5.3).** `POST /api/scan-url` and `/api/scan-request` run the same scope-admission check the CLI does, before anything is sent, and answer `422` with `details: "no_targets_in_scope"` rather than returning a `202` for a scan that would do nothing. The response names the rule that refused it.
+
+  **REST scans resolve their options the same way `vigolium scan` does** as of v0.5.3 — the two used to drift, so a profile or intensity that worked on the CLI could behave differently over the API.
+</Warning>
+
 ---
 
 ### POST /api/scan-request, Scan a Raw HTTP Request
 
 Starts an asynchronous scan from a base64-encoded raw HTTP request. Equivalent to the CLI `scan-request` command. Returns `202 Accepted` immediately with a scan ID.
+
+Since v0.5.3 it **settles a schemeless request like the CLI does**: when the raw request gives no hint of `http` vs `https`, the scheme is probed rather than guessed.
 
 **Request body:**
 
@@ -260,7 +268,7 @@ When a scan starts (via API or CLI), the runner logs a configuration summary to 
   ℹ Phases: ✓ ExternalHarvest (24m0s, x0.2) | ✓ Spidering (18m0s, x0.2) | ✓ Discovery
             ✓ KnownIssueScan (6h0m0s, x3.0) | ✓ Dynamic-Assessment (2h0m0s, x1.0)
   ℹ Speed: concurrency=25 | rate-limit=100 | max-per-host=30
-  ℹ Modules: 208 active, 117 passive
+  ℹ Modules: 215 active, 119 passive
 ```
 
 **Error responses:**
@@ -386,6 +394,36 @@ curl -s http://localhost:9002/api/scans/scan-abc123 \
 | 400  | Missing UUID         |
 | 404  | Scan not found       |
 | 503  | Database unavailable |
+
+#### Scan completeness
+
+Added in v0.5.2. `status` says whether the scan **process** reached its end. `completeness` says whether the run actually **covered the input it was given**. They are independent, and both are needed: a scan can reach its end having scanned half its records.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `completeness` | string | `complete`, `partial`, or **absent** — absent means *unknown*, which is what a row written by an older binary honestly is. **Never read an absent value as `complete`.** |
+| `stop_reason` | string | The single most useful explanation for a partial run: `scan_budget`, `request_budget`, `cancelled`, `abandoned`, `no_targets_in_scope`, or the first reason the first incomplete phase recorded. Absent on a complete run |
+| `phase_outcomes` | array | One object per phase that ran, plus one per planned phase that was never launched |
+
+Each phase outcome carries:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `phase` | string | Canonical phase id, the same vocabulary `--only` / `--skip` use |
+| `state` | string | `completed`, `partial`, `failed`, or `skipped` |
+| `reasons` | array | Why coverage was lost. Sorted and deduplicated |
+| `limits` | array | Configured bounds that were reached. A limit is **designed behaviour** and never downgrades a phase — a per-target time box firing is the scan working as asked |
+| `errors` | int | How many failures the phase reported |
+| `message` | string | The first error's text, truncated to 512 bytes |
+| `unprocessed` | int | Work items a worker dequeued and deliberately did not acknowledge, so a later run re-serves them |
+| `duration_ms` | int | Wall-clock time in the phase |
+| `persistence` | object | What became of the phase's writes: `accepted`, `committed`, `failed`, `unknown` (still in flight at the close deadline), `timed_out` |
+
+The same fields ride `--format jsonl` and the scan document `vigolium scan -j` prints, so one reading of "did this run cover the target" works across the CLI and the API.
+
+<Note>
+  **`reasons` and `limits` are different claims.** A `limit` is a bound you configured being honoured; a `reason` is coverage you asked for and did not get. Alerting on `limits` will page you for scans that worked exactly as specified.
+</Note>
 
 ---
 
@@ -566,7 +604,7 @@ curl -s 'http://localhost:9002/api/scans/scan-abc123/logs?level=info&phase=disco
       "level": "info",
       "phase": "config",
       "message": "scan configuration snapshot",
-      "metadata": "{\"project_uuid\":\"my-project-uuid\",\"targets\":[\"https://example.com\"],\"strategy\":\"balanced\",\"concurrency\":25,\"rate_limit\":100,\"max_per_host\":30,\"active_modules\":208,\"passive_modules\":117,\"spidering_enabled\":true,\"discovery_enabled\":true,\"known_issue_scan_enabled\":false}",
+      "metadata": "{\"project_uuid\":\"my-project-uuid\",\"targets\":[\"https://example.com\"],\"strategy\":\"balanced\",\"concurrency\":25,\"rate_limit\":100,\"max_per_host\":30,\"active_modules\":213,\"passive_modules\":118,\"spidering_enabled\":true,\"discovery_enabled\":true,\"known_issue_scan_enabled\":false}",
       "created_at": "2026-02-16T15:00:00Z"
     },
     {
@@ -631,7 +669,7 @@ curl -s 'http://localhost:9002/api/scans/scan-abc123/logs?level=info&phase=disco
       "level": "info",
       "phase": "audit",
       "message": "phase started",
-      "metadata": "{\"active_modules\":208,\"passive_modules\":117}",
+      "metadata": "{\"active_modules\":213,\"passive_modules\":118}",
       "created_at": "2026-02-16T15:03:01Z"
     },
     {
@@ -725,7 +763,7 @@ curl -s 'http://localhost:9002/api/scans/scan-abc123/logs?level=info&phase=disco
       "level": "info",
       "phase": "config",
       "message": "scan configuration snapshot",
-      "metadata": "{\"project_uuid\":\"my-project-uuid\",\"targets\":[\"https://example.com\"],\"strategy\":\"balanced\",\"scanning_profile\":\"\",\"concurrency\":25,\"rate_limit\":100,\"max_per_host\":30,\"heuristics_check\":\"basic\",\"scope_origin_mode\":\"balanced\",\"active_modules\":208,\"passive_modules\":117,\"spidering_enabled\":true,\"discovery_enabled\":true,\"known_issue_scan_enabled\":false,\"external_harvest\":false,\"skip_dynamic\":false}",
+      "metadata": "{\"project_uuid\":\"my-project-uuid\",\"targets\":[\"https://example.com\"],\"strategy\":\"balanced\",\"scanning_profile\":\"\",\"concurrency\":25,\"rate_limit\":100,\"max_per_host\":30,\"heuristics_check\":\"basic\",\"scope_origin_mode\":\"balanced\",\"active_modules\":213,\"passive_modules\":118,\"spidering_enabled\":true,\"discovery_enabled\":true,\"known_issue_scan_enabled\":false,\"external_harvest\":false,\"skip_dynamic\":false}",
       "created_at": "2026-02-16T15:00:00Z"
     }
   ],

@@ -46,6 +46,17 @@ vigolium run probe -T hosts.txt --json --no-response --tls-probe
 
 The aliases `probing`, `httpx`, `alive`, and `sweep` all work. A probe-only run flips its own defaults - redirect hops recorded, `--redirect-mode same-apex`, proactive WAF pacing off - see [Probe](/native-scan/phases/probe) for the full flag surface and the `surface_score` model.
 
+### Fingerprint
+
+Added in v0.5.5. Where probe asks *which* hosts are alive, fingerprint asks what one origin **is** — base page, favicon, well-known and API-definition paths, GraphQL introspection, CORS preflight, `OPTIONS`, Host-header variants, and a three-random-path not-found baseline — and stores the answer per `host:port`.
+
+```bash
+vigolium run fingerprint -T hosts.txt --fingerprint-depth light
+vigolium fingerprint https://app.example -j        # the same phase, as its own command (--depth)
+```
+
+Reads only (GET, OPTIONS, one GraphQL introspection POST), no redirects followed. Read the stored facts back with `vigolium hosts`; see [Host facts](/others/cli-references#host-facts-fingerprint-hosts-dns). Aliases: `fp`, `tech`, `recon`.
+
 ### Discovery
 
 Discovers new endpoints through wordlist-based fuzzing and content probing:
@@ -164,6 +175,7 @@ Every phase accepts shorthand aliases - the gerund, the internal engine name, an
 |-----------------|---------|
 | `ingestion` | `ingest`, `ingesting` |
 | `probe` | `probing`, `httpx`, `alive`, `sweep` |
+| `fingerprint` | `fp`, `tech`, `recon` |
 | `discovery` | `discover`, `discovering`, `deparos` |
 | `external-harvest` | `harvest`, `harvesting`, `external-harvester` |
 | `spidering` | `spider`, `spitolas`, `crawl`, `crawling`, `crawler` |

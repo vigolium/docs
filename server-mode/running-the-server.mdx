@@ -15,9 +15,9 @@ Vigolium can run as a persistent REST API server, accepting traffic ingestion, s
 export VIGOLIUM_API_KEY=my-secret-key
 vigolium server
 
-# Custom host and port
+# Expose it beyond loopback (deliberately)
 export VIGOLIUM_API_KEY=my-secret-key
-vigolium server --host 127.0.0.1 --service-port 9002
+vigolium server --host 0.0.0.0 --service-port 9002
 
 # With an upstream proxy for outgoing scanner traffic
 export VIGOLIUM_API_KEY=my-secret-key
@@ -36,7 +36,15 @@ vigolium server --scan-on-receive --passive-only
 vigolium server --burp-bridge-url http://127.0.0.1:9009
 ```
 
-The server listens on `0.0.0.0:9002` by default.
+The server listens on `127.0.0.1:9002` by default.
+
+<Warning>
+  **The default bind changed in v0.5.3: `0.0.0.0` → `127.0.0.1`.** A server started with no `--host` is now reachable only from the machine it runs on. Pass `--host 0.0.0.0`, or set `$VIGOLIUM_SERVER_HOST`, to expose it on purpose.
+
+  A deployment that relied on the old default — a container whose port was published, a VM reached over a VPN — will look like the server never started. It did; it is just not listening where you are looking.
+</Warning>
+
+**The scan-on-receive spill queue** lives at `~/.vigolium/server-queue/` and **resumes on restart**, so work queued while the server was down is not lost. `--discard-queued` drops what a previous run left behind; tasks older than 24 h are always dropped. The server also prunes stale `status.json` files at start, the same pass `vigolium log ls --reap` runs.
 
 ## Narrowing the Exposed Surface
 

@@ -873,19 +873,30 @@ type RecordWriter struct {
 `HostRateLimiter` provides per-host concurrency control:
 
 - **32 fixed shards** with inline FNV-1a hashing for shard selection.
-- Each host gets a **buffered channel semaphore** (capacity = `MaxPerHost`, CLI default 30).
+- Each host gets a **buffered channel semaphore** (capacity = `MaxPerHost`, CLI default 40).
 - `Acquire(ctx, host)` blocks until a slot is free; `Release(host)` frees a slot.
 - Background eviction goroutine removes idle entries (default: 30s idle, checked every 10s).
 - Per-shard capacity cap with oldest-entry eviction when exceeded.
 
+### The Egress Gate
+
+Since v0.5.3 **one egress gate paces every request a scan sends**, rather than each phase holding its own limiter. The practical consequence: **retries and redirects take their own tokens**, so a configured rate limit is now the rate that actually reaches the target, not the rate of first attempts — a scan with `--retries 2` against a flaky host used to send up to three times the rate you asked for.
+
+The gate also carries a **priority lane**, which is what lets an in-scan re-login run immediately instead of queueing behind the scan's own traffic.
+
+`--max-requests` / `--max-requests-per-host` are enforced here, which is why the cap is exact for gated traffic, held to within 500 ms for the browser crawl, and does not count nuclei — the external binary sends outside the gate. `scan.started` records which enforcement applied as `request_cap_enforcement`.
+
 ### Host Error Circuit Breaker, `pkg/core/hosterrors/`
 
-`hosterrors.Cache` tracks consecutive errors per host:
+Since v0.5.3 this is a **recovering circuit breaker keyed on `host:port`**, not a one-way quarantine keyed on hostname:
 
 - `MarkFailed()` increments the error counter (with regex-based error matching).
-- `Check()` returns true when the counter reaches `MaxHostError` (default 30).
-- `MarkSuccess()` resets the counter (but not if already at threshold).
+- `Check()` returns true when the counter reaches `MaxHostError` (default 30), opening the breaker for that `host:port`.
+- A host that starts answering again **closes the breaker and resumes receiving traffic** — the old behaviour quarantined a host for the rest of the scan, so a brief outage cost you every later phase against it.
 - The executor's `feedItems()` pre-checks this to skip items for quarantined hosts.
+- State transitions are visible on the event stream as `host.dead`, `host.quarantined` and `host.recovered`.
+
+Keying on `host:port` rather than hostname matters when a target serves `:443` healthily and `:8443` not at all; the old key took both down together.
 
 ### JS Extension Hooks, `pkg/jsext/hooks.go`
 

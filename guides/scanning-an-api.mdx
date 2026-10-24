@@ -66,9 +66,15 @@ Export your Postman collection as JSON (v2.1 format) and pass it directly:
 
 ```bash
 vigolium scan --input collection.json -I postman -t https://api.example.com
+
+# Supply collection variables directly
+vigolium scan -i collection.json -I postman -t https://api.example.com \
+  --spec-var apiVersion=v2 --spec-var region=eu
 ```
 
 Environment variables in the collection are resolved where possible. For variables that reference a specific environment, set the target flag to the correct base URL.
+
+Since v0.5.3, Postman collections take **`-t` as the base URL** and accept `--spec-var <name>=<value>` (repeatable) for collection variables the export did not resolve. Passing `-I postman` explicitly also **disables content detection**, so a collection that happens to look like another format is read as the one you named.
 
 ## From curl Commands
 

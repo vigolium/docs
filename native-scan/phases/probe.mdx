@@ -21,6 +21,7 @@ vigolium run probe -T hosts.txt -c 20
 | You want | Reach for |
 |----------|-----------|
 | "Which of these 4,000 hosts are alive, and what do they run?" | `run probe` |
+| "What *is* this origin — stack, favicon hash, well-known paths, not-found baseline?" | [`vigolium fingerprint`](/others/cli-references#host-facts-fingerprint-hosts-dns) |
 | "What endpoints exist under this one host?" | [`run discovery`](/native-scan/phases/discovery) |
 | "Crawl this app the way a browser would" | [`run spidering`](/native-scan/phases/spidering) |
 | "Actually test this target for vulnerabilities" | `vigolium scan` |
@@ -91,6 +92,10 @@ Reports the negotiated TLS version and cipher plus the leaf certificate - subjec
 
 <Note>
   **Validation is deliberately off.** An expired or self-signed certificate *is* the result you came for, so the handshake records it instead of refusing it.
+</Note>
+
+<Note>
+  **The certificates are stored, so you can read them back later (v0.5.5).** `vigolium hosts --has tls -j` lists every endpoint whose handshake was recorded, and `vigolium hosts --has tls --sans` prints the distinct SANs one per line — a ready `-T` file for the next sweep. The fingerprint phase probes HTTPS unconditionally; `--tls-probe` is what turns it on for `run probe`. See [Host facts](/others/cli-references#host-facts-fingerprint-hosts-dns).
 </Note>
 
 ### `--redirect-mode`

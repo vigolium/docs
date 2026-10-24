@@ -11,9 +11,9 @@ icon: "server"
 export VIGOLIUM_API_KEY=my-secret-key
 vigolium server
 
-# Custom host and port
+# Expose it beyond loopback (deliberately)
 export VIGOLIUM_API_KEY=my-secret-key
-vigolium server --host 127.0.0.1 --service-port 9002
+vigolium server --host 0.0.0.0 --service-port 9002
 
 # With transparent HTTP proxy for recording traffic
 export VIGOLIUM_API_KEY=my-secret-key
@@ -23,7 +23,13 @@ vigolium server --ingest-proxy-port 9003
 vigolium server -A
 ```
 
-The server listens on `0.0.0.0:9002` by default.
+The server listens on `127.0.0.1:9002` by default.
+
+<Warning>
+  **The default bind changed in v0.5.3: `0.0.0.0` → `127.0.0.1`.** Pass `--host 0.0.0.0` (or set `$VIGOLIUM_SERVER_HOST`) to expose it on purpose. A deployment that relied on the old default will look like the server never started — it did, it is just not listening where you are looking.
+
+  **A non-loopback ingest proxy needs access control.** Bound anywhere but loopback, `--ingest-proxy-port` requires `--proxy-token <secret>` (sent as `Proxy-Authorization`: Basic with any username, or Bearer) or `--proxy-allow <cidr|ip>` (repeatable). An open MITM proxy on a routable address is an open relay that also decrypts TLS.
+</Warning>
 
 ## CORS Configuration
 
@@ -409,8 +415,8 @@ Response:
 {
   "version": "0.1.0",
   "uptime": "2h15m30s",
-  "service_addr": "0.0.0.0:9002",
-  "proxy_addr": "0.0.0.0:9003",
+  "service_addr": "127.0.0.1:9002",
+  "proxy_addr": "127.0.0.1:9003",
   "db_driver": "sqlite",
   "queue_depth": 0,
   "total_records": 1542,

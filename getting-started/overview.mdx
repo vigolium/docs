@@ -21,8 +21,8 @@ The platform is built around three key components that work together to provide 
   <Card title="Vigolium Workbench" icon="desktop">
     A self-hosted dashboard for visualizing scan results, managing projects, and tracking findings across your infrastructure. Deploy it on your own servers for full control over your data.
   </Card>
-  <Card title="Vigolium Console" icon="cloud">
-    A cloud-based solution that provides managed scanning, team collaboration, and centralized reporting without the overhead of self-hosting.
+  <Card title="Gimorra" icon="robot">
+    The autonomous offensive-security agent. Pointed at an authorized target with a goal and a scope, it runs recon → scan → propose PoC → **deterministically prove** → report, with Vigolium as its scan engine.
   </Card>
 </Columns>
 
@@ -51,7 +51,7 @@ All scan-oriented modes support `--source` for source-aware analysis and store s
 
 ### Native Scan
 
-Deterministic, multi-phase vulnerability scanning via `vigolium scan`. Fast, modular, and repeatable, runs content discovery, browser spidering, SPA crawling, and active/passive `dynamic-assessment` phases with **325 scanner modules** (208 active, 117 passive).
+Deterministic, multi-phase vulnerability scanning via `vigolium scan`. Fast, modular, and repeatable, runs content discovery, browser spidering, SPA crawling, and active/passive `dynamic-assessment` phases with **334 scanner modules** (215 active, 119 passive).
 
 | Category | Coverage |
 |----------|----------|
@@ -122,35 +122,21 @@ A self-hosted web dashboard that provides a visual interface for managing and an
 
 ---
 
-## <Icon icon="cloud" /> Vigolium Cloud Console
+## <Icon icon="robot" /> Gimorra — An Autonomous Offensive-Security Agent
 
-A cloud-based solution for teams that want the power of Vigolium without managing infrastructure. Console is the **upgraded, fully-featured version of Vigolium**, managed scanning, centralized reporting, team collaboration, and extra features layered on top of the open-source core, so you can focus on fixing vulnerabilities instead of maintaining tooling.
+**Gimorra** is the autonomous offensive-security platform within Vigolium — *hunts while you sleep*. Where `vigolium agent autopilot` drives a scan, Gimorra drives an **engagement**: give it an authorized target, a goal and a scope, and it runs **recon → scan → propose a PoC → deterministically prove it → report** on its own.
+
+Vigolium is the scan engine underneath it. Gimorra is the operator above it.
+
+<Frame caption="A gimorra scan start to finish: a brief resolves into a plan, recon maps the target, the agent proposes candidates, and the deterministic validator confirms the real ones">
+  <img src="/images/gimorra/gimorra-scan.svg" alt="Walkthrough of a gimorra scan: brief, recon, proposed candidates, deterministic confirmation" />
+</Frame>
+
+Autonomy is bought with **deterministic guardrails** rather than a human gating every action: ordinary code re-proves every finding (the agent proposes, code disposes), auto-cleanup and a kill switch bound what a run can leave behind, and a deny-wins scope guard is evaluated on every tool call. None of the three depends on the model, so a prompt-injected agent does not get past them.
 
 <Callout icon="rocket" color="#FFC107" iconType="regular">
-  Check out the Cloud Console at [console.vigolium.com](https://console.vigolium.com/).
+  Read the full introduction on the [Gimorra](/others/gimorra) page, or [Request a Demo](https://www.vigolium.com/request-demo) to see it against your own target.
 </Callout>
-
-
-<Columns cols={2}>
-<Frame caption="Native scan results in Vigolium Console">
-  <img src="/images/vigolium-native-scan.png" alt="Vigolium Console native scan view" />
-</Frame>
-
-<Frame caption="Agentic scan results in Vigolium Console">
-  <img src="/images/vigolium-agentic-scan.png" alt="Vigolium Console agentic scan view" />
-</Frame>
-</Columns>
-
-
-<Columns cols={2}>
-<Frame caption="Project list with severity breakdown per repository">
-  <img src="/images/vigolium-opensource-audit-list.png" alt="Open-source audit project list" />
-</Frame>
-
-<Frame caption="Detailed findings view for an individual project">
-  <img src="/images/vigolium-opensource-audit-blur.png" alt="Open-source audit findings detail" />
-</Frame>
-</Columns>
 
 ---
 
@@ -168,6 +154,7 @@ A cloud-based solution for teams that want the power of Vigolium without managin
 | Try agentic scanning | [Agent Mode](/agentic-scan/agent-mode) |
 | Let AI drive scans autonomously | [Autopilot](/agentic-scan/autopilot) |
 | Run multi-phase AI + native pipelines | [Swarm](/agentic-scan/swarm) |
+| Run a whole engagement autonomously | [Gimorra](/others/gimorra) |
 | Audit source code in depth | [Agentic Security Audit](/getting-started/agentic-security-audit) |
 | Chat with the agent runtime | [Olium](/agentic-scan/olium) |
 | Run Vigolium as an API server | [Server Mode](/server-mode/running-the-server) |

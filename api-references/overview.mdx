@@ -45,6 +45,43 @@ curl -H "Authorization: Bearer my-secret-key" \
 
 This applies to all data endpoints: ingestion, findings, HTTP records, stats, scans, source repos, and OAST interactions. See [Projects](/api-references/projects) for the full multi-tenancy reference.
 
+<Warning>
+  **An unknown `X-Project-UUID` returns `404` as of v0.5.3.** It used to **create** the project on the spot, so a typo in a header quietly started a second, empty engagement that every subsequent request then wrote into — and the caller saw a healthy `200` with no data. Create projects explicitly with `POST /api/projects`.
+</Warning>
+
+---
+
+## Response Versions
+
+Added in v0.5.3. Every response carries a `Vigolium-Api-Version` header naming the body shape it used, and a client picks one with any of (first match wins):
+
+1. `?api_version=2` (or `1`)
+2. `Vigolium-Api-Version: 2` request header
+3. `Accept: application/vnd.vigolium.v2+json` (or `…v1+json`)
+
+Without one, the server uses `server.api_version_default` — **`1` in this release**, so nothing changes for an existing client until it opts in. An unknown version is `400` `unsupported_api_version`. Server-sent event streams are never wrapped.
+
+**v1** is the historical shape, extended only additively. The paginated lists (`/api/findings`, `/api/http-records`, `/api/scans`, `/api/oast-interactions`, `/api/agent/sessions`) gain `schema_version` and `command`; other list endpoints keep their own shapes.
+
+```json
+{"schema_version": 1, "command": "finding", "project_uuid": "...",
+ "data": [ ... ], "total": 150, "limit": 50, "offset": 0, "has_more": true}
+```
+
+**v2 is the CLI's `-j` envelope** — the same document `vigolium finding -j` prints, so one parser serves both surfaces. Every list endpoint answers it, including `/api/modules`, `/api/extensions`, `/api/projects`, `/api/config` and `/api/db/tables/…`:
+
+```json
+{"schema_version": 2, "command": "finding", "kind": "read", "ok": true,
+ "route": "GET /api/findings", "project_uuid": "...", "project_scoped": true,
+ "total": 150, "offset": 0, "limit": 50, "has_more": true,
+ "items": [ ... ], "generated_at": "2026-10-10T08:00:00.000Z",
+ "generated_at_ms": 1791590400000}
+```
+
+<Note>
+  **v1 errors gained `error_code`** in the same release, drawn from the same closed vocabulary the CLI uses (`vigolium schema error`), and **unknown routes now return JSON** rather than an HTML 404 — so a client never has to parse markup to find out it called the wrong path.
+</Note>
+
 ---
 
 ## GET /api/info, App Info
@@ -102,7 +139,7 @@ curl -s http://localhost:9002/server-info | jq .
   "build_time": "2026-05-21T15:22:43Z",
   "commit": "67bdce4",
   "uptime": "5m32s",
-  "service_addr": "0.0.0.0:9002",
+  "service_addr": "127.0.0.1:9002",
   "proxy_addr": "",
   "queue_depth": 0,
   "total_records": 1234,

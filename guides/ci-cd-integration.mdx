@@ -41,7 +41,8 @@ Since **v0.4.5** the exit status distinguishes outcomes a pipeline has to react 
 | `1` | Error — the command failed to do its job | Investigate: this is breakage, not a result |
 | `2` | Usage error — bad flag, bad value, rejected combination | Fix the invocation |
 | `3` | `fuzz --fail-on-match` matched | A fuzz gate fired |
-| `4` | A `--fail-on <severity>` gate tripped | **Fail the build on findings** |
+| `4` | A `--fail-on <severity>` (or `scan diff --fail-on-new`) gate tripped | **Fail the build on findings** |
+| `5` | Incomplete — the work ran but did not finish (`timed_out`, `budget_exhausted`, `partial`) | Read the results; the run finalized. Common on agent runs |
 
 <Warning>
   **Upgrading from v0.4.4 or earlier: check your `if` statements.** `--fail-on` used to exit `1`, the same code the scanner returns when it *crashes*. A pipeline written as `vigolium scan … || exit 1` treated an unreachable target, a bad flag, and a critical finding identically. Now a findings gate is `4`, so you can report the finding and escalate a genuine outage separately:
@@ -65,6 +66,49 @@ vigolium scan -t $TARGET_URL --fail-on critical --soft-fail --format jsonl -o re
 ```
 
 If you need finer control than a single severity threshold, fall back to parsing JSONL with `jq` (see below).
+
+<Warning>
+  **Dismissed findings are left out of the gate as of v0.5.3.** A finding marked `false_positive` or `accepted_risk` with [`vigolium finding mark`](/others/cli-references#finding-lifecycle-finding-mark-finding-verify) no longer trips `--fail-on`, and is also excluded from `scan diff` and `finding --new-since`. Pass `--include-dismissed` to count them again.
+
+  This is the change most likely to move your build's numbers after upgrading: a gate that used to fire on a known-good finding stops firing once someone retires it — which is the point, but it should not surprise you.
+</Warning>
+
+## CI-shaped report formats
+
+v0.5.3 added three formats aimed squarely at pipelines:
+
+```bash
+# JUnit XML — failures at or above --fail-on, for a test-report widget
+vigolium scan -t $TARGET_URL --fail-on high --format junit -o vigolium-junit.xml
+
+# GitHub workflow commands — annotations on the PR, stdout when no -o is given
+vigolium scan -t $TARGET_URL --format github
+
+# CSV, for a spreadsheet or a ticket import
+vigolium scan -t $TARGET_URL --format csv -o findings.csv
+```
+
+`github` writes to **stdout** without `-o`, which is what makes the annotations land. `junit` reports a failure per finding at or above `--fail-on`, so the severity threshold drives both the exit code and the test report.
+
+<Note>
+  `db export --format csv` uses standard CSV quoting and **neutralizes formula injection** — a cell beginning `=`, `+`, `-` or `@` is prefixed so a spreadsheet treats it as text rather than evaluating a value a target chose.
+</Note>
+
+## Gating on *new* findings only
+
+A full scan of a mature application returns the same backlog every run, so a severity gate either fires forever or gets turned off. [`vigolium scan diff`](/others/cli-references#comparing-two-scans-scan-diff) (v0.5.3) gates on the delta instead:
+
+```bash
+# Scan, then fail only if this run introduced something high or above
+vigolium scan -t $TARGET_URL --scan-uuid "$SCAN_ID" --format jsonl -o results.jsonl
+vigolium scan diff previous latest --fail-on-new high
+```
+
+`latest` is the most recently started finished scan and `previous` is the one before it, so the invocation does not change between runs. Findings land in four buckets — `new`, `unchanged`, `fixed` and `not_reobserved` — and only `new` drives `--fail-on-new`.
+
+<Warning>
+  **Do not report `not_reobserved` as fixed.** It means the head scan was *not comparable* — it was curtailed, covered fewer targets, or skipped a phase the base scan ran — so the finding's absence is evidence of nothing. `fixed` is the bucket that carries the warrant.
+</Warning>
 
 ## Watching a scan from the pipeline (`--events ndjson`)
 

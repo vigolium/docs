@@ -114,6 +114,7 @@
             "group": "Others",
             "icon": "bug",
             "pages": [
+              "others/gimorra",
               "others/projects",
               "others/audit-report",
               "others/cli-references",
@@ -169,9 +170,9 @@
           "icon": "calendar"
         },
         {
-          "anchor": "Vigolium Cloud Console",
-          "href": "https://console.vigolium.com/",
-          "icon": "cloud"
+          "anchor": "Gimorra - Autonomous Offensive-Security Agent",
+          "href": "/others/gimorra",
+          "icon": "robot"
         },
         {
           "anchor": "See Vigolium Static Audit Showcases",

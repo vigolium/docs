@@ -222,11 +222,20 @@ For one-shot runs that leave nothing behind (CI, ad-hoc checks), add `--stateles
 
 ```bash
 vigolium update                  # update binary + nuclei templates
+vigolium update --check          # is there a newer release? exit code says so
+vigolium update --dry-run        # show what would happen; change nothing
 vigolium update --skip-templates # only reinstall the binary
+vigolium update --install-dir /opt/bin
 vigolium update -F               # skip the confirmation prompt
 ```
 
 Homebrew, npm, and Docker installs are upgraded through their own tooling (`brew upgrade vigolium` / `npm update -g @vigolium/vigolium` / `docker pull`), not `vigolium update`.
+
+<Note>
+  **Releases are signed, and the update verifies the signature (v0.5.3).** `vigolium update` now updates **in process** with minisign verification rather than shelling out to an installer script, and the installers **fail closed** on a missing checksum or signature instead of proceeding. `VIGOLIUM_UPDATE_BASE_URL` points the whole mechanism at a mirror or an internal release host.
+
+  **`VIGOLIUM_AUTO_UPDATE` only acts at an interactive terminal** as of v0.5.3 — a CI job or an agent harness will not have its binary swapped mid-pipeline.
+</Note>
 
 
 ## Next steps

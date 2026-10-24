@@ -67,12 +67,18 @@ See [Swarm](/agentic-scan/swarm).
   - `piolium` — run only the standalone piolium harness (no audit, no fallback).
 - **Modes:** when the run includes both drivers (`auto` or `both`), `--mode` is restricted to the shared set: `lite`, `balanced`, `deep`, `revisit`, `confirm`, `merge`. Use `--driver=piolium` for `longshot`/`smoke` or `--driver=audit` for `mock`. `--intensity deep` expands to the chain `deep,confirm`.
 - **Agent selection (audit leg only):** `--provider <olium-provider>` resolves the agent **and** forwards that provider's BYOK auth (`anthropic-*` → claude, `openai-*` → codex). `--agent {claude|codex}` is a pure agent selector layered on top of `--provider` (rejected for invalid values; warned under `--driver=piolium`).
-- **Key flags:** `--driver {auto|both|audit|piolium}`, `--mode`, `--modes` (chain), `--intensity {quick|balanced|deep}`, `--source <path|git-url>`, `--commit-depth`, `--interactive`, `--no-stream`, `--no-dedup`, `--upload-results`, `--provider`, `--agent`, plus the `--pi-*` and `--plm-*` passthroughs for the piolium leg. `--list-modes` prints the embedded vigolium-audit binary's mode graph and exits.
+- **Key flags:** `--driver {auto|both|audit|piolium}`, `--mode`, `--modes` (chain), `--intensity {quick|balanced|deep}`, **`--source <path|git-url>` (required)**, `--commit-depth`, `--interactive`, `--no-stream`, `--no-dedup`, `--upload-results`, `--provider`, `--agent`, plus the `--pi-*` and `--plm-*` passthroughs for the piolium leg. `--list-modes` prints the embedded vigolium-audit binary's mode graph and exits.
 - **Raw output (audit leg):** `--keep-raw` is **on by default** (CLI), retaining `<source>/vigolium-results/` in the source tree; `--clean-raw` removes it after the run (the session copy is always kept). `--keep-raw`+`--clean-raw` is an error. The REST `keep_raw` default is unchanged (off).
 - **One-shot report:** `-S`/`--stateless` runs the audit into a throwaway temp DB (main DB untouched, like `vigolium scan -S`) and auto-writes a self-contained HTML report to `vigolium-result/vigolium-audit-report.html` (override with `-o`/`--output`; supports `gs://` and `{ts}`). Not valid with `--interactive`.
 - **REST equivalent:** `POST /api/agent/run/audit` with `driver: "auto"|"both"|"audit"|"piolium"` (default `"auto"`).
 
 See [Agentic Security Audit](/getting-started/agentic-security-audit).
+
+<Warning>
+  **`agent audit` requires `--source` as of v0.5.3.** It used to infer the current directory, which meant a mistyped flag audited whatever you happened to be standing in. Pass `--source .` when you mean the working directory.
+
+  **The nested audit harness is off by default** on `agent autopilot`, `agent swarm` and REST autopilot in the same release — `--audit` now defaults to `off`, and no `--intensity` preset turns it on. Ask for it explicitly (`--audit balanced`) when you want source context folded into the run. This is separate from `agent audit`, whose whole job is the harness.
+</Warning>
 
 <Note>
 There is no standalone `vigolium agent piolium` subcommand. Piolium runs only through the audit dispatcher, `vigolium agent audit --driver piolium` (piolium alone), `--driver both` (audit then piolium), or `--driver auto` (piolium as fallback when the `claude`/`codex` CLI is missing). Piolium-only modes (`longshot`, `smoke`) and passthroughs (`--pi-*`, `--plm-*`) are exposed on `agent audit`.
@@ -93,9 +99,14 @@ There is no standalone `vigolium agent piolium` subcommand. Piolium runs only th
 
 ### `triage`: single-finding confirmation
 
-- **Use for:** confirming or downgrading one existing finding with AI, without launching a full scan.
-- **How it works:** `vigolium agent triage [finding-id]` loads the stored finding (and its linked request/response), runs the AI triage flow against it, and updates the finding's verdict/severity in place.
+- **Use for:** confirming or retiring one existing finding with AI, without launching a full scan.
+- **How it works:** `vigolium agent triage [finding-id]` loads the stored finding (and its linked request/response), runs the AI triage flow against it, and records a lifecycle verdict: `confirmed`, `false_positive`, or `inconclusive` (which writes nothing).
+- **Key flags:** `--no-probe` (decide from captured traffic; contact nothing), `--no-write` / `--report-only` (report without storing), `--dry-run`, `--max-duration` (default `5m`; past it the run exits `5`).
 - **Not for:** discovering new issues, it only re-evaluates a finding you already have.
+
+<Note>
+  **Since v0.5.3 a `false_positive` verdict sets the finding's *status*, not its severity.** It used to downgrade severity to `info`, which destroyed the original assessment while leaving the finding in every report and gate at a lower rank. Dismissed findings are now simply left out of `--fail-on`, `scan diff` and `finding --new-since` by default. `agent triage` also records its own `agentic_scans` row now, as does `agent query`.
+</Note>
 
 ---
 

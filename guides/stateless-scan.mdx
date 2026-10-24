@@ -126,6 +126,10 @@ The other half of what `-S` buys you is an **empty database**. A scan against th
   **A requested artifact that was never written fails the run (v0.5.0).** An export failure used to exit `0`, report `scan.finished status=completed` and leave no file. It now exits `1` with `error.code: "export_failed"`, which outranks the `--fail-on` gate - a `4` whose artifact is missing would send a CI job to read a file that is not there. Each `--format` is attempted independently, so with `--format jsonl,sqlite` one of them may still be on disk; the **Exports** summary on stderr lists what landed.
 </Warning>
 
+<Note>
+  **`--keep-db-on-error` saves a failed run's temp database (v0.5.2)** under `~/.vigolium/recovered/`, so a `-S` scan that died partway through is still readable instead of vanishing with its store. Without it, the whole point of `-S` — nothing left behind — also discards the evidence of why it failed.
+</Note>
+
 ## Output Formats
 
 ### Console (default)

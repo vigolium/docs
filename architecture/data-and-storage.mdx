@@ -70,6 +70,8 @@ Four of those derived and response columns are worth calling out:
 
 **`host_observations`** is a per-host history table: a re-probe **appends** a row rather than overwriting what the last sweep saw, so a host's posture over time stays readable.
 
+**Schema v4 (v0.5.5)** widens it into the store for *host facts*, keyed on `host:port`: DNS answers (`vigolium dns`, the probe phase), the TLS handshake and leaf certificate (`run probe --tls-probe`, the fingerprint phase), the fingerprint report and the **not-found baseline** (`vigolium fingerprint`). The change is additive — new columns, no rewrite. `vigolium hosts` is the read command; DNS-only rows carry port `0`. Because the baseline is stored rather than recomputed, a later `traffic --exclude-not-found` can drop an origin's soft-404 pages in a read that sends nothing.
+
 <Note>
   New columns arrive through the existing self-healing DDL path, so an existing database gains them on the next open with its rows untouched. `currentSchemaVersion` is deliberately not bumped for a column that needs no backfill - bumping it would re-run the O(rows) backfills on every database in the field.
 

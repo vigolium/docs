@@ -29,14 +29,18 @@ By default, HTTPS CONNECT tunneling is passed through without recording — the 
 
 ## HTTPS Interception (MITM)
 
-Add `--proxy-mitm` to intercept HTTPS through the ingest proxy using a generated CA. TLS traffic is decrypted, recorded as HTTP records, and (with `-S`) scanned — just like plain HTTP.
+Add `--proxy-mitm` to intercept HTTPS through the ingest proxy using a generated CA. TLS traffic is decrypted, recorded as HTTP records, and (with `--scan-on-receive`) scanned — just like plain HTTP.
 
 ```bash
 vigolium server --ingest-proxy-port 9003 --proxy-mitm
 
 # Intercept and continuously scan decrypted HTTPS traffic
-vigolium server --ingest-proxy-port 9003 --proxy-mitm -S
+vigolium server --ingest-proxy-port 9003 --proxy-mitm --scan-on-receive
 ```
+
+<Note>
+  **`-S` is no longer an alias for `--scan-on-receive`** — as of v0.5.3 it is a usage error on `server` and `ingest`, because it collided with the global `-S/--stateless`. Spell the flag out.
+</Note>
 
 On startup the server prints the path to the generated CA certificate (default `~/.vigolium/ca/vigolium-ca.pem`). **Your client must trust this CA** or HTTPS requests will fail certificate validation. Install it into your OS/browser trust store, or point your tool at it directly:
 
@@ -47,17 +51,31 @@ curl --cacert ~/.vigolium/ca/vigolium-ca.pem -x http://localhost:9003 https://ex
 
 | Flag | Description |
 |------|-------------|
-| `--proxy-mitm` | Intercept HTTPS through `--ingest-proxy-port` using a generated CA so TLS traffic is recorded (and scanned with `-S`). |
+| `--proxy-mitm` | Intercept HTTPS through `--ingest-proxy-port` using a generated CA so TLS traffic is recorded (and scanned with `--scan-on-receive`). |
 | `--proxy-insecure` | When intercepting HTTPS, skip verification of the **upstream** server's TLS certificate (useful for self-signed targets). |
-| `--export-ca <path>` | Write the ingest-proxy MITM CA certificate to `<path>` and exit (generates the CA if needed). Use this to distribute the CA to clients ahead of time. |
+| `--proxy-token <secret>` | Require this secret on every ingest-proxy request, as `Proxy-Authorization` (Basic with any username, or Bearer). Config: `server.ingest_proxy_token` |
+| `--proxy-allow <cidr\|ip>` | Accept ingest-proxy clients only from this CIDR or IP (repeatable). Config: `server.ingest_proxy_allow` |
+
+### Managing the CA: `vigolium server ca`
 
 ```bash
-# Export the CA without starting the proxy, then trust it on your clients
-vigolium server --export-ca ./vigolium-ca.pem
+vigolium server ca path                            # where the certificate lives
+vigolium server ca print                           # PEM to stdout
+vigolium server ca print --out ./vigolium-ca.pem   # …or to a file
+vigolium server ca print -j                        # {path, sha256, subject, not_after}
+vigolium server ca install                         # print the commands that trust it on this OS
+vigolium server ca install --yes                   # …and run them
+vigolium server ca uninstall --yes                 # remove that trust
 ```
 
+Added in v0.5.3, replacing the old `--export-ca` flag. `install` / `uninstall` **print** the OS-specific trust commands by default so you can read them before anything touches your trust store; `--yes` runs them.
+
+<Warning>
+  **A non-loopback ingest proxy requires access control (v0.5.3).** Bound anywhere but loopback, the proxy refuses to start without `--proxy-token` or `--proxy-allow`. An open MITM proxy on a routable address is an open relay that also decrypts TLS for anyone who finds it.
+</Warning>
+
 <Callout icon="triangle-alert" color="#F59E0B" iconType="regular">
-  Only trust the Vigolium MITM CA on machines you control during testing, and remove it afterward — any party holding the CA private key can forge TLS certificates for those clients.
+  Only trust the Vigolium MITM CA on machines you control during testing, and remove it afterward with `vigolium server ca uninstall` — any party holding the CA private key can forge TLS certificates for those clients.
 </Callout>
 
 ## Usage Examples
@@ -147,8 +165,8 @@ curl -s http://localhost:9002/server-info | jq .
   "author": "vigolium",
   "docs": "https://docs.vigolium.com",
   "uptime": "2h15m30s",
-  "service_addr": "0.0.0.0:9002",
-  "proxy_addr": "0.0.0.0:9003",
+  "service_addr": "127.0.0.1:9002",
+  "proxy_addr": "127.0.0.1:9003",
   "queue_depth": 0,
   "total_records": 1542,
   "total_findings": 23,

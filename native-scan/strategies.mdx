@@ -205,6 +205,31 @@ OAST (Out-of-band Application Security Testing) injects blind callback payloads 
 vigolium scan -t https://example.com --oast-url https://your-oast.example.com/callback
 ```
 
+### Hidden-Parameter Mining
+
+New in v0.5.3. The `param-mining` phase discovers parameters an endpoint reads although nothing in your traffic sends them — `debug=`, `callback=`, `admin=` — and feeds them to the assessment as insertion points, so the injection modules test them too.
+
+```bash
+vigolium scan -t https://example.com --param-mining           # force it on
+vigolium scan -t https://example.com --intensity deep         # on by default here
+vigolium scan -t https://example.com --intensity deep --param-mining=false
+vigolium run param-mining -t https://example.com
+```
+
+It is **on by default at `--intensity deep` and off below**; the budget is `dynamic-assessment.param_mining` in config. Two baselines with a random parameter profile the endpoint first, candidates then go out in chunks, a chunk whose answer differs is bisected to single names, and every survivor is re-sent twice with fresh values — kept only if the difference reproduces. The same machinery is available standalone as [`vigolium kit param-mine`](/others/cli-references#kit-standalone-utilities).
+
+## How a phase failure is handled
+
+<Note>
+  **A failing phase no longer ends the scan (v0.5.3).** Only infrastructure errors do — an unopenable database, a config that will not load. A phase that errors is recorded with its own outcome, the scan carries on with the phases after it, and the result reports `completeness: partial` with the reason. The old behaviour discarded the work of every phase that had already succeeded.
+
+  Read `phase_outcomes` on the scan document, or the `reasons` / `limits` on each `phase.finished` event, to see which phases fell short and why. A phase stopped by its own `max_duration` is reported as such rather than `completed`.
+</Note>
+
+**Module errors are reported, not swallowed.** A module that errors, times out or panics emits a `module.error` event and increments `scans.module_errors` on the scan row. A run with a high count covered less than its finding list suggests.
+
+**First-run dependencies install lazily.** Chrome-for-Testing and the nuclei templates are fetched by the *phase that needs them*, not at startup, and announce themselves on the event stream as `scan.setup` (progress goes to stderr, so a cold machine's first `--events` run is still clean NDJSON). A scan that skips spidering never downloads a browser.
+
 ## Performance Tuning
 
 ### CLI Speed Flags
@@ -212,8 +237,10 @@ vigolium scan -t https://example.com --oast-url https://your-oast.example.com/ca
 | Flag | Default | Description |
 |------|---------|-------------|
 | `-c` / `--concurrency` | 25 | Number of concurrent scan workers |
-| `--max-per-host` | 30 | Max concurrent requests per host |
+| `--max-per-host` | 40 | Max concurrent requests per host |
 | `-r` / `--rate-limit` | 100 | Max request submissions per second |
+| `--max-requests` | 0 (unlimited) | Stop the scan after N requests to the targets (`scanning_pace.max_requests`) |
+| `--max-requests-per-host` | 0 (unlimited) | The same, per host |
 | `--max-host-error` | 30 | Skip host after N consecutive errors |
 | `--max-findings-per-module` | 10 | Suppress findings after this many per module (0 = unlimited) |
 | `--timeout` | 15s | Per-request HTTP timeout |
@@ -238,6 +265,14 @@ vigolium scan -t https://example.com --strategy deep \
 
 <Note>
   **The pre-scan banner prints the budget the phase will actually use (v0.4.8).** An explicit `--spider-max-time` / `--discover-max-time` wins on the banner exactly as it wins in the phase. Before v0.4.8 the banner rendered the `scanning_pace` slice instead, so `--spider-max-time 5m` printed `6m0s` next to **Spidering** while the phase crawled for the 5m you asked for. Both now come from one shared budget resolver, so the two can no longer disagree.
+
+  Since v0.5.3, `vigolium scan --dry-run` prints the whole resolved plan — budgets included — without sending anything, so you can read what a run *would* do before committing to it.
+</Note>
+
+<Note>
+  **Request budgets (v0.5.3).** `--max-requests` is exact for gated traffic; the browser crawl is held to it within 500 ms, and **nuclei is not counted** (`request_cap_enforcement` on `scan.started` records which applied). A scan the budget stops is `partial` with `stop_reason: request_budget` — it is a deliberate stop, not a failure, and still exits `0`.
+
+  **One egress gate paces every scan request** as of v0.5.3, and **retries and redirects take their own tokens** — so a configured rate limit is now the rate that actually reaches the target, not the rate of first attempts. `--max-per-host` defaults to `40` everywhere; it was inconsistent across entry points before.
 </Note>
 
 ### Scanning Pace (Config File)
@@ -481,7 +516,7 @@ Use `--project-uuid` (with a UUID) or `--project-name` (with a name) to scope al
 vigolium scan -t https://example.com --project-uuid a1b2c3d4-...
 
 # Or set the environment variable for your session
-eval $(vigolium project use a1b2c3d4-...)
+eval "$(vigolium project use a1b2c3d4-...)"
 vigolium scan -t https://example.com
 ```
 

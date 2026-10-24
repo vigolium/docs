@@ -86,6 +86,7 @@ Three layers of JS analysis feed endpoints back into the discovery queue:
 - **jstangle** (embedded binary): Deobfuscates bundled JS, resolves string concatenation, traces variable assignments, and extracts `fetch()` / `XMLHttpRequest` / `$.ajax` call sites into full HTTP request specs.
 - **Spider extractors**: Parse inline `<script>` tags and JS string literals for URL patterns.
 - **Source maps** (v0.4.9): An exposed `.map` is fetched and parsed, its original pre-build sources are secret-scanned, and the routes they reveal are ingested. Minification obscures identifier names, unreferenced admin routes and hardcoded credentials; the map gives them all back.
+- **Lazy chunks** (v0.5.3): webpack and Vite name their code-split chunks only at **runtime**, by assembling the filename from a manifest object inside the entry bundle. Discovery now reconstructs those names and fetches the chunks, so routes that only load after a user clicks into a section are reachable without driving the UI there.
 
 Extracted endpoints become priority-0 tasks - tested before any wordlist fuzzing.
 
@@ -124,12 +125,67 @@ SPA frameworks (Next.js/Nuxt/Vite/webpack/CRA) emit content-hash fingerprinted b
 | FUZZ | 12 | Template-based fuzzing (`FUZZ` marker replacement) |
 
 <Note>
-<Note>
   **`--discovery-wordlist` was called `--fuzz-wordlist` before v0.4.5.** The old spelling still works as a deprecated alias, but it collided in name with `vigolium fuzz -w`, which is a completely different knob — that one is the payload list for the [fuzzing primitive](/others/cli-references#fuzz), this one seeds the discovery phase.
 </Note>
 
 **Auto-fuzz on low-yield targets.** FUZZ fuzzing is normally opt-in (`--discovery-wordlist`, `--intensity deep`, or a discovery-only `run discover`). On a full scan it also turns on **automatically** when the preceding Spidering phase comes up empty-handed — it found very few records, or it bounced off-host to an **SSO/login wall**. Such sites frequently still expose hidden routes that don't redirect, so vigolium brute-forces them anyway. The auto-fuzz always targets the **original `-t` host** (the off-host SSO/identity-provider domain is excluded from scope), and a console line announces it when it kicks in. Disable with `discovery.auto_fuzz_low_yield: false`.
+
+### Choosing wordlists
+
+```bash
+# Repeatable, and .gz is read directly
+vigolium scan -t https://example.com \
+  --discovery-wordlist custom.txt \
+  --discovery-wordlist extra.txt.gz
+
+# Pick the embedded tier explicitly
+vigolium scan -t https://example.com --intensity deep        # uses the large tier
+
+# Bound the shape of what gets tested
+vigolium scan -t https://example.com --discovery-extensions php,aspx,json
+vigolium scan -t https://example.com --discovery-max-depth 3
+```
+
+| Setting | What it does |
+|---|---|
+| `--discovery-wordlist` | **Repeatable** since v0.5.3, and reads `.gz` directly |
+| `discovery.wordlists.tier` | Which embedded tier to use. A new **`large`** tier ships in v0.5.3, and `--intensity deep` selects it |
+| `--discovery-extensions` | Restrict the extensions appended to filename candidates |
+| `--discovery-max-depth` | Cap recursive directory expansion |
+
+<Warning>
+  **A missing `--discovery-wordlist` file exits `2` (v0.5.3).** A typo'd path used to be a warning, and the scan ran with the built-in list — producing a discovery phase that looked like it had used your wordlist and had not.
+</Warning>
+
+<Note>
+  **Discovery streams its fuzz results mid-crawl** as of v0.5.3 (`discovery.stream_fuzz`), with order-stable dedup and a cluster cap, rather than holding everything until the phase ends. Findings and records land while the crawl is still running, so `--events` consumers and `scan status` see real progress.
 </Note>
+
+### Wire protocol and the brute-force pool
+
+Two v0.5.5 knobs decide how discovery's requests actually leave the machine.
+
+```yaml
+discovery:
+  engine:
+    protocol: auto            # auto | http1 | http2 | http3
+    brute_force_concurrency: 0  # 0 = the per-host slot cap
+```
+
+| Setting | What it does |
+|---|---|
+| `discovery.engine.protocol` | `auto` (default) resolves to **HTTP/3 where the origin proves it, else HTTP/2 where ALPN selects it, else HTTP/1.1** — and then **pins that choice per origin** for the rest of the phase, so the crawl does not re-negotiate on every request. `http1` / `http2` / `http3` force one |
+| `discovery.engine.brute_force_concurrency` | Worker count for **wordlist and FUZZ-template requests only**. The rest of discovery — spider, observed-word variants, JS analysis — keeps the phase concurrency. `0` means the per-host slot cap (`scanning_pace.max_per_host`), or the phase concurrency when `-c` was given explicitly |
+
+The pool exists because the two halves of discovery have different shapes: brute-force is a long queue of cheap independent requests that wants depth, while the crawl's own requests are few and each one feeds the next round. Sharing one worker count made whichever you tuned for starve the other.
+
+<Note>
+  **Only `fuzz` and discovery multiplex.** Scanner modules stay on HTTP/1.1 — a module's detection logic frequently depends on exact framing, and quietly moving it to h2/h3 would change what it is testing. See the [`fuzz` wire protocol flags](/others/cli-references#fuzz) for the per-request equivalent.
+</Note>
+
+### Backing off instead of hammering
+
+Since v0.5.5 discovery **backs off on `429`, `5xx` and WAF responses, and honours `Retry-After`** rather than continuing at full rate into a target that is already refusing. It also **classifies `404`, `400`, `414`, `421` and `431` by status before soft-404 fingerprinting runs** — those statuses are a definite answer, and putting them through fingerprint comparison both wasted the comparison and let an unusual error page poison the learned baseline.
 
 ## Deduplication
 

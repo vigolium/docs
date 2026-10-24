@@ -58,11 +58,26 @@ The active project is marked with `*`.
 ### Set the active project
 
 ```bash
-eval $(vigolium project use a1b2c3d4-...)
+eval "$(vigolium project use a1b2c3d4-...)"
 # Active project: my-engagement (a1b2c3d4-...)
+
+# Create it in the same step if it does not exist yet
+vigolium project use a1b2c3d4-... --create --name my-engagement
 ```
 
-This exports the `VIGOLIUM_PROJECT_UUID` environment variable into your shell, so every subsequent command in that shell uses this project.
+`project use` writes the UUID to `~/.vigolium/active-project`, which every later command without `--project-uuid` / `$VIGOLIUM_PROJECT_UUID` resolves to. When stdout is not a terminal it also prints `export VIGOLIUM_PROJECT_UUID=<uuid>`, so the `eval` form above pins the current shell as well.
+
+<Warning>
+  **`project use` no longer creates the project (v0.5.3).** An unknown UUID is an error — exit `1`, `error.code: "not_found"` — and **nothing is created**. Pass `--create` (with optional `--name` / `--description`) when you mean to create it.
+
+  It used to create silently, which meant a typo'd UUID produced a brand-new empty project that looked exactly like an engagement whose scan had not run yet.
+</Warning>
+
+<Note>
+  **`~/.vigolium/active-project` is global to the user**, not per shell — a parallel shell, a CI step, or an agent running alongside you can change it underneath. Anything concurrent should pin `--project-uuid` or `$VIGOLIUM_PROJECT_UUID` instead. A `-j` document whose project was actually resolved from that file says so: `project_source: "active_file"`, plus a `warnings` entry.
+</Note>
+
+It also takes a UUID, not a name. Use `--project-name <name>` on the command itself if you want to select by name.
 
 ### View the project config path
 
@@ -195,10 +210,15 @@ A project is a data boundary, not an authentication boundary — Vigolium does n
 | Surface | How |
 |---|---|
 | CLI (one command) | `--project-uuid <uuid>` or `--project-name <name>` |
-| CLI (a session) | `eval $(vigolium project use <uuid>)`, which exports `VIGOLIUM_PROJECT_UUID` |
+| CLI (a session) | `eval "$(vigolium project use <uuid>)"`, which exports `VIGOLIUM_PROJECT_UUID` |
+| CLI (the machine) | `vigolium project use <uuid>` alone, which writes `~/.vigolium/active-project` |
 | REST API | the `X-Project-UUID` request header |
 
-Omit all three and operations land in the default project.
+Omit all of them and operations land in the default project. Under `-j`, the `project_source` field reports which of these actually decided it — `flag`, `env`, `active_file` or `default` — so a driver can assert it rather than assume.
+
+<Warning>
+  **An unknown `X-Project-UUID` returns 404 (v0.5.3).** It used to create the project on the spot, so a typo in a header quietly started a second, empty engagement that every subsequent request then wrote into. Create projects explicitly with `POST /api/projects` or `vigolium project create`.
+</Warning>
 
 ### Managing via API
 

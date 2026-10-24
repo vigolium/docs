@@ -74,8 +74,53 @@ Drop any `.js` or `.vgm.yaml` file into your `extension_dir`. Vigolium discovers
 ### 3. Verify it loaded
 
 ```bash
-vigolium extensions ls
+vigolium extensions ls          # what the scanner will load
+vigolium ext lint my-ext.js     # syntax, handlers, exports, unknown API calls
+vigolium ext lint --strict my-ext.js
 ```
+
+### 4. Prove it works before a scan depends on it
+
+Two commands added in v0.5.3 close the loop without pointing anything at a live target.
+
+```bash
+# Run it against one stored record, offline
+vigolium ext run --ext my-ext.js --record-uuid <uuid>
+vigolium ext run --ext my-ext.js --record-uuid <uuid> --handler scanPerInsertionPoint
+vigolium ext run --ext my-ext.js --record-uuid <uuid> --insertion URL_PARAM:id
+vigolium ext run --ext my-ext.js --record-uuid <uuid> --allow-network   # actually send
+
+# Run every extension against its fixture cases
+vigolium ext test
+vigolium ext test my-ext.js -j
+```
+
+**`ext run`** (equivalently `ext eval --record-uuid`) loads one extension exactly as a scan does and calls its handlers against a stored record. The record is **read-only**: `vigolium.db` reads work, while `record.annotate` / `addRemarks` and `vigolium.ingest` return `false`. Every outbound request fails with `network disabled in ext eval; pass --allow-network` and is counted in `network_calls_blocked`. `vigolium.oast` and `vigolium.agent` are unavailable. With no `--handler`, every handler the module's `scanTypes` declare runs. Exit `1` when a handler threw.
+
+**`ext test`** runs fixture cases that live beside the extension:
+
+```
+my-ext.js
+my-ext.fixtures/basic.http               # raw request, blank line, raw response
+my-ext.fixtures/basic.expect.json        # {"findings": 1, "errors": 0}
+my-ext.fixtures/basic.responses/*.http   # canned responses for an active extension's requests
+```
+
+`findings` is either a count or a list of matchers that must all match distinct results, in any order: `{"findings": [{"name~": "exposed", "severity": "info", "confidence": "certain"}], "errors": 0}`. Matcher keys are `name~` (substring), `name` (whole), `severity` and `confidence`, all case-insensitive; `errors` defaults to `0`; an unknown key fails the case.
+
+A case can carry its expectation inline instead, as a leading `// expect: {...}` comment, alongside `// handler:`, `// insertion:` and `// url:` directives. In a response file, `// match: <text>` serves that response only to a request whose target or body contains the text.
+
+<Warning>
+  **An `--ext` extension that fails to load now stops the scan (v0.5.3).** The run exits `2` with `error.code: "extension_load_failed"` **before any request is sent**, rather than scanning on without it and producing a clean-looking result that silently skipped your check. `--ext-allow-failures` restores the old behavior.
+
+  Extensions discovered from `extension_dir` are unaffected — only the ones you named explicitly abort the run.
+
+  `ext lint` tightened at the same time: it loads the file in a side-effect-free full VM, **errors** on missing handlers and exports, and flags unknown YAML keys with suggestions (`extensions.yaml_strict` in config). Top-level extension code is capped at **10 s** at load, so a module that does real work outside its handlers now fails fast instead of stalling every scan that loads it.
+</Warning>
+
+<Note>
+  **Module selection reaches extensions now.** `-m` / `--module-id` / `--module-tag` apply to JS and YAML extensions as well as built-in modules, on the CLI and over REST — so `--module-tag custom` runs only your extensions, and a failing one announces itself on the event stream as `extension.failed`.
+</Note>
 
 ---
 
@@ -225,7 +270,7 @@ module.exports = {
     var findings = [];
     var headers = ctx.response.headers;
 
-    var poweredBy = headers["X-Powered-By"] || headers["x-powered-by"];
+    var poweredBy = headers.get("x-powered-by");
     if (poweredBy) {
       findings.push({
         matched: "X-Powered-By: " + poweredBy,
@@ -687,6 +732,30 @@ ctx.response.headers   // { "X-Powered-By": "PHP/8.1", ... }
 ctx.response.raw       // full raw HTTP response string
 ctx.response.title     // HTML page title (if applicable)
 ```
+
+### Header objects
+
+`ctx.request.headers`, `ctx.response.headers`, the pre-hook's `request.headers`, the `headers` of every `vigolium.http.*` / session / MCP response, and the YAML `js` matcher's `response.headers` **all behave the same way**, and as of v0.5.3 that behaviour is **case-insensitive**:
+
+```javascript
+headers.get("x-powered-by")      // "PHP/8.1": case-insensitive, null when absent
+headers["X-Powered-By"]          // same value; property access is case-insensitive too
+headers.has("content-type")      // true
+headers.getAll("set-cookie")     // ["a=1; Path=/", "b=2; Path=/"]: every value, wire order
+headers["set-cookie"]            // "b=2; Path=/": set-cookie reads as the LAST value
+headers["cache-control"]         // "no-cache, no-store": other repeats join with ", "
+Object.keys(headers)             // ["content-type", "set-cookie", ...]: lowercase, first-occurrence order
+headers.entries()                // [["Set-Cookie", "a=1; Path=/"], ...]: original case, every occurrence
+headers.raw()                    // { "Set-Cookie": "b=2; Path=/", ... }: the original-case object
+```
+
+Assigning or deleting a property changes only the JS view. In a pre-hook, returning `{headers: request.headers}` applies just the headers you assigned or deleted.
+
+<Warning>
+  **This replaces the `headers["X-Powered-By"] || headers["x-powered-by"]` dance**, which was the standard workaround and silently missed any third spelling the server chose. If an extension of yours still does it, the fallback is now dead code — but harmless, because both arms hit the same value.
+
+  A header whose name collides with a method (`get`, `getAll`, `has`, `entries`, `raw`) or an `Object.prototype` member is **not** exposed as a property, so a hostile server cannot shadow `headers.get`. Read those with `headers.get(name)` or `headers.entries()`.
+</Warning>
 
 ### `insertion`: second arg to `scanPerInsertionPoint`
 

@@ -150,6 +150,42 @@ curl -s -X PATCH http://localhost:9002/api/findings/42/status \
 | 404    | Finding not found          |
 | 503    | Database not configured    |
 
+<Note>
+  **Since v0.5.3 the status is a real lifecycle**, matching `vigolium finding mark`: `draft → triaged → confirmed → fixed`, with `false_positive` and `accepted_risk` as **dismissed** exits. Dismissed findings are left out of the `--fail-on` gate, `scan diff` and `finding --new-since` by default.
+</Note>
+
+---
+
+## POST /api/findings/:id/verify, Verify a Finding
+
+Added in v0.5.3 — `vigolium finding verify` over REST (operator and admin). Re-runs the module behind one finding against the request it originally scanned and records whether it reproduces. `:id` is the numeric ID **or the finding hash** (12+ character prefix); the lookup is scoped to `X-Project-UUID`, so a finding from another project returns `404` (`error_code: finding_not_found`). The call is **synchronous** — it answers when the module run ends.
+
+| Verdict | Meaning |
+|---|---|
+| `confirmed` | The module reported the same finding again |
+| `not_reproduced` | The module ran against a responding target and did not |
+| `inconclusive` | Target unreachable, module timed out or failed, or the baseline could not be reconstructed |
+| `unsupported` | No deterministic re-run exists (agent, audit, OAST and known-issue-scan findings; an `ext-*` module the project's extension config does not load) |
+
+**Request body (all optional):**
+
+| Field | Type | Description |
+|---|---|---|
+| `dry_run` | bool | Return the reconstruction (module, baseline, insertion point); send and write nothing |
+| `no_write` | bool | Run, but do not store the verdict |
+| `mark` | bool | Also set the status: `not_reproduced` → `false_positive`, `confirmed` → `confirmed` (not with `dry_run` / `no_write`) |
+| `refetch` | bool | Passive findings: fetch a fresh response instead of re-analyzing the stored one |
+| `rate_limit` | number | Max requests/second (`0` = unlimited; fractions allowed) |
+| `timeout` | string | Go duration bounding the run (default `2m`, at most `10m`; one request is capped at 15 s) |
+
+```bash
+curl -s -X POST http://localhost:9002/api/findings/42/verify \
+  -H 'Content-Type: application/json' \
+  -d '{"mark":true}' | jq .
+```
+
+The response is the same result object `vigolium finding verify -j` emits.
+
 ---
 
 ## DELETE /api/findings/:id, Delete Finding

@@ -24,11 +24,41 @@ The `--format` flag controls the output format, and formats can be combined (e.g
 | `html` | Self-contained interactive grid report |
 | `report` | Self-contained document-style report |
 | `pdf` | PDF document rendered through headless Chrome |
+| `markdown` | Markdown report (alias: `md`) |
 | `sarif` | SARIF 2.1.0 log for GitHub code scanning, DefectDojo, SARIF viewers |
-| `sqlite` | Standalone database that can be reopened by Vigolium (aliases: `sqlite3`, `db`) |
+| `csv` | Findings as CSV, for a spreadsheet or a ticketing import |
+| `junit` | JUnit XML — failures at or above `--fail-on`, for a CI test report |
+| `github` | GitHub workflow commands; goes to stdout without `-o`, so annotations land on the PR |
+| `sqlite` | Standalone database that can be reopened by Vigolium (aliases: `sqlite3`, `db`; needs `-S`) |
 | `fs` | Flat, browsable request/response and finding tree (alias: `file-system`) |
 
-Matching is case-insensitive, and a format that writes a file requires `-o/--output`.
+Matching is case-insensitive, and a format that writes a file requires `-o/--output`. `csv`, `junit` and `github` were added in v0.5.3 — see [CI/CD Integration](/guides/ci-cd-integration).
+
+### TSV, for the read commands
+
+v0.5.5 adds **`--format tsv`** to the read commands — `traffic`, `finding`, `endpoints`, `params`, `hosts`, `dns`. One tab-separated row per item, with a header line first (`--no-header` omits it), and `--fields` picking the columns and their order:
+
+```bash
+vigolium finding --format tsv --fields id,severity,module,url
+vigolium hosts '*.example.com' --format tsv --fields hostname,port,title,server,favicon_mmh3
+vigolium traffic --format tsv --fields uuid_short,status,method,url --no-header | cut -f4
+```
+
+This is the shape to pipe into `cut`, `awk`, `sort -u` or a spreadsheet when a JSON parser is more machinery than the task needs. Each command has a sensible default column set, so `--fields` is optional.
+
+<Note>
+  **`--fields` is a shared vocabulary as of v0.5.5.** The same names mean the same thing on every command that takes it, aliases like `status`, `length` and `title` are accepted and emitted under the name you passed, and an unknown name is an **error with the nearest match suggested** rather than a silently missing column. Two new names: `uuid_short` (the short record id, enough to pass back to any `--uuid` flag) and `response_headers`.
+</Note>
+
+All `--format` values resolve through **one table** as of v0.5.3, so a value that works on one command works on every command (`scan --format md` used to be rejected). `import` and `js` lost their own local `--format` flags in the same release and read the global one, with the same spelling and values.
+
+<Note>
+  **Two reporting bounds worth knowing.** `--max-body-bytes` caps how much of a stored body a report renders, and `--pdf-timeout` bounds the headless-Chrome render — a PDF that times out reports the specific `pdf_failed` rather than a generic export failure.
+</Note>
+
+<Warning>
+  **`db export --format csv` changed its quoting in v0.5.3.** It now uses standard CSV quoting and **neutralizes formula injection** — a cell beginning `=`, `+`, `-` or `@` is prefixed so a spreadsheet treats it as text. A field that previously opened as a live formula (including one a target chose, in a reflected value) now opens as the string it actually is. Anything parsing the old output by splitting on commas should move to a real CSV reader.
+</Warning>
 
 ### Console (default)
 
@@ -168,8 +198,12 @@ run-findings/
 - Available on `vigolium export`, `vigolium db export` (honoring its filters), and `scan`/`scan-url`/`scan-request`/`run` — with or without `-S/--stateless`.
 - Honors `--omit-response` (drops the `.resp.*` files). `--split-by-host` is a no-op, since `fs` already splits by host.
 
+<Warning>
+  **A `--format fs` re-export replaces the tree instead of merging into it (v0.5.2).** A re-export with a narrower filter used to leave the previous run's files in place, so the directory held a union of two runs and `index.json` described only the newer one.
+</Warning>
+
 <Callout icon="circle-info" color="#3B82F6" iconType="regular">
-  The ingestion server can produce this same tree **live** with `vigolium server --mirror-fs <dir>` — see [Running the Server](/server-mode/running-the-server#live-filesystem-mirror).
+  The ingestion server can produce this same tree **live** with `vigolium server --mirror-fs <dir>` — see [Running the Server](/server-mode/running-the-server#live-filesystem-mirror). Mirror files are written atomically and owner-only.
 </Callout>
 
 ## Exporting Stored Results in Several Formats
@@ -340,7 +374,7 @@ vigolium traffic list
 vigolium traffic list --project my-project
 ```
 
-Results are scoped to the active project. Use `--project-name`/`--project-uuid` to target a specific project, or set a default for your shell with `eval $(vigolium project use <uuid>)`. See the [Projects & Multi-Tenancy](/others/projects) reference for details on multi-tenancy and project scoping.
+Results are scoped to the active project. Use `--project-name`/`--project-uuid` to target a specific project, or set a default for your shell with `eval "$(vigolium project use <uuid>)"` (an unknown UUID is an error since v0.5.3 — add `--create` to create it). See the [Projects & Multi-Tenancy](/others/projects) reference for details on multi-tenancy and project scoping.
 
 ### Reading a Standalone Export
 
@@ -363,6 +397,12 @@ vigolium finding -S --db ./scan.sqlite --json --with-records
   Attach paths are percent-encoded too: the SQLite driver parses **every** `ATTACH` filename as a URI, not only ones beginning with `file:`, so a `--glob-db` path containing `?` used to attach a different, empty database and report a successful merge having copied nothing. Such a path is now an explicit error.
 
   A valid SQLite file that is not a Vigolium store reports `error.code: "source_incompatible"` rather than the generic `failed`.
+</Note>
+
+<Note>
+  **`--glob-strict` fails the read when any source was skipped (v0.5.2).** A glob merge quietly drops a file it cannot open — unreadable, corrupt, not a Vigolium store — so a report over "every scan in this directory" could silently cover fewer scans than you think. `--glob-strict` turns that into an error, and the `glob_sources` accounting on the result **names every file that was skipped and why**, with or without the flag.
+
+  Use `--max-output-bytes <n>` on `finding`, `traffic` and `db ls` when a merged read is too large for one document: it drops whole trailing items, keeps the JSON valid, and adds an `output_budget` object naming how many came back, how many were omitted, and the next `--offset`.
 </Note>
 
 <Note>

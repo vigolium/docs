@@ -105,13 +105,31 @@ It is heavily constrained, along the same lines as the default-credential pass:
 
 - **Single-flighted per host**, and it never submits to an off-host action.
 - It fills through the normal form handler, so the identity it creates lands in the shared fill context and is **reused by any later login form** — whether or not registration itself logged the browser in.
-- It stays **off by default**, because registering is a write. `--intensity deep` enables it; setting `spidering.self_register: true` forces it on at any intensity.
+- It stays **off by default**, because registering is a write. `spidering.interaction.self_register: true` turns it on.
+
+<Warning>
+  **The crawler stopped taking side-effectful actions in v0.5.2.** It no longer **creates accounts**, **uploads files** or **downloads files**, and it now **cancels** `confirm()` dialogs instead of accepting them. These used to happen on an ordinary crawl, which meant a scan of someone's staging environment could leave real accounts and real uploads behind.
+
+  Each is individually restorable under `spidering.interaction.*` — and `--intensity deep` no longer turns self-registration on by itself. Generated identities use `example.com` so an escaped signup cannot mail a real address.
+
+  **The browser sandbox is on by default** in the same release. `--browser-insecure` restores the old posture for a target that genuinely needs it.
+</Warning>
+
+### Multi-tab crawling and route seeding
+
+- **`spidering.tabs`** (v0.5.3) crawls several tabs concurrently in one browser, instead of one page at a time.
+- **Client routes found in JavaScript seed the crawl** (`spidering.route_seeds`): the router table a SPA ships in its bundle names views the crawler would otherwise only reach by guessing the right click path.
+- The crawler **clicks elements inside shadow DOM and web components**, so a design-system app built on custom elements is no longer a blank page to it.
 
 ### Crawl graph output (`graph_output_dir`)
 
 Captured traffic records *what* was requested. The crawl graph records *how the crawler got there* — which action on which state, the selector that finds that element again, and the form values used. That is what makes a run reproducible and lets a later pass re-reach a specific state without rediscovering the path to it.
 
 Set `spidering.graph_output_dir` to a directory and each host's graph is written into it as its own file. It is a directory rather than a path because one browser session reuses a single base config across all of a host's seeds — a precomputed path would be whatever the first target implied, and every later seed would overwrite it. The DOM itself is deliberately excluded from the dump; the selector and form values on each edge are the point, since they are what make a transition replayable.
+
+<Warning>
+  **Crawl graph filenames changed in v0.5.2** to `crawl-graph-<host>-<scan>-<seq>.json`, and the files are now **redacted and owner-only** (`0600`). Widen any glob written against the old name. The redaction matters because a crawl graph records the form values used — including whatever the fill context put in a password field.
+</Warning>
 
 ### DOM-based XSS (Browser-Confirmed)
 
@@ -136,6 +154,10 @@ This pass is **discovery-focused, not a brute-force**, and is heavily constraine
 
 The pass is **off by default** and the [native-scan runner](/native-scan/scanning-modes-overview) auto-enables it by **intensity**: `balanced` uses the minimal list, `deep` uses the full documented list. An ordinary crawl leaves it off, keeping active login attempts explicit.
 
+<Note>
+  **`--require-auth`** (or `spidering.require_auth`, v0.5.2) makes a failed login **fatal for that target** rather than letting the crawl continue anonymously. Without it, an expired credential produces a scan of the public surface that looks like a clean result. All login flows together are bounded by a 2-minute budget, and they honour `--proxy` and the scan's TLS stance like every other request.
+</Note>
+
 ### Session carry-forward
 
 While crawling, the browser often clears an interstitial WAF/bot challenge (a JS or cookie challenge) or picks up session cookies. Those cleared cookies and the browser's User-Agent are **carried forward** into the subsequent discovery and active-scanning phases, so content discovery and module probes reuse the already-cleared session instead of tripping the challenge again.
@@ -156,8 +178,14 @@ While crawling, the browser often clears an interstitial WAF/bot challenge (a JS
 - **Embedded binaries**: ships Chromium (macOS/Windows/Linux) and ungoogled-Chromium (Linux). Extracted on first run, cached by version.
 - **Headless mode**: uses `headless=new` when extensions are loaded (supports Chrome extensions unlike legacy headless).
 - **Extensions**: loaded via `--load-extension` (e.g., uBlock Origin Lite for ad blocking during crawl).
-- **Security flags disabled** for crawling: `--disable-web-security`, `--ignore-certificate-errors`, `--allow-running-insecure-content`.
-- **Pool**: multiple browser instances with round-robin selection.
+- **Relaxed web-security flags** for crawling: `--disable-web-security`, `--ignore-certificate-errors`, `--allow-running-insecure-content`. The **OS sandbox stays on** as of v0.5.2; `--browser-insecure` disables it for a target that needs it.
+- **Pool**: multiple browser instances with round-robin selection, plus `spidering.tabs` for concurrency inside one browser.
+
+<Note>
+  **A browser launch no longer strands its Chromium profile.** `Browser.Close` never called go-rod's `launcher.Cleanup()`, so every launch left a profile directory behind — one workstation accumulated 3,384 of them totalling 104 GB. Fixed in v0.5.0, with an abandoned crawl's browser now shut down too (v0.5.2). `vigolium kit tmp-clean` collects anything an interrupted run left before the fix.
+
+  Stored `duration_ms` for browser-captured responses **excludes the CDP body fetch** since v0.5.2, so those values are smaller than they used to be — and now actually describe the response.
+</Note>
 
 ## Network Capture
 

@@ -64,13 +64,46 @@ spidering:
   max_depth: 5          # Maximum navigation depth from the entry point
   max_pages: 100        # Maximum number of pages to visit
   max_duration: 300     # Timeout in seconds for the spidering phase
+  tabs: 4               # Crawl several tabs concurrently in one browser (v0.5.3)
+  route_seeds: true     # Seed the crawl with client routes found in JavaScript
+  require_auth: false   # A failed login is fatal for that target
   interaction:
     click_buttons: true  # Click discovered buttons
     fill_forms: true     # Auto-fill and submit forms
     scroll: true         # Scroll pages to trigger lazy loading
 ```
 
-For large SPAs, increase `max_pages` and `max_depth` to ensure full coverage. For quick assessments, reduce them to keep scan times short.
+For large SPAs, increase `max_pages` and `max_depth` to ensure full coverage. For quick assessments, reduce them to keep scan times short. `tabs` is usually the cheaper win: it raises throughput without widening the crawl.
+
+Two v0.5.3 additions matter specifically for SPAs:
+
+- **Client routes found in JavaScript seed the crawl** (`route_seeds`). The router table a SPA ships in its bundle names views the crawler would otherwise only reach by guessing the right click path.
+- **The crawler clicks into shadow DOM and web components**, so an app built on a custom-element design system is no longer a blank page to it.
+
+Discovery also reconstructs **webpack/Vite lazy chunks** — the ones named only at runtime from a manifest inside the entry bundle — so routes that load after a user navigates into a section are reachable without driving the UI there.
+
+## What the crawler will and will not do
+
+<Warning>
+  **The crawler stopped taking side-effectful actions in v0.5.2.** It no longer **creates accounts**, **uploads files** or **downloads files**, and it **cancels** `confirm()` dialogs instead of accepting them. These used to happen on an ordinary crawl — so scanning a staging environment could leave real accounts and real uploads behind.
+
+  Each is individually restorable under `spidering.interaction.*`, and `--intensity deep` no longer enables self-registration by itself:
+
+  ```yaml
+  spidering:
+    interaction:
+      self_register: true      # complete a public signup form and continue as that account
+      upload_files: true
+      download_files: true
+      accept_confirm: true
+  ```
+
+  Generated identities use `example.com` (`spidering.identity_email_domain`), so an escaped signup cannot mail a real address.
+</Warning>
+
+<Note>
+  **The browser sandbox is on by default** as of v0.5.2; `--browser-insecure` restores the old posture for a target that genuinely needs it. **Crawl graphs** are written as `crawl-graph-<host>-<scan>-<seq>.json`, redacted and owner-only — widen any glob written against the old name. Redaction matters because a crawl graph records the form values used, including whatever the fill context put in a password field; `spidering.graph_include_values` turns it off.
+</Note>
 
 ## Common Issues
 

@@ -188,11 +188,17 @@ vigolium agent autopilot -t https://staging.example.com \
 | `--knowledge-base-no-traffic` | false | Treat every knowledge-base file as prose. By default, HTTP-traffic exports found there (HAR, Burp XML, curl, OpenAPI/Swagger, Postman, URL lists, raw HTTP) are parsed and ingested as project traffic. |
 | `--source` |, | Path to application source code (or git URL, auto-cloned). Auto-runs vigolium-audit. |
 | `--files` |, | Specific files to include (relative to `--source`) |
-| `--intensity` | `balanced` | Preset bundle: `quick` / `balanced` / `deep`. Sets the turn budget (quick=150, balanced=500, deep=1500), audit mode, browser, and pre-scan strategy |
-| `--audit` | intensity preset (`balanced` by default) | Vigolium-audit mode: `lite` / `balanced` / `deep` / `mock` / `off` |
+| `--intensity` | `balanced` | Preset bundle: `quick` / `balanced` / `deep`. Sets the tool-call budget (quick=150, balanced=750, deep=3000), audit mode, browser, and pre-scan strategy |
+| `--audit` | **`off`** | Vigolium-audit mode: `lite` / `balanced` / `deep` / `mock` / `off`. The nested audit harness is **off by default** since v0.5.3 — ask for it explicitly |
 | `--diff` |, | Focus on changed code (PR URL, `main...branch`, `HEAD~N`) |
 | `--last-commits` |, | Shorthand for `--diff HEAD~N` |
-| `--max-duration` | 6h | Wall-clock cap (intensity preset sets this — quick=1h, balanced=6h, deep=12h) |
+| `--max-duration` | 6h | Wall-clock cap (intensity preset sets this — quick=1h, balanced=6h, deep=12h). A stop here exits `5` |
+| `--max-commands` | intensity preset | Operator tool-call budget. A stop here exits `5` with `budget_exhausted` — see [Run budgets](#run-budgets) |
+| `--token-budget` | 0 (no cap) | Cap on cumulative input + output tokens |
+| `--max-cost-usd` | 0 (no cap) | Cap on estimated spend, priced per turn from provider usage |
+| `--preflight-timeout` | 15s | Deadline of the provider preflight ping (`60s` for a local Ollama / LM Studio endpoint) |
+| `--no-preflight` | false | Skip the provider preflight ping; a missing or broken provider then fails on the first real call |
+| `--auth-file` |, | Session auth file for the run (also on `agent swarm`) |
 | `--triage` | false | Run an AI triage pass over findings after the scan (confirm real issues vs false positives) |
 | `--skill` |, | Force-load these skills by name, bypassing the pre-flight selection (repeatable or comma-separated) |
 | `--skill-tag` |, | Force-load every skill carrying one of these tags (e.g. `xss,idor`) |
@@ -359,14 +365,43 @@ Prompt caching (`EnablePromptCache: true`) is set on the engine; only the Anthro
 
 ---
 
+## Run budgets
+
+Four independent caps bound a run. Hitting any of them **stops the run and finalizes it** — summary, triage and transcript are all written — then exits `5`.
+
+| Flag | Caps | Default |
+|---|---|---|
+| `--max-commands` | Operator tool calls | The `--intensity` preset: quick `150`, balanced `750`, deep `3000` |
+| `--token-budget` | Cumulative input + output tokens | `0` (no cap) |
+| `--max-cost-usd` | Estimated spend, priced per turn from provider usage | `0` (no cap) |
+| `--max-duration` | Wall clock | Intensity preset: quick `1h`, balanced `6h`, deep `12h` |
+
+```bash
+vigolium agent autopilot -t https://app.example --max-commands 400 --max-cost-usd 5
+vigolium agent autopilot -t https://app.example --token-budget 2000000 -j
+```
+
+<Warning>
+  **Exit `5` is not a crash.** A budget stop means the run did everything it had room for and then wrapped up cleanly; `error.code` is `budget_exhausted` (or `timed_out` for `--max-duration`), and `status` on the run document says so. **Read the findings** rather than retrying blind — a retry with the same budget reaches the same wall.
+
+  Before v0.5.1 a `--max-commands` stop (or a context overflow) exited *early*, skipping the summary, triage and transcript, so the work done up to that point was largely wasted.
+</Warning>
+
+**Provider preflight.** A run pings its provider before starting real work, so a missing key or a dead endpoint fails in seconds instead of mid-scan. `--preflight-timeout` sets the deadline (`0` = `agent.olium.preflight_timeout`, default `15s`; `60s` for a local Ollama / LM Studio endpoint) and `--no-preflight` skips it — a broken provider then fails on the first real call instead.
+
 ## Halt conditions
 
-The autopilot exits in one of four ways:
+The autopilot exits in one of these ways:
 
 1. **Natural halt**: model calls `halt_scan`. The current turn is allowed to finish; the engine then sees no further tool calls on the next turn and emits `EventRunDone`. `Result.Halted=true`, `HaltReason` populated.
 2. **Quiet halt**: model finishes a turn with no tool calls and no `halt_scan`. Treated as a natural stop.
-3. **Max turns**: turn count hits `MaxCommands`. Engine emits an `EventError`; autopilot returns a non-nil error.
-4. **Context cancelled**: timeout or SIGINT/SIGTERM. Engine teardown cancels in-flight tools.
+3. **Budget exhausted**: `--max-commands`, `--token-budget` or `--max-cost-usd` ran out. The run **finalizes** and exits `5` with status `budget_exhausted`.
+4. **Timed out**: `--max-duration` elapsed. Finalizes the same way; exit `5`, `error.code: "timed_out"`.
+5. **Context cancelled**: SIGINT/SIGTERM. Engine teardown cancels in-flight tools.
+
+<Note>
+  **A run where the model simply stopped calling tools reports `stalled`**, with a warning and a "never called a tool" diagnosis — not "natural stop" (v0.5.1). The server marks such runs **degraded**. A model that got stuck repeating itself is cut off rather than streamed until the provider's output ceiling.
+</Note>
 
 A separate **finding rate-limit** lives inside `report_finding` in legacy/shadow mode:
 

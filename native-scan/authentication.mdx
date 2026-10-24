@@ -40,7 +40,8 @@ vigolium scan https://app.com --auth-file ./auth-config.json
 | Flag | Description |
 |------|-------------|
 | `--auth` | Inline session in `name:Header:value` format. Repeatable. |
-| `--auth-file` | Path to an auth file (YAML or JSON). Accepts either a single session or a `sessions:` bundle with multiple definitions. Repeatable. |
+| `--auth-file` | Path to an auth file (YAML or JSON). Accepts either a single session or a `sessions:` bundle with multiple definitions. Repeatable. Also available on `agent swarm` and `agent autopilot` since v0.5.3. |
+| `--require-auth` | A failed login is **fatal** for that target rather than a silent anonymous scan (config: `spidering.require_auth`). |
 
 Both flags can be combined. If no session is explicitly marked as `primary`, the first session loaded is used as the primary.
 
@@ -150,6 +151,116 @@ login:
 }
 ```
 
+### Login Request Headers
+
+Added in v0.5.3. `login.headers` adds request headers to **every** request the login sends — the single request, each step of a multi-step flow, or the OAuth2 token request. A step's own `headers` are applied after the flow's, so a step header wins on a clash. Values take `{name}` step variables and the templates below, exactly like `url` and `body`; a `Host` header sets the request's Host.
+
+```yaml
+login:
+  headers:
+    Origin: https://app.example.com
+    X-Client-Version: "4.2"
+  steps:
+    - url: https://identity.example.com/sdk/authenticate
+      method: POST
+      headers:
+        Authorization: "Basic {{env:SDK_BASIC_AUTH}}"
+      body: '{"email":"${TEST_EMAIL}","password":"${TEST_PASSWORD}"}'
+      extract:
+        - source: json
+          path: .intermediate_token
+          apply_as: "var:intermediate"
+    - url: https://api.example.com/auth/exchange
+      method: POST
+      headers:
+        X-Intermediate-Token: "{intermediate}"
+      extract:
+        - source: json
+          path: .token
+          apply_as: "Authorization: Bearer {value}"
+```
+
+### Templates: environment variables and TOTP
+
+Added in v0.5.3. Login `url`, `body`, header values and the OAuth2 fields accept **function templates**, evaluated every time the login runs — including an in-scan re-login — so a TOTP code is always current and a secret never has to live in the file.
+
+| Template | Value |
+|---|---|
+| `{{env:NAME}}` | Environment variable `NAME`, read when the login runs |
+| `{{totp:NAME}}` | Current 6-digit TOTP code (RFC 6238, SHA-1, 30 s) for the base32 secret in `$NAME` |
+| `{{totp_secret_file:PATH}}` | The same, for a base32 secret stored in file `PATH` (`~/` expands) |
+
+```yaml
+login:
+  steps:
+    - url: https://app.example.com/login
+      method: POST
+      body: '{"user":"{{env:APP_USER}}","password":"{{env:APP_PASS}}"}'
+      extract:
+        - source: json
+          path: .mfa_ticket
+          apply_as: "var:ticket"
+    - url: https://app.example.com/login/mfa
+      method: POST
+      body: '{"ticket":"{ticket}","code":"{{totp:APP_TOTP_SECRET}}"}'
+      extract:
+        - source: cookie
+```
+
+**This is what makes MFA-gated targets scannable without a human in the loop.** A variable that is not set, an unreadable secret file or an invalid secret **fails the login** and names the template — nothing is ever sent with an empty value.
+
+<Note>
+  Templates expand **before** `{name}` step variables, so a value the server returned is never itself treated as a template.
+
+  `vigolium auth lint` reports an unknown template function or malformed name as an error, and **warns when `{{totp:…}}` holds what looks like a literal base32 secret** rather than the name of a variable — the easy mistake. `vigolium auth totp` prints the code a template would produce, so you can check it against your authenticator before a scan depends on it.
+
+  The older `${NAME}` syntax still works; it is expanded **once**, when the file is loaded, which is why it cannot carry a rotating code.
+</Note>
+
+### OAuth2 token endpoints
+
+Added in v0.5.3. `type: oauth2_client_credentials` and `type: oauth2_refresh_token` log in against an OAuth2 token endpoint instead of a login form.
+
+```yaml
+sessions:
+  - name: service
+    role: primary
+    login:
+      type: oauth2_client_credentials
+      token_url: https://idp.example.com/oauth/token
+      client_id: vigolium-scanner
+      client_secret: "{{env:SCANNER_CLIENT_SECRET}}"
+      scope: "read:orders write:orders"
+      audience: https://api.example.com
+      auth_style: header        # or body; omit to try header, then body
+
+  - name: user
+    role: compare
+    login:
+      type: oauth2_refresh_token
+      token_url: https://idp.example.com/oauth/token
+      client_id: vigolium-scanner
+      client_secret: "{{env:SCANNER_CLIENT_SECRET}}"
+      refresh_token: "{{env:USER_REFRESH_TOKEN}}"
+```
+
+| Field | Meaning |
+|---|---|
+| `token_url` | Token endpoint (**required**) |
+| `client_id`, `client_secret` | Client credentials (both required for `oauth2_client_credentials`) |
+| `scope` | Space- or comma-separated scopes (client credentials only) |
+| `audience` | Sent as the `audience` parameter (client credentials only) |
+| `refresh_token` | **Required** for `oauth2_refresh_token` |
+| `auth_style` | `header` (HTTP Basic) or `body` (form fields); omit to try header, then body |
+
+The access token is sent as `Authorization: <token_type> <access_token>` (`Bearer` for a bearer token).
+
+<Note>
+  **The token is refreshed before it expires, not after a 401.** The response's `expires_in` becomes the session's expiry, and during a native scan the token is renewed shortly ahead of it — a tenth of its lifetime, between 5 s and 60 s, at most half of it — without waiting for a rejection and without holding scan traffic, **even when the session has no `check` block**. A refresh token the server rotates replaces the configured one for the next refresh.
+
+  `auth load -j` reports the expiry as `expires_at`. A token-endpoint error (`invalid_client`, `invalid_grant`, …) fails the login with that error. `auth lint` checks the required fields, the `token_url` scheme and `auth_style`, and warns about request-flow fields (`url`, `method`, `body`, `extract`, …) that an OAuth2 login ignores.
+</Note>
+
 ### Extraction Sources
 
 | Source | Description | Example |
@@ -158,7 +269,7 @@ login:
 | `cookie` | Extract cookies from `Set-Cookie` response headers. Omit `name` to extract all cookies. | `name: "session_id"` |
 | `header` | Extract a value from a response header. | `name: "X-Auth-Token"` |
 
-The `apply_as` field defines how the extracted value is applied as a request header. Use `{value}` as a placeholder.
+The `apply_as` field defines how the extracted value is applied as a request header. Use `{value}` as a placeholder. `apply_as: "var:<name>"` instead stores the value as a step variable for a later step to reference as `{<name>}`.
 
 ## Multi-Session Bundle File
 
@@ -291,19 +402,98 @@ SessionConfig
 │   ├── role                # (string) "primary" or "compare"
 │   ├── headers             # (map) Static headers, e.g. {"Cookie": "sid=abc"}
 │   ├── login               # (object) Automated login flow
-│   │   ├── url             # (string, required) Login endpoint URL
-│   │   ├── method          # (string, required) HTTP method (POST, GET, etc.)
+│   │   ├── type            # (string) "" (request flow), "oauth2_client_credentials",
+│   │   │                   #          or "oauth2_refresh_token"
+│   │   ├── url             # (string, required for a request flow) Login endpoint URL
+│   │   ├── method          # (string, required for a request flow) HTTP method
 │   │   ├── content_type    # (string) Request Content-Type
+│   │   ├── headers         # (map) Headers added to EVERY request the login sends
 │   │   ├── body            # (string) Request body
-│   │   └── extract[]       # (array, required) Credential extraction rules
+│   │   ├── steps[]         # (array) Multi-step flow; each step takes url/method/headers/
+│   │   │                   #         body/extract/expect
+│   │   ├── token_url       # (string) OAuth2 token endpoint
+│   │   ├── client_id       # (string) OAuth2 client id
+│   │   ├── client_secret   # (string) OAuth2 client secret
+│   │   ├── scope           # (string) OAuth2 scopes (client credentials)
+│   │   ├── audience        # (string) OAuth2 audience (client credentials)
+│   │   ├── refresh_token   # (string) OAuth2 refresh token
+│   │   ├── auth_style      # (string) "header", "body", or "" (try header, then body)
+│   │   └── extract[]       # (array, required for a request flow) Extraction rules
 │   │       ├── source      # (string) "json", "cookie", or "header"
 │   │       ├── name        # (string) Cookie/header name to extract
 │   │       ├── path        # (string) JSONPath for json source
-│   │       └── apply_as    # (string) Header template, e.g. "Authorization: Bearer {value}"
+│   │       └── apply_as    # (string) Header template ("Authorization: Bearer {value}")
+│   │                       #          or "var:<name>" to hold it for a later step
+│   ├── check               # (object) What "logged in" looks like on this target
+│   │   ├── url             # (string) Probe URL; a path resolves against the target origin
+│   │   ├── method          # (string) Probe method (default GET)
+│   │   ├── logged_in       # (object) ALL must hold: status[], body_contains,
+│   │   │                   #          body_regex, header_regex
+│   │   ├── logged_out      # (object) ANY match means logged out: status[],
+│   │   │                   #          redirect_regex, body_regex
+│   │   ├── sample_every    # (int) Check body_regex on 1 response in N
+│   │   └── interval        # (duration) Re-probe check.url at most this often
+│   ├── reauth              # (object) What to do once the session is logged out
+│   │   ├── enabled         # (bool)
+│   │   ├── max_attempts    # (int)
+│   │   ├── backoff         # (duration) Doubles after each failure
+│   │   ├── on_failure      # (string) "continue" or "abort"
+│   │   └── pause_traffic   # (bool, default true) Hold this session's requests
+│   │                       #          through the confirm probe and re-login
 │   └── login_request       # (string) Raw HTTP request for login (alternative to login)
 ```
 
-Only one of `headers`, `login`, or `login_request` can be set per session.
+Only one of `headers`, `login`, or `login_request` can be set per session. `check` and `reauth` were added in v0.5.3; `scanning_strategy.session.validate_url`, `reauth_on_status` and `reauth_interval` fill `check.url`, `check.logged_out.status` and `check.interval` for every session that leaves them unset.
+
+### Logged-in check and in-scan re-login
+
+```yaml
+sessions:
+  - name: admin
+    role: primary
+    login: { ... }
+    check:
+      url: /api/me                 # a path resolves against the target origin
+      method: GET
+      logged_in:                   # ALL listed conditions must hold
+        status: [200]
+        body_contains: '"email"'
+        header_regex: '(?i)^content-type: application/json'
+      logged_out:                  # ANY match means logged out
+        status: [401, 419, 440]
+        redirect_regex: '(?i)/(login|signin|sso)\b'
+        body_regex: '(?i)(session (has )?expired|please (log|sign) in)'
+      sample_every: 50
+      interval: 2m
+    reauth:
+      enabled: true
+      max_attempts: 3
+      backoff: 10s
+      on_failure: continue         # or abort
+      pause_traffic: true
+```
+
+A session with a `check` block is **kept live for the whole scan** (v0.5.3). This matters because a long scan routinely outlives its own session, and every request after that point tests the logged-out surface while reporting nothing wrong.
+
+1. **Sampling.** Every response received with the session's credentials is matched against `logged_out`: `status` and `redirect_regex` (against `Location`) on all of them, `body_regex` on one in `sample_every` (first 64 KiB). Cached responses are not fresh evidence and are not sampled.
+2. **Confirming.** A match marks the session *suspect* and emits `auth.session_suspect`. With a `check.url`, one probe goes out with the current credentials — if it is still logged in, the session stays valid, which is the common case of **a module that provoked a 401 on purpose**. Without a `check.url`, three matches within 10 s confirm the logout.
+3. **Re-login.** The login flow runs again on a copy of the session, through the same login transport and the egress gate's priority lane, so it never queues behind the scan's own traffic. Up to `reauth.max_attempts`, waiting `backoff` after the first failure and doubling it. Success publishes the new credentials as the next *generation* and emits `auth.relogin` with `ok: true`.
+4. **One login per expiry.** However many workers see the 401 at once, only the first confirms and re-logs-in. A response to an older generation's credentials is never evidence against the new ones.
+5. **Pausing.** With `pause_traffic: true` (the default) this session's requests wait from the first logged-out match through the re-login — at most the 2-minute login budget — and leave with the new credentials. Only requests already in flight come back logged out.
+6. **Proactive probe.** `check.interval` re-runs the probe at most that often even when nothing looked logged out.
+7. **Expiry.** When the login reported when its credentials expire (an OAuth2 `expires_in`), the session is kept live **even without a `check` block**, and renews shortly before that time — no confirm probe, no paused traffic, since the old token is still good.
+
+<Warning>
+  **When every re-login attempt fails, the session is *lost* and the scan says so.** `auth.relogin` reports `ok: false`; the running phase and every later phase that sends with that session are recorded **partial** with reason `auth_lost`; and the scan carries on unauthenticated rather than pretending otherwise. With `reauth.on_failure: abort` the scan stops instead — the remaining phases are skipped with `auth_lost` and the command exits `1` with `error.code: "login_failed"`.
+
+  Responses received while the session was logged out are reported as the `responses_while_logged_out` limit on the phase, with the count under `counts.responses_while_logged_out`. They are **not** re-queued, so treat that number as the size of the hole in your coverage.
+</Warning>
+
+<Note>
+  `--require-auth` (or `spidering.require_auth`, v0.5.2) makes a *failed initial login* fatal for that target, rather than silently scanning it anonymously. Credential-stripped requests — the authorization-differential modules' anonymous replays — are never sampled, so their deliberate 401s cannot trigger a re-login. A header you set explicitly with `-H` is never taken over by a session.
+
+  All login flows together are bounded by a **2-minute budget** (v0.5.2), and login flows now honour `--proxy` and the scan's TLS stance like every other request — they used to ignore both.
+</Note>
 
 ## Managing Sessions with the `auth` Command
 
@@ -314,6 +504,7 @@ The `--auth`/`--auth-file` flags load sessions for a single scan. The `vigolium 
 | `vigolium auth list` | Print every session stored for the active project. |
 | `vigolium auth load` | Persist sessions from a file, stdin, or a raw login request into the database. |
 | `vigolium auth lint` | Validate a session config file for errors and warnings before you use it. |
+| `vigolium auth check` | Prove a session actually authenticates against a URL. |
 | `vigolium auth totp` | Generate an RFC 6238 TOTP code for scripting 2FA login flows. |
 
 ### List stored sessions
@@ -344,7 +535,13 @@ vigolium auth load ./login-request.txt --host app.example.com --name admin
 vigolium auth load ./auth-config.yaml --no-validate
 ```
 
-By default, `load` executes each login flow once to verify the credentials work; pass `--no-validate` to skip. Agent format is auto-detected when the path contains `agent-sessions/` (or force it with `--agent-format`). The hostname is derived from the first login URL when `--host` is omitted.
+By default, `load` executes each login flow once to verify the credentials work; pass `--no-validate` to skip. Agent format is auto-detected when the path contains `agent-sessions/` (or force it with `--agent-format`). The hostname is derived from the first login URL when `--host` is omitted. `--force` stores a session whose login failed anyway, and `--timeout` bounds the round-trip.
+
+<Warning>
+  **`auth load` exits `1` on a failed login as of v0.5.3, and runs the *full* scan login flow.** It used to validate only part of a multi-step flow, ignore `expect` conditions and `--proxy`, and then **save the failed session anyway** — so a broken credential set looked loaded and every scan after it ran unauthenticated against a target that looked clean.
+
+  Under `-j` each session reports its own login result, so a bundle with one bad session says which.
+</Warning>
 
 ### Lint a session config
 
@@ -352,21 +549,63 @@ Catch mistakes before a scan — missing/invalid fields, bad extract rules, unkn
 
 ```bash
 vigolium auth lint ./auth-config.yaml
-# Or from stdin
+vigolium auth lint ./admin.yaml ./readonly.yaml ./service.yaml   # several files at once
 cat auth-config.json | vigolium auth lint --stdin
+vigolium auth lint ./auth-config.yaml -j
 ```
+
+Since v0.5.3 it takes **multiple files**, reports **unknown fields with line and column**, and supports `-j` (one item per file, with each issue's severity, line, column, message and rule; `ok` is false exactly when there are errors). `auth load`, `auth lint` and `--auth-file` share one session-file parser, so a file that lints clean is a file the scan can load.
+
+### Check that a session really authenticates
+
+```bash
+vigolium auth check sessions.yaml --url https://app.example.com/account
+vigolium auth check admin --url https://app.example.com/api/me -j   # a stored session
+vigolium auth check sessions.yaml --session admin                    # uses check.url
+```
+
+Added in v0.5.3, and the answer to the most expensive failure mode in authenticated scanning: **a session that loads, lints and looks fine, but is not actually logged in** — so the whole scan crawls the public surface and reports a small, clean result.
+
+It logs each session in exactly as a scan does (the scan's login transport: `--proxy`, the scan's TLS stance, `--timeout`), then requests the URL **twice** through the scan's HTTP stack — once with the session's credentials and once without — following no redirects. The two responses decide the verdict:
+
+| Verdict | Meaning |
+|---|---|
+| `authenticated` | The session reached what the anonymous request did not (status pair, the anonymous request redirected to a login page or served a password form, different content), or `check.logged_in` held with credentials and failed without them |
+| `login_wall` | The authenticated request was redirected to a login URL, got a password form, or matched `check.logged_out` by redirect or body |
+| `unauthorized` | 401/403 with credentials, a `check.logged_out` status, or `check.logged_in` failed |
+| `indistinguishable` | Same status and the same body (volatile tokens such as nonces and timestamps ignored) with and without credentials — **the URL proves nothing.** Pick a page only a logged-in user sees, or configure `check.logged_in` |
+| `error` | The login failed, or a request did not complete |
+
+The URL is `--url`, else `check.url`, else `validate_url`; a path resolves against the login URL's origin. It exits `0` **only when every checked session is `authenticated`**, otherwise `1` with `error.code` `login_failed` (the login itself did not work) or `not_authenticated` (any other verdict) — so it drops straight into CI ahead of the scan.
+
+`-j` gives one item per session: `session`, `url`, `method`, `verdict`, `authenticated`, `reason`, `signals` (`name`, `side`, `detail`), `similarity`, `auth_response` and `anon_response` (`status`, `length`, `location`, `error`), and `login`.
+
+<Note>
+  The database has no columns for `check` / `reauth`, so a **stored** session is checked with `--url` (or `validate_url`) and the heuristics alone.
+</Note>
 
 ### Generate a TOTP code for 2FA
 
-For automating two-factor login flows, `auth totp` turns a base32 secret into the current code (JSON output, `{"code": "...", "expires_in": <seconds>}`):
+For automating two-factor login flows, `auth totp` turns a base32 secret into the current code:
 
 ```bash
 vigolium auth totp --secret JBSWY3DPEHPK3PXP
+# 123456
+
+vigolium auth totp --secret JBSWY3DPEHPK3PXP -j
 # {"code":"123456","expires_in":18}
 
-# Inject the code into a login body
-CODE=$(vigolium auth totp --secret "$TOTP_SECRET" | jq -r .code)
+# Keep the secret off the command line (and out of your shell history)
+vigolium auth totp --secret-env TOTP_SECRET
+vigolium auth totp --secret-file ~/.config/app-totp.key
+printf '%s' "$SECRET" | vigolium auth totp --secret -
 ```
+
+<Warning>
+  **`auth totp` prints the bare code as of v0.5.3; JSON is behind `-j`.** A script doing `vigolium auth totp --secret "$S" | jq -r .code` now gets a jq parse error. Drop the `jq`, or add `-j`.
+</Warning>
+
+`--secret-env`, `--secret-file` and `--secret -` were added in the same release so the secret never appears in `ps` output or shell history. In a session file, prefer the `{{totp:NAME}}` template over shelling out at all — it re-derives the code on every re-login, which a value captured once cannot do.
 
 ## Environment Variables
 
@@ -583,7 +822,9 @@ Agent modes (`swarm`, `autopilot`) can auto-generate session configs from source
 
 When running agent swarm with `--source`, the source-analysis phase discovers authentication flows in the codebase and produces a `session-config.json` and `auth-config.yaml` in the session directory. This config is then fed into subsequent scan phases automatically.
 
-Swarm accepts a pre-built bundle via its own `--auth-config` flag (it skips browser/CLI auth synthesis and uses the file verbatim). Autopilot does not take a pre-built file. For both autopilot and swarm, put credentials, roles, login URL, and browser requirements in `--prompt` (or the positional prompt); browser tooling is always available and the intent parser extracts the auth signals:
+**Since v0.5.3 both `agent swarm` and `agent autopilot` take `--auth-file`**, so a session bundle you already lint, check and version-control drives an agentic run exactly as it drives a native scan — no prompt engineering, no credentials in a transcript.
+
+Swarm additionally accepts a pre-built bundle via its own `--auth-config` flag (it skips browser/CLI auth synthesis and uses the file verbatim). You can still put credentials, roles, login URL and browser requirements in `--prompt` (or the positional prompt) for either command; browser tooling is always available and the intent parser extracts the auth signals:
 
 ```bash
 # Swarm with a pre-built auth-config bundle
@@ -595,6 +836,10 @@ vigolium agent swarm \
 vigolium agent autopilot \
   --target https://app.com \
   --prompt "Log in with admin/admin123 and user/user123. Compare both roles for IDOR."
+
+# Or hand either command the same session file a native scan uses (v0.5.3)
+vigolium agent autopilot --target https://app.com --auth-file ./sessions.yaml
+vigolium agent swarm --target https://app.com --auth-file ./sessions.yaml
 ```
 
 The REST agent endpoints still accept structured `credentials`, `credential_sets`, `auth_required`, `requires_browser`, `browser_start_url`, and `focus_routes` fields. Their removal applies to the autopilot/swarm CLI flags only.

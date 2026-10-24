@@ -14,6 +14,241 @@ package.
   the build you have installed, and `vigolium update` to upgrade.
 </Note>
 
+<Update label="v0.5.5" description="2026-10-24">
+
+An **agent-ergonomics** release. A run can now ask the target what it *is* before deciding what to send it — [`vigolium fingerprint`](/others/cli-references#host-facts-fingerprint-hosts-dns) stores per-origin host facts, [`hosts`](/others/cli-references#host-facts-fingerprint-hosts-dns) reads them back, and [`dns`](/others/cli-references#host-facts-fingerprint-hosts-dns) resolves names into the same store. Alongside it: `fuzz` and discovery multiplex over HTTP/3, every read command gains `--format tsv` and a shared `--fields` vocabulary, and the self-describing surface grows `--usage`, `schema flags` and `schema storage`. Registry moves to **215 active + 119 passive**.
+
+### New vulnerability checks
+
+- **`php2shell`** (active) — CVE-2026-109618 / CVE-2026-109619, on PHP-fingerprinted hosts. Detection inspired by [assetnote/php2shell-scanner](https://github.com/assetnote/php2shell-scanner).
+- **`php2shell-version`** (passive) — flags vulnerable PHP 8.2–8.5 banners in responses the scan already has.
+- **`brotli-request-decoding-exposure`** (active) — flags servers that decode **Brotli request bodies** (CVE-2026-111497, the http2shell surface). The out-of-bounds write is in the Brotli decoder itself, so this is not a Node bug: Bun, Envoy/Istio decompressors and anything linking libbrotli are exposed too. The module is stack-agnostic and **never sends the crash trigger** — it establishes that the server decodes the encoding, nothing more. Background: [patchtheplanet.org/brotli](https://patchtheplanet.org/brotli).
+
+### Added
+
+- **[`vigolium fingerprint`](/others/cli-references#host-facts-fingerprint-hosts-dns)** — fingerprints each origin (base page, favicon, well-known and API-definition paths, GraphQL introspection, CORS preflight, OPTIONS, Host-header variants, and a three-random-path **not-found baseline**) and stores the result per `host:port`. `--depth light|standard|full`; the default is `standard` up to 50 targets and `light` beyond. Also a scan phase (`run fingerprint`, `--fingerprint-depth`).
+- **`vigolium hosts`** reads those stored facts back without sending anything — `--has dns|fingerprint|not-found|tls`, `--history`, `--soft-404`, and `--sans` to print certificate SANs one per line as a ready `-T` list.
+- **`vigolium dns`** resolves A/AAAA/CNAME/MX/NS/TXT/SOA/CAA against the system resolver or `--resolver` and stores the answers as host facts. Resolution only — no zone transfer, no brute force. The `dig` and `host` shims route here.
+- **Favicon mmh3 hashes** (Shodan / FOFA pivot format) alongside the existing MD5 and SHA-256.
+- **HTTP/3 multiplexing on `fuzz`** — `--http-version auto|1.1|2|3|3-only`, with `--http3` / `--http3-only` / `--http2` / `--http1.1` as curl-shaped sugar. `auto` tries HTTP/3, then HTTP/2, then HTTP/1.1, and reports what it used as `pace.protocol`.
+- **Discovery pins each origin's protocol** (`discovery.engine.protocol`) and runs its wordlist brute-force on a dedicated pool (`discovery.engine.brute_force_concurrency`), separate from the phase concurrency.
+- `traffic --fields matches_not_found` and `--exclude-not-found` — drop the records that are their origin's not-found page, judged against the baseline `fingerprint` stored.
+- **`--format tsv`** on `traffic`, `finding`, `endpoints`, `params`, `hosts` and `dns` (`--no-header` omits the header line).
+- **Shared `--fields` aliases** with nearest-name suggestions, plus new `uuid_short` and `response_headers` fields. `--fields`, `--compact` and `--max-output-bytes` reach `fuzz`, `replay`, `endpoints`, `params`, `log ls`, `hosts` and `dns`.
+- **`--usage` on any command** and `vigolium schema flags <command> -j` — the same flag list as prose and as data.
+- **`vigolium schema storage [table]`** describes the database this invocation would read: tables, columns, row counts, and the `-j` field each column surfaces as.
+- JSON schemas for `fuzz`, `replay`, `ingest`, `traffic body`/`headers`, `hosts`, `dns`, `fingerprint` and `schema storage`/`flags`.
+- **Record UUID flags accept a unique 8+ character prefix** (a collision is `ambiguous_id`, with the candidates listed).
+- `ingest -j` lists the stored `items` and the reason each failure failed; `--keep-blocked` stores WAF block pages instead of dropping them.
+
+### Fixed
+
+- **Proxied scans no longer drop pooled connections every 100 requests**, and TLS sessions resume across connections instead of paying a full handshake each time.
+- **Discovery backs off on 429/5xx/WAF responses** and honours `Retry-After`, and classifies 404/400/414/421/431 by status *before* soft-404 fingerprinting.
+- `fuzz --send-via-burp` pools its bridge connections.
+- **Process-substitution and pipe inputs (`-T <(…)`) no longer read as empty**, and `ingest --dir` works, including when it matches a single file.
+- `replay --raw-request-file` / `--raw-request` alone is a valid source; `replay -i` and `fuzz -i` read a **file path** instead of trying to parse it as a request. An unparsed input is `input_unparsed` and names `--input-file`.
+- `fuzz -w builtin|default` selects the default list; `builtin:<name>` picks a specific one.
+- `ingest` reports the dominant WAF-block reason instead of "no response to store".
+
+### Changed
+
+- **Probe markers say `vigolium`** instead of `vgl` / `vgn` / `vgm` / `vgo` / `vig-`.
+- `traffic body` and `traffic headers` accept the record **positionally**.
+- `--tls-probe` help explains that certificates are readable via `vigolium hosts`.
+- **DB schema v4** — `host_observations` gains DNS, `fingerprint` and `not_found` columns (additive; no rewrite).
+- Go 1.27.3, and upgraded Go/JS dependencies (Bun v1.3).
+
+</Update>
+
+<Update label="v0.5.4" description="2026-10-18">
+
+A **small correctness** release, mostly about ports and proxies. Nothing changes in the module registry (**213 active + 118 passive**) and no flag changes meaning; four of these fixes made a request arrive somewhere other than where you aimed it.
+
+### Added
+
+- `oast.fallback_to_default` (default **true**) — when the configured `oast.server_url` does not answer, registration falls back to `oast.pro` **without carrying the configured token**. A dead private OAST server used to silently disable every blind check.
+
+### Fixed
+
+- **Preflight no longer follows redirects**, so a target that redirects to a dead host is no longer reported unreachable (`no_targets_reachable`) and refused before the scan starts.
+- The heuristics check no longer classifies a redirecting root from the *destination's* page, nor requests that destination twice.
+- `confirmBlank`'s secondary probes leaked two pooled buffers per blank-rooted target.
+- **Through an `http://` proxy, `replay` and `fuzz` dropped a non-default port from the request line**, so the proxy forwarded to port 80 — a scan of `:8080` silently tested `:80`.
+- **Through an `http://` proxy, a scan, discovery or login request whose `Host` header differed from its URL was forwarded to that `Host`** instead of the target.
+- Raw request-target probes (routing SSRF) stripped the port from the `Host` header.
+- `fuzz` omitted a non-default port from its `fuzzing …` line and from the `-j` summary's `target`.
+- The ingest proxy dropped a non-default port from the upstream `Host` for an intercepted HTTPS request that carried none.
+
+### Changed
+
+- **`--scope-origin` help now says it bounds stored records, not egress.** A followed redirect is `--redirect-mode`'s job; no `--scope-origin` value stops one.
+- `replay` and `fuzz` send the **request's own `Host`** instead of the target hostname, matching `--send-via-burp`. A request carrying none gets `host:port`.
+
+</Update>
+
+<Update label="v0.5.3" description="2026-10-10">
+
+A **machine-contract** release, and the largest since v0.4.5. `schema_version` goes to **2**: every remaining command moves onto the `-j` envelope, [`vigolium schema`](/others/cli-references#vigolium-schema-the-generated-contract) publishes the whole contract as generated JSON Schema, and a finding gains a lifecycle that survives the next scan. Alongside it: a scan you can plan before running and watch from another process, OAuth2 and TOTP logins, hidden-parameter mining, and a server that no longer listens to the world by default. Registry moves to **213 active + 118 passive**.
+
+<Warning>
+  **Six changes will alter what an existing pipeline sees.** The full BREAKING list is in [`CHANGELOG.md`](https://github.com/vigolium/vigolium/blob/main/CHANGELOG.md); these are the ones that break a working setup rather than shift a number.
+
+  1. **`-j` on a scan no longer implies `--format jsonl`.** `scan -j` prints one [scan document](/getting-started/cheat-sheet#the-scan-document); ask for the bulk `{type,data}` stream explicitly with `--format jsonl -o <file>`. `schema_version` is `2`, `-j` is **compact by default** (`--pretty` indents), and `command` is always the cobra path of what ran — `db list -j` used to say `traffic`.
+  2. **`vigolium server` binds `127.0.0.1`, not `0.0.0.0`.** A deployment that relied on the old default will look like the server never started. Pass `--host 0.0.0.0` to expose it. A **non-loopback ingest proxy now requires** `--proxy-token` or `--proxy-allow` — an open MITM proxy on a routable address is an open relay that also decrypts TLS. `-S` on `server` and `ingest` is a usage error; spell `--scan-on-receive` out.
+  3. **`scan` and `run` with no target need `--all-records`.** They no longer fall back to the database on their own. Under `-j`, `--events`, `--ci-output-format`, or a non-terminal stdout/stderr this is already an error; an interactive terminal gets one more release with a deprecation warning.
+  4. **A `--ext` extension that fails to load stops the scan** — exit `2`, `extension_load_failed`, before any request. `--ext-allow-failures` restores the old behavior. Extension **header objects are case-insensitive** now, with `get` / `getAll` / `has` / `entries` / `raw`.
+  5. **Dismissed findings leave the gate.** A finding marked `false_positive` or `accepted_risk` is excluded from `--fail-on`, `scan diff` and `finding --new-since` unless you pass `--include-dismissed`. `agent triage` marks false positives **by status** instead of downgrading severity to `info`.
+  6. **`project use` no longer creates** (pass `--create`), an unknown `X-Project-UUID` returns **404** instead of creating a project, `agent audit` **requires `--source`**, and `auth totp` prints the **bare code** (JSON behind `-j`).
+</Warning>
+
+### Added
+
+- **[`vigolium schema`](/others/cli-references#vigolium-schema-the-generated-contract)** — JSON Schema (draft 2020-12) for every `-j` document, `--events` line and the error envelope, reflected from the Go types that emit them and committed under `docs/schema/`. Objects are closed, so a key the schema does not name is a contract change rather than a silent addition.
+- **Finding lifecycle.** [`finding mark`](/others/cli-references#finding-lifecycle-finding-mark-finding-verify) records a verdict (`false_positive`, `confirmed`, `accepted_risk`, `fixed`, `triaged`); `finding verify` re-runs a finding's own module and records whether it reproduces; `finding --verdict` and `--new-since` read them back. Findings store their replay context — origin record, insertion point, payload — which is what makes the re-run deterministic. `POST /api/findings/:id/verify` over REST.
+- **[`scan diff`](/others/cli-references#comparing-two-scans-scan-diff)** compares two scans into `new` / `unchanged` / `fixed` / `not_reobserved`, with `--fail-on-new` for CI. `fixed` is claimed only when the head scan was actually comparable.
+- **[`scan status`](/others/cli-references#watching-a-scan-from-elsewhere-scan-status-scan-wait) and `scan wait`** watch a scan from another process. Every native scan keeps a 10-second heartbeat, so a dead run is reported `abandoned` rather than `running` forever, and `log ls --reap` finalizes the rows it left behind. **The ETA is never invented** — each figure is `null` when its basis is unknown, and `basis` names what it rests on.
+- **[`scan --dry-run`](/others/cli-references#planning-a-scan-without-sending-anything)** resolves and prints the whole plan — phases with the reason each disabled one is off, budgets, pace, modules, scope, a request estimate — and exits without sending anything, minting a UUID or writing a row. The same object rides a real run as the `scan.plan` event and is stored on the scan row.
+- **[`vigolium endpoints`](/others/cli-references#endpoint-and-parameter-inventory-endpoints-params) and `vigolium params`** aggregate stored traffic into an endpoint and parameter inventory without sending a request. `params --type integer,uuid,sequential_id` is an IDOR shortlist.
+- **[OAuth2 logins](/native-scan/authentication#oauth2-token-endpoints)** (`oauth2_client_credentials`, `oauth2_refresh_token`) in session files, refreshed **before** expiry rather than after a 401, even without a `check` block.
+- **[`{{env:}}` / `{{totp:}}` / `{{totp_secret_file:}}` templates](/native-scan/authentication#templates-environment-variables-and-totp)** and `login.headers`, re-evaluated on every login — which is what makes an MFA-gated target scannable unattended. `auth totp` gained `--secret-env` / `--secret-file` / `--secret -`.
+- **[`vigolium auth check`](/native-scan/authentication#check-that-a-session-really-authenticates)** proves a session actually authenticates against a URL, and names `indistinguishable` as its own verdict so "the URL proves nothing" is not read as success. Session files gained `check` and `reauth` blocks, with [in-scan re-login](/native-scan/authentication#logged-in-check-and-in-scan-re-login) when a session is detected as logged out.
+- **Agent run budgets** — `--max-commands`, `--token-budget`, `--max-cost-usd` — each stopping the run, **finalizing it**, and exiting `5`. Plus `--preflight-timeout` / `--no-preflight`, `--auth-file` on `agent swarm` and `autopilot`, `agent triage --no-write` / `--no-probe` and an `inconclusive` verdict.
+- **[Hidden-parameter mining](/native-scan/strategies#hidden-parameter-mining)** as the `param-mining` phase and `kit param-mine`, feeding what it finds to the injection modules as insertion points.
+- **Scope admission and reachability preflight** before a scan sends anything: every target refused is exit `1` `no_targets_in_scope` with the rule named per target; nothing reachable is `no_targets_reachable`.
+- `module.error` events and `scans.module_errors`, so a module that errors, times out or panics is reported rather than logged away.
+- `ext run` / `ext eval --record-uuid` runs one extension offline against a stored record; `ext test` runs fixture cases.
+- `--format csv`, `junit` and `github`; `--max-body-bytes` and `--pdf-timeout`.
+- `vigolium config validate`, `vigolium db compact`, `vigolium server ca print|path|install|uninstall`.
+- Request budgets `--max-requests` / `--max-requests-per-host`; `--known-issue-scan-templates`; `--discovery-extensions` / `--discovery-max-depth`; repeatable `--discovery-wordlist` with `.gz`; a `large` embedded wordlist tier.
+- Discovery recovers **webpack/Vite lazy chunks** named only at runtime; client routes found in JavaScript seed the browser crawl; `spidering.tabs` crawls multiple tabs; the crawler clicks into **shadow DOM**.
+- Global `--color auto|always|never` and `--pretty`; `VIGOLIUM_DB` and `VIGOLIUM_CONFIG`; `doctor` `scope` and `oast` checks and `--strict`; opt-in REST **v2 responses** via header or `?api_version=2`.
+- Signed releases (minisign), `vigolium update --check` / `--dry-run` / `--install-dir`, and `VIGOLIUM_UPDATE_BASE_URL`.
+
+### Changed
+
+- **A failing phase no longer ends a native scan** — only infrastructure errors do. The scan carries on and reports `completeness: partial` with the reason, instead of discarding the work of every phase that already succeeded.
+- **First-run dependencies install lazily**, fetched by the phase that needs them and announced as `scan.setup`. A scan that skips spidering never downloads a browser.
+- **One egress gate paces every scan request**, and **retries and redirects take their own tokens** — so a configured rate limit is now the rate that actually reaches the target. `--max-per-host` defaults to `40` everywhere.
+- Dead-host quarantine became a **recovering circuit breaker keyed on `host:port`**: a host that starts answering again resumes receiving traffic, and `:443` being healthy no longer depends on `:8443` being healthy.
+- Embedded helpers are zstd-compressed — binary 310 MB → 220 MB. Run `make build` once after pulling.
+- `config set` parses JSON/YAML lists and maps and validates before an **atomic** write; it used to split a JSON list on commas, producing scope patterns that matched nothing.
+- `db export --format csv` uses standard quoting and **neutralizes formula injection**.
+- The scan-on-receive spill queue moved to `~/.vigolium/server-queue/` and **resumes on restart**.
+- `scan-url` / `scan-request` enforce scope without `-S` (REST answers 422), run OAST checks on the direct path, probe the scheme when a raw request gives no hint, and accept `--auth`, `--intensity`, `--scanning-max-duration`, `--oast-url` and `--scope-origin`.
+- `modules_run` counts modules that **executed**; `modules_loaded` holds the old number.
+- Module selection applies to JS/YAML extensions, on the CLI and over REST. `ext lint` errors on missing handlers and exports, and extension top-level code is capped at 10 s at load.
+- The nested audit harness is **off by default** on `agent autopilot`, `agent swarm` and REST autopilot.
+- `doctor` exits `1` when the verdict is `not_ready`; `vigolium update` updates in process with signature verification, and `VIGOLIUM_AUTO_UPDATE` only acts at an interactive terminal.
+- The scan webhook fires on every exit (`scan.failed`, `scan.cancelled`) and is drained before exit.
+- Shims gained `--dry-run` and approximation notes; `ffuf` routes to `fuzz` when FUZZ isn't the last path segment, `arjun` routes to `fuzz --fuzz new-param`, `nuclei -t` maps to `--known-issue-scan-templates`.
+
+### Fixed
+
+- **`db clean --scan-uuid` deleted every HTTP record in the project**, and `export` / `ls` / `stats` ignored the filter too.
+- **`auth load` validated only part of a multi-step flow**, ignored `expect` and `--proxy`, and saved failed sessions anyway — so a broken credential set looked loaded and every later scan ran anonymously.
+- `config set` / `scope set` split JSON lists on commas, producing scope patterns that matched nothing.
+- `finding --sort severity` returned an unsorted list.
+- `POST /api/scan-all-records` silently ignored an unloadable profile or intensity.
+- Large source maps (>512 sources or 8 MiB) produced no finding.
+- Several REST handlers kept running after writing an error response.
+- PostgreSQL stores failed on integer-typed bool columns; `db migrate` converts them.
+- `--session` / `--session-file` aliases were unknown flags on `scan` and `run`.
+
+<Note>
+  The full list — every Added, Changed and Fixed entry, including the long tail of per-module and provider-specific fixes — is in [`CHANGELOG.md`](https://github.com/vigolium/vigolium/blob/main/CHANGELOG.md).
+</Note>
+
+</Update>
+
+<Update label="v0.5.2" description="2026-10-03">
+
+A **tell-the-truth-about-coverage** release: a scan now reports whether it actually covered what you asked for, the browser crawler stops taking actions that change the target, and `--events` owns stdout so a machine consumer never parses an interleaved stream. No module changes — the registry stays at **208 active + 117 passive**.
+
+<Warning>
+  **Three changes alter what an existing setup does.**
+
+  1. **The browser crawler no longer creates accounts, uploads files or downloads files, and cancels `confirm()` dialogs.** These used to happen on an ordinary crawl, so scanning a staging environment could leave real accounts and real uploads behind. Each is restorable under [`spidering.interaction.*`](/guides/scanning-a-spa#what-the-crawler-will-and-will-not-do), and generated identities now use `example.com`. The browser **sandbox is on by default**; `--browser-insecure` restores the old posture.
+  2. **Crawl graphs are now `crawl-graph-<host>-<scan>-<seq>.json`, redacted and owner-only.** Widen any glob written against the old name. Redaction matters because a crawl graph records the form values used.
+  3. **`-j` emits one document per invocation with `items` as the only row array.** `--json-legacy-keys` restores the old per-command names for a caller still migrating.
+</Warning>
+
+### Added
+
+- **Scan completeness** — [`completeness`, `stop_reason` and `phase_outcomes`](/api-references/scan#scan-completeness) on the scan row, in the REST object and in `--format jsonl`, plus `reasons` / `limits` on `phase.finished` and `scan.finished`. `status` says whether the process reached its end; `completeness` says whether the run covered its input. **They are independent, and an absent `completeness` means unknown — never read it as complete.**
+- **`--require-auth`** / `spidering.require_auth` — a failed login is fatal for that target, instead of a quiet anonymous scan that comes back clean.
+- **`--keep-db-on-error`** — a failed `-S` run's database is kept under `~/.vigolium/recovered/`, so the evidence of why it failed does not vanish with the temp store.
+- **`--glob-strict`** for `--glob-db` reads, with `glob_sources` accounting **naming every skipped file** — a merge used to drop unreadable sources silently.
+- `--max-output-bytes` (opt-in) on `finding`, `traffic` and `db ls`, with an `output_budget` object naming the next `--offset`.
+- `spidering.interaction.*`, `spidering.identity_email_domain`, `spidering.graph_include_values`, `spidering.max_capture_body_bytes`.
+- `make test-browser-conformance` — a browser conformance suite with a launch precheck.
+
+### Changed
+
+- **`--events ndjson` owns stdout exclusively.** Combining it with `-j`, `--format jsonl` without `-o`, `--ci-output-format` or any `--print-*` flag is rejected **before any work starts**, exit `2` naming the conflict; it used to produce a corrupt interleaved stream and exit `0`. Events carry **`seq`**, the stream's own total order — order by it, not by `ts`, which is millisecond-precision on a stream that emits several events per millisecond.
+- **The terminal event is written after finalization**, so a run whose results never landed reports `failed` rather than `completed`. A closed consumer (`| head -5`) no longer kills the scan. SIGTERM cancels a scan like Ctrl-C.
+- **A broken `--config` exits `1`** instead of silently falling back to defaults — which used to produce a scan with none of your settings and nothing to say why.
+- **Record delivery is at-least-once**: a curtailed phase leaves its cursor behind unfinished records, so a later run re-serves them.
+- Cookies are evaluated per request, so fewer are sent — host-only, path-scoped, `Secure` and expired cookies are no longer sent everywhere.
+- A requested output that cannot be written exits `1` with `export_failed`; single-file `-o` outputs publish **atomically**, so a failure leaves the previous file intact, and a `--format fs` re-export **replaces** the tree rather than merging into it.
+- All login flows together are bounded by a 2-minute budget; `spidering.max_duration: 0s` means the 30 m default and a negative duration exits `2`.
+- Stored `duration_ms` for browser-captured responses excludes the CDP body fetch, so those values shrink — and now describe the response.
+- `version`, `help` and `completion` no longer create `~/.vigolium`; first-run setup and `doctor --fix` write to stderr, so a cold-`$HOME` NDJSON run stays clean.
+
+### Fixed
+
+- **`session.use_in_discovery: false` made the entire scan anonymous**, including DynamicAssessment and KnownIssueScan.
+- **Compare-session requesters carried the primary session's credentials**, so every authorization-differential check read "same as primary" — the whole IDOR/BOLA family was answering from the wrong identity.
+- **A stored login flow could never be reloaded** — double-encoded `ExtractRules` failed validation and killed session init for the whole scan.
+- **A cancelled scan acked unprocessed work**, advancing the DB cursor past records a later run then skipped permanently.
+- **`scope.host.exclude` / `scope.path.exclude` were not enforced before a discovery request left.**
+- `vigolium ingest` reported records it never persisted, and discarded the captured response on every HAR/Burp/Postman entry to re-fetch it live.
+- A browser crawl that lost its corpus recorded `completed`; a phase stopped by its own `max_duration` reported `completed`; a dynamic-assessment round that errored printed "all rounds completed" and carried on.
+- Login flows ignored `--proxy` and rejected the target's certificate, unlike every other request.
+- `-P --fail-on` exited `0` unless **every** child tripped the gate; it now exits `4` when any does.
+- A SQLite path containing `#`, `%`, a space or non-ASCII did not reach the file it named; `--stateless=false` dropped a `VIGOLIUM_DB_PATH` pin.
+- `scan-url --events ndjson` emitted nothing, and `| head` killed the scan with SIGPIPE.
+- `scanning_pace.discovery.rate_limit` was accepted and ignored; `requests_sent` for Discovery was effectively `0`.
+- Discovery cleanup deleted records that findings referenced.
+
+</Update>
+
+<Update label="v0.5.1" description="2026-09-24">
+
+An **agent-runtime reliability** release. Nothing changes for a native scan; everything changes for a long agentic run, where a dropped tool call, a truncated provider stream or an early exit used to cost the whole session. Registry unchanged at **208 active + 117 passive**.
+
+### Added
+
+- Claude 5 family pricing (Fable 5.1 / 5, Opus 5.5 / 5, Sonnet 5) in audit cost estimates.
+- `reasoning_effort: max` for Anthropic, with the effort level now reaching every provider that supports it; adaptive thinking for Claude 4.6+ models.
+- **Conversation-tail prompt caching on Anthropic**, cutting input cost on long agent loops.
+- Skill `allowed-tools` surfaced to the model, with warnings for tools the run does not expose.
+
+### Changed
+
+- Default models bumped to `claude-sonnet-5` for LLM helpers; provider defaults centralized.
+- `agent.olium.max_tokens` defaults to `0` (the provider default, 64000 on Anthropic); oversized values are ignored. `temperature` is accepted but ignored, as current Claude models reject sampling params.
+- Docs and prompts reference the real tool name `run_native_scan`.
+
+### Fixed
+
+- **Hitting `--max-commands` or a context overflow now finalizes the run** — summary, triage and transcript — instead of exiting early and discarding the work already done.
+- **Parallel tool calls no longer cross-wire their arguments or drop a call** (OpenAI chat-completions, id-less gateways); Gemini parallel calls get unique synthesized ids with tool results folded into one turn.
+- **A truncated provider stream is retried** instead of being committed as a finished turn, and 429/529/5xx errors are retried with longer backoff instead of ending the run.
+- Orphaned `tool_use` blocks are auto-answered, avoiding a hard 400 on every re-send path.
+- **Tool calls whose arguments do not parse are no longer run with `{}`** — the model gets the parse error and its raw arguments back.
+- Scan tools honor their own duration budget and read back results even after the deadline, so a timed-out scan tool no longer returns an all-zero summary.
+- **A run where the model stopped calling tools reports `stalled`** with a "never called a tool" diagnosis, instead of "natural stop"; the server marks it degraded. A model stuck repeating itself is cut off rather than streamed to the provider's output ceiling.
+- Run status is decided in one place, so a CLI autopilot run records `completed_with_warnings` like the server does, and a multi-driver audit where every driver failed is `failed`.
+- A long tail of openai-compatible gateway fixes: a 200 JSON body from a proxy ignoring `stream: true`, single-newline SSE framing, `content` as an array of parts, tool arguments sent as an object or double-encoded, in-stream `{"error":…}` frames, and `/v1` probe handling — each of which used to surface as "stream incomplete" or an empty turn.
+- Workbench: the scan-detail LOGS panel reads the plain-text `runtime.log` tail again, the live log reconnects past the follower's 2 h cap, and split UTF-8/ANSI sequences no longer garble chunks.
+
+<Note>
+  The provider-by-provider list is long and specific; see [`CHANGELOG.md`](https://github.com/vigolium/vigolium/blob/main/CHANGELOG.md) for every entry.
+</Note>
+
+</Update>
+
 <Update label="v0.5.0" description="2026-09-22">
 
 A **trustworthy-output** release: two finding families that were entirely false positives now need evidence the transport can actually produce, the hardening advisories move off the default intensity, a run that fails to write a requested artifact exits non-zero, and scans stop leaking temp scratch. No module changes - the registry stays at **208 active + 117 passive**.

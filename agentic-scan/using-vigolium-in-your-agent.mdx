@@ -45,30 +45,55 @@ Don't poll the database and don't invent a patience message — ask for the stre
 vigolium scan -t https://target.example --events ndjson 2>/dev/null | jq -c .
 ```
 
-Available on `scan`, `run`, `scan-url`, `scan-request`. Types: `scan.started`, `phase.started|progress|finished`, `waf.block`, `waf.pacing`, `finding.new`, `error`, `scan.finished`.
+Available on `scan`, `run`, `scan-url`, `scan-request`. The vocabulary is **20 types** as of v0.5.3: `scan.started`, `scan.plan`, `scan.setup`, `phase.started|progress|finished`, `finding.new`, `module.error`, `extension.failed`, `waf.block`, `waf.pacing`, `host.dead|quarantined|recovered`, `auth.relogin`, `auth.session_suspect`, `oast.unavailable`, `import.summary`, `error`, `scan.interrupting`, `scan.finished`.
 
-The three you should actually branch on:
+The ones you should actually branch on:
 
+- **`scan.plan`** — always the second line, before any request. Its `plan` is the resolved scan plan: phases, budgets, modules, scope, and a request estimate. Read it to know what the run is *about* to do.
 - **`waf.block`** — the edge started filtering. Results for that host are **incomplete**; do not read a thin surface as a clean target.
+- **`module.error`** — a module errored, timed out or panicked. The scan carries on; the total lands on the scan row as `module_errors`. A run with a high count covered less than its finding list suggests.
 - **`error`** — a phase failed and the scan **carried on**. Non-fatal by construction, so this is never a reason to abandon a run that is still producing findings. A failure that ends the run rides on `scan.finished{status:"failed"}` instead.
-- **`scan.finished`** — always last, including `status:"interrupted"` on SIGINT/SIGTERM. Its *absence* means the process was killed outright (SIGKILL can't be caught), so treat a stream that stops without it as a hard kill, not a completed scan.
+- **`scan.interrupting`** — nonterminal. SIGINT/SIGTERM arrived; graceful shutdown runs and the real terminal event still follows. Don't treat it as the end of the stream.
+- **`scan.finished`** — always last, including `status:"interrupted"`, and written **after finalization**, so its totals come from the persisted scan row. Its *absence* means the process was killed outright (SIGKILL can't be caught), so treat a stream that stops without it as a hard kill, not a completed scan.
 
-Every line carries `scan_uuid` (a sweep is several invocations) and `v`, the event-schema version. This replaces scraping `vigolium log` for `[waf-block-detected]` markers. Full event table: [CLI References](/others/cli-references#machine-event-stream).
+Every line carries `scan_uuid` (a sweep is several invocations), `v` (the event-schema version) and **`seq`** — the stream's own total order, 1-based and stamped under the write lock. **Order by `seq`, not `ts`:** timestamps are millisecond-precision and a busy scan emits several events per millisecond. A gap in `seq` means a line was lost.
+
+This replaces scraping `vigolium log` for `[waf-block-detected]` markers. Full event table: [CLI References](/others/cli-references#machine-event-stream); the generated schema for any line is `vigolium schema event <type>`.
+
+<Warning>
+  **`--events` owns stdout exclusively (v0.5.2).** Combining it with `-j`, `--format jsonl` without `-o`, `--ci-output-format`, `--print-finding`, `--print-traffic` or `--print-traffic-tree` is rejected **before any work starts**, exit `2` naming the conflict. It used to produce a corrupt interleaved stream and exit `0`.
+
+  Piping to a consumer that closes early is fine, though: `… --events ndjson | head -5` runs the scan to completion and exits on its own merit.
+</Warning>
 
 ### `-j`: one envelope, every command
 
 ```jsonc
-{ "schema_version": 1, "command": "traffic", "project_uuid": "…",
+{ "schema_version": 2, "command": "traffic", "kind": "read", "ok": true,
+  "project_uuid": "…", "project_scoped": true, "project_source": "flag",
   "db_path": "/home/me/.vigolium/database-vgnm.sqlite",
   "total": 39, "offset": 0, "limit": 100,
   "items": [ … ],
   "query": "vigolium replay -u <uuid>",
+  "query_argv": ["vigolium", "replay", "-u", "<uuid>"],
   "generated_at": "2026-09-04T10:11:12.345Z", "generated_at_ms": 1788453072345 }
 ```
 
-Parse `items` — it is **the** row array, and since v0.4.6 the only one. The historical row keys (`records`, `findings`, `scans`, `rows`, `stats`) are gone from the default output: they shipped a second full copy of every row, which on a 20-record compact read was 19,983 bytes against 7,884 of actual rows. `--json-legacy-keys` (or `VIGOLIUM_JSON_LEGACY_KEYS=1`) restores the alias for a caller still migrating, at that cost.
+Parse `items` — it is **the** row array, and since v0.4.6 the only one; `[]` when empty, never `null`, never an object. The historical row keys (`records`, `findings`, `scans`, `rows`, `stats`) are gone from the default output: they shipped a second full copy of every row, which on a 20-record compact read was 19,983 bytes against 7,884 of actual rows. `--json-legacy-keys` (or `VIGOLIUM_JSON_LEGACY_KEYS=1`) restores the alias for a caller still migrating, at that cost.
 
-**Assert `db_path`**: the database open order ends at one shared default file, so a fall-through silently mixes engagements. Run the `query` field rather than composing your own follow-up.
+`ok` is on **every** document — `true` on a result, `false` on an error — so `.ok` is a valid branch on anything `-j` prints. `kind` names the shape: `read`, `mutation` (adds `changed` and `action`) or `scan`. A single-object answer arrives as `items: [obj]` with `total: 1`; read `.items[0]`.
+
+**Assert `db_path`**: the database open order ends at one shared default file, so a fall-through silently mixes engagements. Run the `query` field rather than composing your own follow-up — `query_argv` is the same thing pre-split, if you are spawning rather than shelling out.
+
+**Check `project_source`.** It says where the project came from: `flag`, `env`, `active_file` or `default`. `active_file` means `~/.vigolium/active-project`, which is **global to the machine** — another shell or agent can change it under you, so a document resolved that way also carries a `warnings` entry. Pin `--project-uuid` or `VIGOLIUM_PROJECT_UUID` and both go away.
+
+<Warning>
+  **Three v0.5.3 changes to adjust for.** `schema_version` went `1` → `2`; every remaining command moved onto this envelope at the same time.
+
+  1. **`-j` on a scan no longer implies `--format jsonl`.** `scan -j` now prints one scan document; ask for the bulk `{type,data}` stream with `--format jsonl -o <file>`.
+  2. **`-j` is compact by default** — one line. The global `--pretty` (or `VIGOLIUM_JSON_PRETTY=1`) indents it.
+  3. **`command` is the cobra path** of what ran (`"db list"`, `"scan status"`, `"extensions lint"`), not a hand-typed label. `db list -j` used to say `traffic`.
+</Warning>
 
 <Note>
   `query` is a ready-to-run follow-up pinned to the same store and scope, correctly shell-quoted:
@@ -81,15 +106,32 @@ Parse `items` — it is **the** row array, and since v0.4.6 the only one. The hi
   Finding IDs are per-database autoincrement integers, so the `--db` / `--stateless` / `--project-uuid` flags inside that string are load-bearing. Under `--glob-db` the field is **absent**, because the merged source is a temporary database that no argument list can reopen.
 </Note>
 
-Gate on the contract once at startup with `vigolium version --json`, which reports `schema_version` and `db_schema_version`.
+Gate on the contract once at startup. The strong form is `vigolium schema command <name>`, which prints the generated JSON Schema (draft 2020-12) for exactly the document you are about to parse — reflected from the Go types that emit it, with objects closed, so a key it does not name is a contract change rather than a silent addition:
+
+```bash
+vigolium schema                       # what has a schema: commands, event types, error, documents
+vigolium schema command finding       # one command's -j document
+vigolium schema command scan status   # multi-word paths need no quoting
+vigolium schema event phase.progress  # one --events line type
+vigolium schema error                 # the error envelope; error.code is the closed enum
+vigolium schema all > vigolium.schema.json
+```
+
+The cheap form is still `vigolium version --json`, which reports `schema_version` and `db_schema_version` without printing a schema.
 
 ### Exit codes
 
-`0` success · `1` error · `2` usage error · `3` `fuzz --fail-on-match` · `4` `--fail-on` gate tripped.
+`0` success · `1` error · `2` usage error · `3` `fuzz --fail-on-match` · `4` `--fail-on` gate tripped · `5` incomplete.
 
-`3` and `4` are *completed results*, not failures: the output was written before the code was chosen. When it was **not** written, the run is `1` with `error.code: "export_failed"`, and that outranks the gate.
+**`3`, `4` and `5` are completed results, not failures.** The output was written before the code was chosen. When it was **not** written, the run is `1` with `error.code: "export_failed"`, and that outranks the gate — a `4` whose artifact is missing would send you to read a file that is not there.
 
-**`3` and `4` are completed results, not failures.** The output was written before the code was chosen. `--soft-fail` forces the process status to `0` for all of them while leaving the output intact — under `--json` the error object still reports the code that *would* have been used, plus `"soft_fail": true`. See the [full table](/others/cli-references#exit-codes).
+`--soft-fail` forces the process status to `0` for all of them while leaving the output intact — under `--json` the error object still reports the code that *would* have been used, plus `"soft_fail": true`. See the [full table](/others/cli-references#exit-codes).
+
+<Note>
+  **`5` is how an agent run tells you it stopped short (v0.5.3).** `agent autopilot` / `swarm` / `audit` exit `5` on a `--max-duration` stop, an exhausted `--max-commands` / `--token-budget` / `--max-cost-usd`, or an audit in which some drivers failed; `error.code` is `timed_out`, `budget_exhausted` or `partial`. The run still **finalized** — summary, triage and transcript are all written — so read the results rather than retrying blind.
+
+  A **native** scan that is merely partial still exits `0`. Read `completeness`, `reasons` and `stop_reason` on the scan document instead; `scan wait --fail-on-partial` is the opt-in that turns that into a `5`.
+</Note>
 
 ### One document per invocation
 
@@ -99,7 +141,9 @@ Under `--json` you get **exactly one document**, whatever happens:
 - A command that already wrote its result does not get an error object appended to it — the exit code carries the outcome.
 - Nothing else is ever written to stdout. Banners, prompts, progress, and warnings all go to stderr.
 
-Error codes worth branching on: `usage_error`, `source_missing`, `source_unreadable`, `source_incompatible` (a valid SQLite file that is **not** a Vigolium store — you are pointed at the wrong file), `export_failed` (the run finished but a requested artifact was not written — retry the export, not the scan), `gate_tripped`, `failed`. `traffic body` and `traffic headers` add four of their own: `record_not_found`, `body_unavailable`, `body_decode_failed`, `body_incomplete`.
+`error.code` is a **closed set**, shared with the REST API; values are added but never re-worded, so branch on the code and never on the message. `vigolium schema error` prints the authoritative enum.
+
+Worth branching on: `usage_error`, `extension_load_failed` (a `--ext` extension failed to load, so the scan was refused before any request), `source_missing`, `source_unreadable`, `source_incompatible` (a valid SQLite file that is **not** a Vigolium store — you are pointed at the wrong file), `no_targets_in_scope` and `no_targets_reachable` (the scan sent nothing; the message names the rule or the failure per target), `export_failed` (the run finished but a requested artifact was not written — retry the export, not the scan), `gate_tripped`, `budget_exhausted` / `timed_out` / `partial` (the exit-`5` family), `failed`. `traffic body` and `traffic headers` add four of their own: `record_not_found`, `body_unavailable`, `body_decode_failed`, `body_incomplete`. Watching a scan adds `scan_not_found`, `scan_abandoned` and `wait_timeout`.
 
 <Warning>
   **A requested artifact that was not written is exit `1`, code `export_failed` (v0.5.0)** — even when the scan itself ran clean, and even when it would otherwise have tripped the `--fail-on` gate. The gate's whole premise is that the output was written before the code was chosen; when it wasn't, exit `4` would send you to read a file that does not exist.
@@ -1679,7 +1723,7 @@ vigolium strategy
 ```bash
 vigolium project create my-project
 vigolium project list
-vigolium project use my-project
+vigolium project use <project-uuid>   # a UUID, not a name; add --create if it may not exist
 ```
 
 **Scope CLI operations to a project:**

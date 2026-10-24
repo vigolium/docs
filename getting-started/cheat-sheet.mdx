@@ -243,6 +243,40 @@ The aliases `httpx`, `alive`, `sweep`, and `probing` all reach the same phase, a
 
 ---
 
+## 5b. Ask an origin what it is, and read the answer back later
+
+Added in v0.5.5. Where probe answers *which* hosts are alive, `vigolium fingerprint` answers what **one origin is** — and stores it per `host:port` so every later command and run can read it without sending anything again.
+
+```bash
+# Fingerprint and store (reads only: GET, OPTIONS, one GraphQL introspection POST)
+vigolium fingerprint https://app.example -j
+vigolium fingerprint -T hosts.txt --depth light -j --compact
+
+# Resolve names into the same store (no zone transfer, no brute force)
+vigolium dns -T hosts.txt --type a,cname --format tsv
+
+# Read the facts back — zero requests
+vigolium hosts -j --compact
+vigolium hosts '*.example.com' --format tsv --fields hostname,port,title,server,favicon_mmh3
+vigolium hosts --has tls --sans > more-hosts.txt      # certificate SANs: a ready -T list
+vigolium hosts --soft-404 -j                          # origins that answer 200 to anything
+
+# Then drop every stored not-found page out of a traffic read
+vigolium traffic --exclude-not-found --format tsv --fields status,method,url
+```
+
+`--depth light` (~9 reads per origin), `standard` (~60, the default up to 50 targets) or `full` (adds sensitive paths, `OPTIONS` on everything that answered, source maps). Beyond 50 targets the default drops to `light` on its own.
+
+<Callout icon="circle-info" color="#3B82F6" iconType="regular">
+  **The not-found baseline is the payoff.** Fingerprint records how an origin answers three random paths; afterwards `traffic --exclude-not-found` can drop that origin's soft-404 pages and `hosts --soft-404` can list the origins where a `200` means nothing. No status filter can do either, because those pages *are* `200`s. `favicon_mmh3` is Shodan/FOFA's hash format, so a hash here is a query you can paste into either.
+</Callout>
+
+<Callout icon="circle-info" color="#3B82F6" iconType="regular">
+  Every fingerprint request goes **through the scan engine** — scope, `--rate-limit`, `--max-per-host`, `--max-requests` and WAF pacing all apply, and each request lands as an `http_record` with `source: fingerprint`. It is also a phase: `vigolium run fingerprint` (`--fingerprint-depth`), and `fingerprint` in `--only` / `--skip`. See [Host facts](/others/cli-references#host-facts-fingerprint-hosts-dns).
+</Callout>
+
+---
+
 ## 6. Resume a large parallel scan
 
 A stateless parallel fan-out (`-S -T --split-by-host -P`) writes a tiny line-cursor manifest, `<output>.progress.json`, tracking the targets that completed cleanly. If the batch is interrupted (Ctrl-C, a crash, a CI timeout), re-run it with `--resume` to skip the finished targets and scan only the remainder, Vigolium also prints a copy-pasteable resume command on Ctrl-C/failure:
@@ -891,19 +925,24 @@ Output-shaping flags on `finding` / `traffic` / `db ls`:
 
 ### The JSON envelope
 
-Since **v0.4.5** every `-j/--json` command emits the *same* outer object, so one parser handles all of them. Don't write key fallbacks.
+Since **v0.4.5** every `-j/--json` command emits the *same* outer object, so one parser handles all of them. Don't write key fallbacks. **v0.5.3 finished the job** — every remaining command moved onto the envelope and `schema_version` went to `2`.
 
 ```jsonc
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "command": "traffic",
+  "kind": "read",
+  "ok": true,
   "project_uuid": "…",
+  "project_scoped": true,
+  "project_source": "flag",
   "db_path": "/home/me/.vigolium/database-vgnm.sqlite",
   "total": 39,
   "offset": 0,
   "limit": 100,
   "items": [ … ],
   "query": "vigolium replay -u <uuid>",
+  "query_argv": ["vigolium", "replay", "-u", "<uuid>"],
   "generated_at": "2026-09-04T10:11:12.345Z",
   "generated_at_ms": 1788453072345
 }
@@ -911,13 +950,29 @@ Since **v0.4.5** every `-j/--json` command emits the *same* outer object, so one
 
 | Field | Why it is there |
 |---|---|
-| `schema_version` | Gate on it. Bumped on any breaking field change |
-| `items` | **The** row array, and the only one. Since v0.4.6 the historical keys (`records`, `findings`, `scans`, `rows`, `stats`) are **gone from the default output** — they shipped a second full copy of every row on the wire, which on a 20-record compact read was 19,983 bytes against 7,884 of actual rows. `--json-legacy-keys` (or `VIGOLIUM_JSON_LEGACY_KEYS=1`) brings the alias back, at that cost, for a caller still migrating |
-| `db_path` | The database this command actually opened. **Assert it**: the open order ends at one shared default file, so a silent fall-through mixes engagements |
-| `query` | A ready follow-up command for the obvious next step. Run it rather than composing your own |
+| `schema_version` | Gate on it. Bumped on any breaking field change — `2` since v0.5.3 |
+| `kind` | The document's shape: `read` (a row list, or a one-object answer wrapped as `items: [obj]` with `total: 1`), `mutation` or `scan`. A `mutation` adds `changed`, `action` (`"compact"`, `"push_to_burp"`, …) and `dry_run: true` on a dry run |
+| `ok` | `true` on every result document; the error object carries `false`. So `.ok` is a valid branch on **anything** `-j` prints |
+| `items` | **The** row array, and the only one — `[]` when empty, never `null`, never an object. Since v0.4.6 the historical keys (`records`, `findings`, `scans`, `rows`, `stats`) are **gone from the default output**: they shipped a second full copy of every row on the wire, which on a 20-record compact read was 19,983 bytes against 7,884 of actual rows. `--json-legacy-keys` (or `VIGOLIUM_JSON_LEGACY_KEYS=1`) brings the alias back, at that cost, for a caller still migrating |
+| `project_scoped` | Whether a project filter was applied **at all**, so "no filter" is explicit rather than inferred from an absent `project_uuid` |
+| `project_source` | Where the project selection came from: `flag`, `env`, `active_file` (`~/.vigolium/active-project`) or `default`. `active_file` is shared by every shell and agent on the machine, so a document resolved from it also carries a `warnings` entry saying so — pin `--project-uuid` or `VIGOLIUM_PROJECT_UUID` and both go away |
+| `db_path` | The database this command actually opened. **Assert it**: the open order ends at one shared default file, so a silent fall-through mixes engagements. Absent for a non-SQLite driver |
+| `query` / `query_argv` | A ready follow-up command for the obvious next step, and the same thing pre-split as argv. Run it rather than composing your own. Absent together under `--glob-db` |
 | `generated_at` / `_ms` | RFC3339 with **exactly 3** fractional digits, plus an epoch-millisecond sibling. Both compare safely against a JS `toISOString()`; the old microsecond form sorted `…785113Z` *before* `…785Z` |
 
-`db stats -j` uses this envelope too — it used to be the documented exception that dumped its raw struct, and a contract with a hole in it is one consumers special-case forever. Its `items` is an **object**, not a row array, and `items.database` names the file actually opened plus its on-disk size (WAL siblings included).
+Commands attach their own keys alongside these (`glob_sources`, `output_budget`, `targets_not_scanned`, …). A key that collides with one of the envelope's own is **dropped** rather than shadowing it.
+
+`db stats -j` uses this envelope too — it used to be the documented exception that dumped its raw struct, and a contract with a hole in it is one consumers special-case forever. Its single-object answer arrives as `items: [obj]` (read `.items[0]`), and `items[0].database` names the file actually opened plus its on-disk size (WAL siblings included).
+
+<Warning>
+  **Three v0.5.3 changes a v1 parser will notice.**
+
+  1. **`-j` on a scan no longer implies `--format jsonl`.** `scan -j` prints one [scan document](#the-scan-document); for the bulk `{type,data}` stream pass `--format jsonl -o <file>` explicitly.
+  2. **`-j` is compact by default** — one line, no indentation. Pass the global `--pretty` (or set `VIGOLIUM_JSON_PRETTY=1`) when a human is reading it.
+  3. **`command` is always the cobra path** of what ran (`"db list"`, `"extensions lint"`, `"scan status"`), not a hand-typed label. `db list -j` used to say `traffic`.
+</Warning>
+
+Validate rather than trust this table: `vigolium schema command traffic` prints the generated JSON Schema for exactly this document.
 
 **Saving it instead of reading it.** `traffic`, `finding` and `db ls` take `-o <path>` alongside `-j`: the document goes to the file, byte-identical to what would have been printed, and stdout gets a receipt instead — `{"artifact":"json_result","output":…,"bytes":…,"sha256":…,"complete":true}`. `complete: false` means the file holds one page, so raise `-n/--limit` (or `-a`) for the whole set; `-o -` forces stdout. The receipt never echoes the document, which is the point of the flag.
 
@@ -928,8 +983,66 @@ vigolium finding -j -n 500 -o findings.json   # ~65 KB to disk, a few lines to s
 Check the contract once at startup, so drift is a startup failure rather than a parse error in production:
 
 ```bash
-vigolium version --json   # {version, commit, schema_version, db_schema_version}
+vigolium schema command finding   # the generated JSON Schema for what you're about to parse
+vigolium version --json           # the cheap form: {version, commit, schema_version, db_schema_version}
 ```
+
+### The scan document
+
+`scan`, `run`, `scan-url` and `scan-request` under `-j` print **one scan document** when the scan ends — `kind: "scan"`, findings as `items`. This replaced the old `--format jsonl` stream on stdout; ask for the stream explicitly with `--format jsonl -o <file>`.
+
+```jsonc
+{
+  "schema_version": 2, "command": "scan-url", "kind": "scan", "ok": true,
+  "scan_uuid": "9551f38a-…",
+  "persisted": true, "stateless": false,
+  "status": "completed", "completeness": "complete", "reasons": [],
+  "targets": [
+    { "target": "https://target.example/login", "admitted": true, "reached": true,
+      "resolved_target": "https://target.example:443", "findings": 2, "duration_ms": 1840 }
+  ],
+  "targets_not_scanned": [],
+  "phase_outcomes": [],
+  "modules": { "selected": 334, "executed": 41 },
+  "counts_by_severity": { "critical": 0, "high": 1, "medium": 1, "low": 0, "suspect": 0, "info": 0 },
+  "candidates": 3, "observations": 7,
+  "errors": [],
+  "total": 2, "items": [ /* finding rows, highest severity first */ ],
+  "items_truncated": false,
+  "plan": null,
+  "query": "vigolium finding --scan-uuid 9551f38a-… -j",
+  "duration_ms": 1840
+}
+```
+
+| Field | Read it for |
+|---|---|
+| `status` | `completed`, `curtailed` (finished but partial — see `reasons`), `failed` or `interrupted` |
+| `completeness` / `reasons` / `stop_reason` | **Whether the scan actually covered what you asked for.** A `curtailed` scan still exits `0`, so this is the only place the shortfall shows |
+| `items` | Finding rows in the `finding -j` shape, highest severity first, capped at `-n/--limit` (default 200; `0` = no cap). `items_truncated` says the cap bit. `--fields`, `--compact`, `--full-body` and `--max-output-bytes` shape them as on `finding` |
+| `total` / `counts_by_severity` | **Exact**, regardless of the `items` cap |
+| `targets[]` | Per-target `admitted`, `reached` (`null` when not checked), and `reason` / `code` / `detail` when one was refused or unreachable |
+| `modules` | `selected` is what the scan was handed, `executed` how many ran at least once. (`scan-url` used to report `modules_run`, which counted *loaded* modules) |
+| `phase_outcomes` | Per-phase status, so one failed phase is visible without reading the log |
+| `plan` | The resolved plan the runner stored on the row, verbatim — the same object [`--dry-run`](#planning-a-scan-without-sending-anything) prints. `null` on a direct `scan-url` / `scan-request` run, which resolves no plan |
+| `persisted` | `false` under `-S` (the temp store is gone when the process exits, so `db_path` and `query` are omitted too) |
+
+A scan that **fails** still prints this document, with `status: "failed"` and `errors: [{code, message, target?}]`; `ok` stays `true` because it is a result document, and the exit code carries the failure. Only a failure *before any scan existed* — bad config, an unopenable `--db` — prints the error envelope instead.
+
+<Note>
+  **A persisted finding has a store `id`; an unpersisted one (`-S`, or a direct run with no store) does not.** Use `finding_hash` as the identity in that case — it is the stable dedup key, and what SARIF fingerprints use.
+</Note>
+
+### Planning a scan without sending anything
+
+```bash
+vigolium scan -t https://target.example --dry-run -j
+vigolium run discovery -t https://target.example --dry-run
+```
+
+`--dry-run` resolves the whole plan and prints it, then exits: phases (with *why* each disabled one is off), budgets, pace, modules, scope, auth session names, scope admission and a rough request estimate. It **mints no scan UUID, writes no output file or scan row, materializes no wordlist, runs no login and registers no OAST** — an existing database is only read. Under `-j` the document carries `items` (phases), `plan` (the full object) and `dry_run: true`.
+
+The same object rides the event stream as `scan.plan`, always the second line of a real run, and is stored on the scan row — so `scan status` and the scan document can hand it back afterwards. `vigolium schema plan` prints its schema.
 
 ---
 

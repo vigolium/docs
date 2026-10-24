@@ -29,6 +29,30 @@ Settings are resolved from highest to lowest precedence:
 
 Higher-precedence sources override lower ones. Within the config file, environment variables can be referenced using `${VAR}` or `$VAR` syntax and are expanded at load time.
 
+<Warning>
+  **A broken `--config` exits `1` (v0.5.2).** A path that does not exist, or a file that will not parse, used to fall back to the built-in defaults **silently** — producing a scan with none of your settings and nothing to indicate why. The config file itself is validated before a write now, and `config set` / `scope set` write **atomically**, so an interrupted write cannot leave half a file behind.
+
+  Check a config before a scan depends on it:
+
+  ```bash
+  vigolium config validate            # exit 1, error.code config_invalid, on any error
+  vigolium config validate --strict   # fail on warnings too
+  ```
+
+  It catches malformed scope patterns, host patterns carrying a scheme or port, **an exact-host include that drops every subdomain**, invalid status-code patterns and origin modes, and keys your file sets that Vigolium does not recognise. `-j` gives `items[]` of `{key, severity, code, message, fix}`.
+</Warning>
+
+Since v0.5.3, `vigolium config set` also parses **JSON and YAML list and map values**, so a nested structure can be set from the command line rather than hand-edited:
+
+```bash
+vigolium config set scope.host.include '["*.example.com","api.example.net"]'
+vigolium config set scanning_pace.max_requests 20000
+```
+
+<Note>
+  **This fixed a real foot-gun.** `config set` and `scope set` used to split a JSON list on commas, so `'["*.example.com"]'` became the three literal patterns `["*.example.com"]` — which matched nothing, and produced a scan that silently reached no target.
+</Note>
+
 ## Environment Variables
 
 | Variable | Purpose |
@@ -38,7 +62,30 @@ Higher-precedence sources override lower ones. Within the config file, environme
 | `VIGOLIUM_PROJECT_NAME` | Default project *name* for CLI operations (equivalent to `--project-name`) |
 | `VIGOLIUM_PROXY` | HTTP/SOCKS proxy URL, used when `--proxy` is not set |
 | `VIGOLIUM_HOME` | Base directory for Vigolium data (used by the installer; defaults to `~/.vigolium`) |
-| `VIGOLIUM_DB_PATH` | Default for the global `--db` flag — pins a shell to one session database |
+| `VIGOLIUM_DB` | Default for `--db`, **keeping project scoping on** for reads (v0.5.3) |
+| `VIGOLIUM_DB_PATH` | The same, but reads treat the file as a standalone source with project scoping **off** |
+| `VIGOLIUM_CONFIG` | Default for the global `--config` flag (v0.5.3) |
+| `VIGOLIUM_JSON_PRETTY` | `1` indents `-j` output, as the global `--pretty` |
+| `VIGOLIUM_JSON_LEGACY_KEYS` | `1` restores the pre-envelope row aliases |
+| `VIGOLIUM_UPDATE_BASE_URL` | Where `vigolium update` fetches releases from |
+| `VIGOLIUM_SERVER_HOST` | Default bind address for `vigolium server` (default `127.0.0.1`) |
+
+### Choosing the database
+
+The resolution order is **`--db` → `VIGOLIUM_DB` → `VIGOLIUM_DB_PATH` → config → default** (`~/.vigolium/database-vgnm.sqlite`).
+
+The two environment variables differ in exactly one way, and it is the one that matters:
+
+| Variable | Reads | Writes |
+|---|---|---|
+| `VIGOLIUM_DB` | **Project scoping stays on** — you see your project's rows | Scans record their own project |
+| `VIGOLIUM_DB_PATH` | **Project scoping off** — every row in the file is listed, as `-S --db <file>` | Scans record their own project |
+
+Use `VIGOLIUM_DB` to pin a shell to an engagement database you are also writing to; use `VIGOLIUM_DB_PATH` to read a colleague's export whole.
+
+<Warning>
+  **A pinned path never silently falls back to another store.** Whichever variable you set, a path that exists but is unusable is a hard error, not a redirect to the shared default — a scan you believed was isolated must not land in the file every other engagement shares. Read `db_path` off any `-j` envelope, or off `scan.started`, to confirm which store you actually got.
+</Warning>
 
 ### `VIGOLIUM_DB_PATH`
 
@@ -87,6 +134,30 @@ vigolium config set server.service_port 8080
 ```
 
 These commands modify the main config file directly. For one-off overrides during a scan, use CLI flags instead.
+
+## Keys added in v0.5.1 – v0.5.3
+
+| Key | What it does |
+|---|---|
+| `scanning_pace.max_requests` | Stop the scan after N requests to the targets (`--max-requests`) |
+| `scanning_pace.max_requests_per_host` | The same, per host |
+| `scanning_strategy.scan_logs.status_retention_days` | How long `status.json` files are kept (default `30`; `0` keeps them). Pruned by `log ls --reap` and at server start |
+| `scanning_strategy.session.*` | Now also act as defaults for each session's `check` block — `validate_url`, `reauth_on_status` and `reauth_interval` fill `check.url`, `check.logged_out.status` and `check.interval` |
+| `discovery.wordlists.tier` | Which embedded wordlist tier to use; a new **`large`** tier ships in v0.5.3 and `--intensity deep` selects it |
+| `discovery.stream_fuzz` | Stream fuzz results during the crawl instead of holding them to the end |
+| `dynamic-assessment.param_mining` | Budget for the hidden-parameter mining phase |
+| `dynamic-assessment.hygiene_modules` | Force the hardening advisories on at any intensity, or off even at `deep` |
+| `spidering.tabs` | Crawl several tabs concurrently in one browser |
+| `spidering.route_seeds` | Seed the crawl with client routes found in JavaScript |
+| `spidering.require_auth` | A failed login is fatal for that target (`--require-auth`) |
+| `spidering.interaction.*` | Restore the side-effectful crawl actions v0.5.2 turned off: account creation, file upload, file download, accepting `confirm()` dialogs |
+| `spidering.identity_email_domain` | Domain for generated identities (defaults to `example.com`) |
+| `spidering.graph_include_values` | Keep form values in the crawl graph (redacted by default) |
+| `spidering.max_capture_body_bytes` | Cap on a browser-captured body |
+| `extensions.yaml_strict` | Treat unknown keys in a YAML extension as errors |
+| `server.ingest_proxy_token` | Secret required on every ingest-proxy request (`--proxy-token`) |
+| `server.ingest_proxy_allow` | CIDRs or IPs allowed to use the ingest proxy (`--proxy-allow`) |
+| `jstangle.worker_count` | Supersedes the deprecated `engine.jstangle_concurrency`; workers and the memory budget now scale with CPU and RAM |
 
 ## Config Sections
 
@@ -220,6 +291,10 @@ discovery:
     max_consecutive_waf_blocks: 0
     observed_max_items: 4000
     disable_secret_scan: false     # turn off in-process secret scanning during discovery
+    protocol: auto                 # auto | http1 | http2 | http3 — auto resolves to h3, else h2,
+                                   # else 1.1, and pins that choice per origin (v0.5.5)
+    brute_force_concurrency: 0     # workers for wordlist/FUZZ requests only; 0 = the per-host
+                                   # slot cap, or the phase concurrency when -c was explicit
 
     prefix_breaker:                # circuit-breaker that stops recursing into trap directories
       enabled: true                # omit = on (CLI: --no-prefix-breaker)
@@ -255,7 +330,8 @@ discovery:
     source_maps: true
     asset_graph: true              # follow imported chunks to find more endpoints
     protocol_handshake: false
-    worker_count: 0                # 0 = scale to CPU count
+    worker_count: 0                # 0 = clamp(CPUs/2, 2, memory_budget_mb/384), max 8
+                                   # supersedes the deprecated engine.jstangle_concurrency
     memory_budget_mb: 768
     cache_mb: 128
     job_timeout: 60s
@@ -666,7 +742,12 @@ oast:
   oast_url: ""                     # fixed callback URL (empty = auto-generate)
   blind_xss_src: ""                # JS script src for blind XSS payloads
   enabled_blind_xss: false
+  fallback_to_default: true        # v0.5.5: re-register against oast.pro when server_url is dead
 ```
+
+<Note>
+  **`oast.fallback_to_default` (v0.5.5, on by default)** re-registers against `oast.pro` when the configured `server_url` does not answer — **without carrying the configured token**, since that token belongs to your server and not to the public one. A dead private OAST server used to silently disable every blind check in the run, so a scan came back clean because nothing out-of-band could be observed at all. Set it to `false` if a run must never reach the public collaborator.
+</Note>
 
 ### `source_aware`
 
