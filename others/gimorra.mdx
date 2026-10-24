@@ -1,86 +1,88 @@
 ---
 title: "Gimorra - An Autonomous Offensive-Security Agent"
 description: "The autonomous offensive-security platform within Vigolium: give it an authorized target, a goal and a scope, and it runs the whole engagement."
-icon: "robot"
+icon: "bolt"
 ---
 
-**Gimorra** is the autonomous offensive-security platform within Vigolium — *hunts while you sleep*.
+**Gimorra** is the autonomous offensive-security platform within Vigolium. *It hunts while you sleep.*
 
-Point it at an **authorized** target with a goal and a scope, and it runs the whole engagement on its own: **recon → scan → propose a PoC → deterministically prove it → report**, with a human in the loop only where blast radius actually requires one.
+Give it an **authorized** target, a goal and a scope. It takes the engagement from there — **recon → scan → propose a PoC → prove it → report** — and wakes you only when blast radius demands a human.
 
-Vigolium is the scan engine underneath it. Gimorra is the operator above it.
+Vigolium is the engine. Gimorra is the operator.
 
-<Frame caption="A gimorra scan start to finish: a brief resolves into a plan, recon maps the target, the agent proposes candidates, and the deterministic validator confirms the real ones">
+<Frame caption="One run, start to finish: a brief becomes a plan, recon maps the target, the agent proposes candidates, and the validator throws out everything it cannot prove">
   <img src="/images/gimorra/gimorra-scan.svg" alt="Walkthrough of a gimorra scan: brief, recon, proposed candidates, deterministic confirmation" />
 </Frame>
 
 <Callout icon="rocket" color="#FFC107" iconType="regular">
-  Interested in Gimorra? [Request a Demo](https://www.vigolium.com/request-demo) to see it in action, or visit [gimorra.vigolium.com](https://gimorra.vigolium.com/).
+  Want to see it work? [Request a Demo](https://www.vigolium.com/request-demo), or head to [gimorra.vigolium.com](https://gimorra.vigolium.com/).
 </Callout>
 
-## Autonomy bought with guardrails, not supervision
+## Safety by construction, not by babysitting
 
-Autonomous offense is usually gated by a human on every action, because a mistake reaches out and touches something it shouldn't. Gimorra takes the opposite route: make the run **incapable** of harming the target, so supervision becomes a dial rather than a per-action crutch.
+Most offensive agents ask a human to approve every action. That is not caution — it is an admission that the agent could do real damage if nobody is watching.
+
+Gimorra closes that gap in code. Three controls make a run **incapable** of hurting the target, so supervision becomes a dial you set once instead of a seat you sit in.
 
 <Columns cols={3}>
-  <Card title="Deterministic validator" icon="circle-check">
-    Ordinary code — not the model — re-proves every finding with the least-invasive action that settles it. The agent proposes; code disposes. **No self-certified bugs.**
+  <Card title="The validator decides" icon="circle-check">
+    The agent proposes. Code disposes. Every finding is re-proven by deterministic, non-AI code using the least invasive action that settles it. **Nothing self-certifies.**
   </Card>
-  <Card title="Auto-cleanup & kill switch" icon="power-off">
-    Anything a run changes is reverted, and one command stops the engagement: queued work becomes unclaimable and no further proof is accepted.
+  <Card title="Cleanup and a kill switch" icon="power-off">
+    Whatever a run touches, it puts back. One command ends the engagement: queued work goes unclaimable, and no further proof is accepted.
   </Card>
-  <Card title="Scope guard" icon="shield-halved">
-    Deny-wins, and ambiguity blocks. Evaluated on every single tool call, before anything else gets a say.
+  <Card title="Scope guard on every call" icon="shield-halved">
+    Deny wins. Ambiguity blocks. Checked on every single tool call, before anything else gets a vote.
   </Card>
 </Columns>
 
-None of the three depends on the agent, the model, or the network stack. **If the model is prompt-injected, they still hold** — that property is the whole point.
+None of the three touches the model, the agent, or the network stack. **Prompt-inject the model and they still hold.** That is the whole design.
 
 <Warning>
-  Gimorra only operates against targets you are authorized to test. **No authorization artifact, no active operation** — enforced in code, not policy.
+  Gimorra operates only against targets you are authorized to test. **No authorization artifact, no active operation** — enforced in code, not in policy.
 </Warning>
 
-## What you can point it at
+## Point it at anything
 
-| You give it | What comes back |
+| Give it | Get back |
 |---|---|
-| A URL, host, domain, IP or CIDR | A scoped, authorized engagement: the target mapped, tested, and the real findings proven |
-| A plain-English brief | The same, steered at what you actually asked for — "focus on IDOR and broken access control" |
-| An API spec or a captured session | The documented operation set turned into testable surface before anything is sent |
-| A source repository or a shipped app bundle | A source-code audit, alongside the live target or on its own |
-| A whole bug-bounty scope document | Every in-scope asset worked as one engagement |
+| A URL, host, domain, IP or CIDR | A scoped, authorized engagement — mapped, tested, and the real bugs proven |
+| A sentence of plain English | The same run, aimed where you said: *"focus on IDOR and broken access control"* |
+| An API spec or a captured session | Every documented operation turned into testable surface before a packet moves |
+| A repository or a shipped app bundle | A source audit, beside the live target or on its own |
+| A full bug-bounty scope document | Every in-scope asset, worked as one engagement |
 
-One dial controls how far it goes — from fully passive to aggressive — and nothing else needs tuning to get a first result.
+One dial sets how hard it pushes, from fully passive to aggressive. Nothing else needs tuning to get a first result.
 
-## What you get out
+## What lands on your desk
 
 <Columns cols={2}>
-  <Card title="Proven findings, not candidates" icon="flask">
-    Every reported finding has been reproduced by deterministic code. What reaches your report is what actually happened.
+  <Card title="Bugs, not maybes" icon="flask">
+    Every finding in the report was reproduced by deterministic code. No triage queue of plausible-looking noise.
   </Card>
-  <Card title="A chain of custody" icon="link">
-    Each run keeps a hash-chained evidence trail, so a finding can be traced back to the exact exchange that proved it.
+  <Card title="Receipts for all of it" icon="link">
+    A hash-chained evidence trail ties each finding to the exact exchange that proved it.
   </Card>
-  <Card title="Reports you can hand over" icon="file-lines">
-    Verified-only reports in Markdown or HTML, plus a live dashboard while the run is still going.
+  <Card title="A report you can forward" icon="file-lines">
+    Verified-only Markdown or HTML, plus a live dashboard while the run is still going.
   </Card>
-  <Card title="An accumulating picture" icon="layer-group">
-    Attack surface, tradecraft and accounts carry across runs against the same target, so the second engagement starts where the first finished.
+  <Card title="Memory between runs" icon="layer-group">
+    Surface, tradecraft and accounts carry forward, so the second engagement starts where the first stopped.
   </Card>
 </Columns>
 
-## How it relates to the rest of Vigolium
+## Where it sits
 
 | | What it is | Reach for it when |
 |---|---|---|
 | [**Native scan**](/native-scan/how-it-works) | Deterministic, module-based scanning | You want broad, repeatable coverage, fast |
-| [**Agentic scan**](/agentic-scan/how-it-works) | AI driving or augmenting a Vigolium scan | You want AI judgement inside a scan you are running |
-| **Gimorra** | An autonomous agent running the whole engagement | You want the engagement itself handled, start to finish |
+| [**Agentic scan**](/agentic-scan/how-it-works) | AI inside a scan you are driving | You want AI judgement on a run you control |
+| **Gimorra** | An agent that runs the engagement | You want the engagement handled, start to finish |
 
 <Note>
-  Gimorra runs the tools directly on the machine it is started on, so the boundary around a run is the environment you start it in. An all-in-one container image is the recommended way to give it one.
+  Gimorra runs its tools on the machine you start it on, so that machine is the blast radius. Start it in a container — there is an all-in-one image for exactly this.
 </Note>
 
 ---
 
-Want to see it against your own target? [Request a Demo](https://www.vigolium.com/request-demo), or reach us at [contact@vigolium.com](mailto:contact@vigolium.com).
+Curious what it finds on your own target? [Request a Demo](https://www.vigolium.com/request-demo), or email [jessie@vigolium.com](mailto:jessie@vigolium.com).
