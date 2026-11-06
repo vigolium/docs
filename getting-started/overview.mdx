@@ -129,7 +129,7 @@ A self-hosted web dashboard that provides a visual interface for managing and an
 Vigolium is the scan engine underneath it. Gimorra is the operator above it.
 
 <Frame caption="A gimorra scan start to finish: a brief resolves into a plan, recon maps the target, the agent proposes candidates, and the deterministic validator confirms the real ones">
-  <img src="/images/gimorra/gimorra-scan.svg" alt="Walkthrough of a gimorra scan: brief, recon, proposed candidates, deterministic confirmation" />
+  <img src="/images/gimorra/gimorra-scan.svg" alt="An illustrative gimorra scan in six scenes: the scope guard strikes out a denied host, recon passes union onto one attack-surface table, a master agent dispatches four specialist children, probers hunt four asserted premises and refute two, the proof engine re-proves eleven proposed PoCs and keeps three, and the run comes back as one folder of reproduced findings." />
 </Frame>
 
 Autonomy is bought with **deterministic guardrails** rather than a human gating every action: ordinary code re-proves every finding (the agent proposes, code disposes), auto-cleanup and a kill switch bound what a run can leave behind, and a deny-wins scope guard is evaluated on every tool call. None of the three depends on the model, so a prompt-injected agent does not get past them.
