@@ -4,11 +4,15 @@ description: "Get access to Gimorra, install the CLI and its scan engine, and ch
 icon: "download"
 ---
 
-Gimorra is in an invite-only alpha. Your invitation includes the install command, so the first step is to get an invitation.
+Gimorra is in invite-only alpha. Get an invite, run one command, and you're scanning.
+
+<Card title="Get your invite: jessie@vigolium.com" icon="envelope" href="mailto:jessie@vigolium.com" horizontal>
+  Email [jessie@vigolium.com](mailto:jessie@vigolium.com) with the target you want to point Gimorra at. You'll get a personal install link back.
+</Card>
 
 <Steps>
   <Step title="Get an invitation">
-    Visit [gimorra.vigolium.com](https://gimorra.vigolium.com/), [request a demo](https://www.vigolium.com/request-demo), or email [jessie@vigolium.com](mailto:jessie@vigolium.com). Your invitation link opens a page with your own install command.
+    Email [jessie@vigolium.com](mailto:jessie@vigolium.com). You can also [request a demo](https://www.vigolium.com/request-demo) or visit [gimorra.vigolium.com](https://gimorra.vigolium.com/). Your invitation link opens a page with your own install command.
   </Step>
   <Step title="Run the install command">
     The command looks like this. Copy the real one from your invitation page:
@@ -17,7 +21,7 @@ Gimorra is in an invite-only alpha. Your invitation includes the install command
     curl -fsSL <your install URL> | bash
     ```
 
-    Please don't share your install link.
+    The link is yours alone. Don't share it.
   </Step>
   <Step title="Check the host">
     ```bash
@@ -29,7 +33,7 @@ Gimorra is in an invite-only alpha. Your invitation includes the install command
 
 ## What the installer does
 
-The installer is one script. It runs these steps in order:
+One script, five steps, no surprises:
 
 1. Detects the platform. Gimorra supports macOS and Linux, on arm64 or x64.
 2. Finds the current release and downloads it. It checks the SHA-256 checksum, and it also checks the release signature when the host's `openssl` supports Ed25519. If a checksum is missing or wrong, the install stops.
@@ -58,7 +62,7 @@ curl -fsSL <your install URL> | bash -s -- --for audit
 
 ## Where to run it
 
-Gimorra runs its tools as your user, on the machine where you start it. A tool that misbehaves can affect that machine. Run Gimorra in a VM, a container or a machine you can throw away. Don't run it on a laptop that holds credentials you need to protect.
+Gimorra runs its tools as your user, on the machine where you start it. Give it a VM, a container or a box you can throw away, not the laptop that holds your keys.
 
 <Tip>
   In a cloud coding sandbox such as Claude Code on the web, put the install command in the environment's setup script. In auto mode, the agent is not allowed to pipe a downloaded script into `bash` during a session.
@@ -74,3 +78,7 @@ Gimorra runs its tools as your user, on the machine where you start it. A tool t
     Start a scan against a target you are authorized to test.
   </Card>
 </Columns>
+
+---
+
+Stuck on install, or want access for your team? Email [jessie@vigolium.com](mailto:jessie@vigolium.com).

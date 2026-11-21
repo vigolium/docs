@@ -4,19 +4,21 @@ description: "Start a Gimorra scan against a target you are authorized to test, 
 icon: "play"
 ---
 
-<Warning>
-  Only scan targets you are authorized to test. Gimorra refuses to start active testing without an authorization record. Its tools run as your user, on the machine where you start it.
-</Warning>
-
 ## Your first scan
 
 ```bash
 gimorra scan -t https://app.example.com
 ```
 
-This one command runs a whole engagement. Gimorra authorizes the target you typed, sets the scope, maps and attacks the target, proves what it finds, and writes the report. The console prints a line as each phase starts. [What a run does](/gimorra#what-a-run-does) describes each phase.
+That's it. One command runs the whole engagement: Gimorra authorizes the target you typed, locks the scope, maps and attacks the target, proves what it finds, and writes the report. The console prints a line as each phase starts. [What a run does](/gimorra#what-a-run-does) describes each phase.
 
 `scan` is the default command. Every command takes `-h` to print its flags and examples, and `gimorra help scan --groups` lists the scan flags by topic.
+
+Rather click than type? The console's **New scan** page builds the same run from a target, an intensity and a brief.
+
+<Frame caption="New scan in the console: a target, an intensity and a plain-English brief">
+  <img src="/images/gimorra/gimorra-console-new-scan.png" alt="The New scan form with a target field, four intensity tiers from Passive to Aggressive, and a prompt box with suggested briefs such as focus on IDOR and broken access control" />
+</Frame>
 
 ## Targets
 
@@ -144,7 +146,16 @@ To copy the results and the full HTML report into a directory you choose:
 gimorra scan -t https://app.example.com --output ./out --report-html ./out/report.html
 ```
 
-`gimorra serve` starts the local dashboard, which shows runs live while they are going.
+`gimorra serve` starts the local console, which shows runs live while they are going. Every finding opens to its proof verdict and the exact requests that reproduce it:
+
+<Columns cols={2}>
+  <Frame caption="A finding with its proof and reproduction steps">
+    <img src="/images/gimorra/gimorra-console-finding-proof.png" alt="A confirmed critical SQL injection with CVSS vector, triage state, a differential proof verdict and copyable curl reproduction steps" />
+  </Frame>
+  <Frame caption="The engagement report: proven versus recorded">
+    <img src="/images/gimorra/gimorra-console-engagement-report.png" alt="Engagement report showing findings, jobs, attack surface, hash-chained proofs, spend and severity breakdown" />
+  </Frame>
+</Columns>
 
 ## Stop a run
 

@@ -55,7 +55,7 @@ environment variable  >  ~/.gimorra/configs.yaml  >  built-in default
     export GIMORRA_LLM_MODEL_FALLBACK=<a cheaper model id>   # optional
     ```
 
-    Use the model ids that your proxy serves, not bare `claude-*` ids. If the proxy rejects requests that carry two credential headers, set `llm.connections.main.auth_style` to `bearer`.
+    Use the model ids that your proxy serves, not bare `claude-*` ids.
   </Tab>
   <Tab title="OpenAI-compatible endpoint">
     Use this for vLLM, LiteLLM, Ollama, LM Studio, OpenRouter, or any server that only answers `/v1/chat/completions`. Set the API type to `openai`, and keep `/v1` at the end of the base URL:
@@ -70,6 +70,58 @@ environment variable  >  ~/.gimorra/configs.yaml  >  built-in default
     Gimorra runs a local bridge that translates Messages API requests into chat-completion requests. The bridge listens on `127.0.0.1` only, and it keeps your endpoint key out of the agents' environment. Through the bridge, Anthropic's server-side tools such as web search are unavailable, and the model gets a text note in place of each image.
   </Tab>
 </Tabs>
+
+## Example: a main lane with a standby behind it
+
+This is a real-world setup: one proxy, two fast models doing the work, and a stronger model on each lane for when a fast one stumbles. Drop it in your shell profile and every run picks it up:
+
+```bash
+# main: the connection every run uses
+export GIMORRA_LLM_BASE_URL="https://llmproxy.example.com"
+export GIMORRA_LLM_API_KEY="<your proxy key>"
+export GIMORRA_LLM_MODEL="glm-5.3-flash"
+export GIMORRA_LLM_MODEL_FALLBACK="gpt-5.5"
+
+# standby: where a session goes when main keeps failing
+export GIMORRA_STANDBY_LLM_BASE_URL="https://llmproxy.example.com"
+export GIMORRA_STANDBY_LLM_API_KEY="<your proxy key>"
+export GIMORRA_STANDBY_LLM_MODEL="deepseek-v4.1-flash"
+export GIMORRA_STANDBY_LLM_MODEL_FALLBACK="deepseek-v4-pro"
+```
+
+When a session keeps failing, it walks down this ladder instead of failing the run:
+
+```text
+main (glm-5.3-flash)  →  main fallback (gpt-5.5)  →  standby (deepseek-v4.1-flash)  →  standby fallback (deepseek-v4-pro)
+```
+
+The ladder tries the same endpoint with its `_MODEL_FALLBACK` first, because swapping models is a smaller change than swapping providers. That step alone often clears a model-level 429 or an "overloaded" error. When `_MODEL_FALLBACK` is a model Gimorra knows costs less, cheap-tier child agents also run on it, while the supervisor and the attack sessions keep the main model.
+
+| Variable | What it sets |
+|---|---|
+| `<PREFIX>_BASE_URL` | The endpoint. Leave off `/v1` for an Anthropic-compatible proxy, keep it for an OpenAI-compatible one. |
+| `<PREFIX>_API_KEY` | The key for that endpoint. |
+| `<PREFIX>_MODEL` | The model the connection serves. Use the ids your proxy serves. |
+| `<PREFIX>_MODEL_FALLBACK` | A second model on the same endpoint: the first rung down when this one fails. Optional. |
+| `<PREFIX>_API` | Set to `openai` when the endpoint only answers `/v1/chat/completions`. Optional. |
+
+Each connection has its own prefix. Declare as many as you have relays, and the ladder walks only the ones you set, in this order:
+
+| Prefix | Connection | Role |
+|---|---|---|
+| `GIMORRA_LLM` | `main` | The default for every run |
+| `GIMORRA_STANDBY_LLM` | `standby` | First fallback |
+| `GIMORRA_RESERVE_LLM` | `reserve` | Second fallback |
+| `GIMORRA_FAILOVER_LLM` | `failover` | Third fallback |
+| `GIMORRA_AUXILIARY_LLM` | `auxiliary` | Fourth fallback |
+| `GIMORRA_SPARE_LLM` | `spare` | Last fallback |
+| `GIMORRA_FRONTIER_LLM` | `frontier` | Never a fallback. Pick it with `-L frontier` when you want the strongest model. |
+
+Then prove every rung answers before you start a scan:
+
+```bash
+gimorra doctor llm
+```
 
 ## Save the settings in the config file
 
@@ -125,7 +177,7 @@ Gimorra checks routing rules in a fixed order and uses the first match: planning
 
 ### When a provider fails
 
-By default, `llm.routing.on_failure` is `chain`. When a session keeps failing on one connection, Gimorra moves it to the next connection in a fallback ladder instead of failing the run. `llm.routing.retry_budget_ms` limits the total time one session spends retrying, and the default is 2 hours. Set `on_failure` to `off` if you want a session to fail as soon as its connection runs out of retries.
+By default, `llm.routing.on_failure` is `chain`. When a session keeps failing on one connection, Gimorra moves it down the [fallback ladder](#example-a-main-lane-with-a-standby-behind-it) instead of failing the run. `llm.routing.retry_budget_ms` limits the total time one session spends retrying, and the default is 2 hours. Set `on_failure` to `off` if you want a session to fail as soon as its connection runs out of retries.
 
 ## Reasoning effort
 

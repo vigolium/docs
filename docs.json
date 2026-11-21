@@ -46,6 +46,16 @@
             ]
           },
           {
+            "group": "Gimorra",
+            "icon": "bolt",
+            "pages": [
+              "gimorra/index",
+              "gimorra/installation",
+              "gimorra/llm-configuration",
+              "gimorra/running-a-scan"
+            ]
+          },
+          {
             "group": "Native Scan",
             "icon": "radar",
             "pages": [
@@ -67,16 +77,6 @@
               "agentic-scan/swarm",
               "agentic-scan/olium",
               "agentic-scan/using-vigolium-in-your-agent"
-            ]
-          },
-          {
-            "group": "Gimorra",
-            "icon": "bolt",
-            "pages": [
-              "gimorra/index",
-              "gimorra/installation",
-              "gimorra/llm-configuration",
-              "gimorra/running-a-scan"
             ]
           },
           {
