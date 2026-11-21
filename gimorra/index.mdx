@@ -7,8 +7,8 @@ icon: "bolt"
 
 Gimorra arms your model with agents, attack skills, validators and an evidence trail, then pushes it to its ceiling: planning the attack, chaining bugs, re-proving every finding and writing the report. Point it at a target and walk away.
 
-<Frame caption="The Gimorra console. Every engagement, every finding, every dollar spent, on one screen.">
-  <img src="/images/gimorra/gimorra-console-dashboard.png" alt="Gimorra console dashboard showing 6 engagements, 39 findings, 25 proven, 234 mapped assets, spend, a findings-over-time chart by severity and the proof-engine verdict breakdown" />
+<Frame caption="One run from start to finish. A brief becomes a plan, recon maps the target, the agents propose candidates, and the proof engine drops every candidate it cannot prove.">
+  <img src="/images/gimorra/gimorra-scan.svg" alt="An illustrative gimorra scan in six scenes: the scope guard strikes out a denied host, recon passes union onto one attack-surface table, a master agent dispatches four specialist children, probers hunt four asserted premises and refute two, the proof engine re-proves eleven proposed PoCs and keeps three, and the run comes back as one folder of reproduced findings." />
 </Frame>
 
 <Callout icon="rocket" color="#FFC107" iconType="regular">
@@ -17,48 +17,26 @@ Gimorra arms your model with agents, attack skills, validators and an evidence t
 
 ## Features
 
-<Columns cols={2}>
-  <Card title="Every ounce out of your model" icon="brain">
-    A supervisor splits the work across specialist agents armed with attack skills. A second model reviews the plan and calls out what it missed.
-  </Card>
-  <Card title="Any starting point" icon="crosshairs">
-    A URL, an IP range, a domain, a repo, an app bundle, an API spec or a whole bug-bounty scope document. One command takes all of them.
-  </Card>
-  <Card title="Brief it in plain English" icon="comment">
-    `-p "focus on IDOR and broken access control"` and the run aims there. `--dry-run` shows which words set which flag.
-  </Card>
-  <Card title="Re-proved, not guessed" icon="circle-check">
-    Deterministic code with no AI in it re-tests every candidate. An agent can never mark its own finding confirmed.
-  </Card>
-  <Card title="Chains bugs, chases impact" icon="link">
-    Gimorra combines findings into larger attacks, then follows a confirmed bug to see what else it hands an attacker.
-  </Card>
-  <Card title="Hunts what scanners miss" icon="magnifying-glass">
-    The hypothesis phase assumes a critical bug exists and goes looking for it, long after an ordinary pass would give up.
-  </Card>
-  <Card title="Logged in like a real user" icon="user-lock">
-    Hand it accounts and it logs in as each one before the attack. Access-control bugs between users are fair game.
-  </Card>
-  <Card title="Source and live, together" icon="code">
-    Pass `--source` and the run audits the code while it attacks the app. Every agent can read the source.
-  </Card>
-  <Card title="Evidence you can replay" icon="fingerprint">
-    A hash-chained trail ties each finding to the exact request and response that proved it, with copy-paste `curl` steps.
-  </Card>
-  <Card title="Memory between runs" icon="layer-group">
-    The next engagement starts from what the last one learned: pages, endpoints, working techniques and held accounts.
-  </Card>
-  <Card title="Bring your own model" icon="microchip">
-    A Claude login, an Anthropic key, a proxy or any OpenAI-compatible endpoint. Route the supervisor and the children to different models.
-  </Card>
-  <Card title="Built for CI and long runs" icon="gauge-high">
-    `--exit-on-findings` fails the build. `--detach` survives a closed terminal. `--resume` picks up where a run stopped, without paying twice.
-  </Card>
-</Columns>
+- **Every ounce out of your model.** A supervisor splits the work across specialist agents armed with attack skills. A second model reviews the plan and calls out what it missed.
+- **Any starting point.** A URL, an IP range, a domain, a repo, an app bundle, an API spec or a whole bug-bounty scope document. One command takes all of them.
+- **Brief it in plain English.** `-p "focus on IDOR and broken access control"` and the run aims there. `--dry-run` shows which words set which flag.
+- **Re-proved, not guessed.** Deterministic code with no AI in it re-tests every candidate. An agent can never mark its own finding confirmed.
+- **Chains bugs, chases impact.** Gimorra combines findings into larger attacks, then follows a confirmed bug to see what else it hands an attacker.
+- **Hunts what scanners miss.** The hypothesis phase assumes a critical bug exists and goes looking for it, long after an ordinary pass would give up.
+- **Logged in like a real user.** Hand it accounts and it logs in as each one before the attack. Access-control bugs between users are fair game.
+- **Source and live, together.** Pass `--source` and the run audits the code while it attacks the app. Every agent can read the source.
+- **Evidence you can replay.** A hash-chained trail ties each finding to the exact request and response that proved it, with copy-paste `curl` steps.
+- **Memory between runs.** The next engagement starts from what the last one learned: pages, endpoints, working techniques and held accounts.
+- **Bring your own model.** A Claude login, an Anthropic key, a proxy or any OpenAI-compatible endpoint. Route the supervisor and the children to different models.
+- **Built for CI and long runs.** `--exit-on-findings` fails the build. `--detach` survives a closed terminal. `--resume` picks up where a run stopped, without paying twice.
 
 ## Inside the console
 
 Everything a run does lands in the console, live while it runs and frozen when it finishes. These screenshots come straight from the [demo console](https://gimorra-demo.vigolium.com/).
+
+<Frame caption="The Gimorra console. Every engagement, every finding, every dollar spent, on one screen.">
+  <img src="/images/gimorra/gimorra-console-dashboard.png" alt="Gimorra console dashboard showing 6 engagements, 39 findings, 25 proven, 234 mapped assets, spend, a findings-over-time chart by severity and the proof-engine verdict breakdown" />
+</Frame>
 
 <Columns cols={2}>
   <Frame caption="Engagement report: proven versus recorded, by severity and by class">
@@ -84,10 +62,6 @@ Everything a run does lands in the console, live while it runs and frozen when i
 ## What a run does
 
 One command runs a whole engagement through a fixed order of phases. The console prints one line per phase, marked with its symbol.
-
-<Frame caption="One run from start to finish. A brief becomes a plan, recon maps the target, the agents propose candidates, and the proof engine drops every candidate it cannot prove.">
-  <img src="/images/gimorra/gimorra-scan.svg" alt="An illustrative gimorra scan in six scenes: the scope guard strikes out a denied host, recon passes union onto one attack-surface table, a master agent dispatches four specialist children, probers hunt four asserted premises and refute two, the proof engine re-proves eleven proposed PoCs and keeps three, and the run comes back as one folder of reproduced findings." />
-</Frame>
 
 <Steps>
   <Step title="⌥ Resolve, ◎ target and ◈ scope">

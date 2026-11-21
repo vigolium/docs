@@ -47,7 +47,7 @@
           },
           {
             "group": "Gimorra",
-            "icon": "bolt",
+            "icon": "atom",
             "pages": [
               "gimorra/index",
               "gimorra/installation",
