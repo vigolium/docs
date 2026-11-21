@@ -70,6 +70,16 @@
             ]
           },
           {
+            "group": "Gimorra",
+            "icon": "bolt",
+            "pages": [
+              "gimorra/index",
+              "gimorra/installation",
+              "gimorra/llm-configuration",
+              "gimorra/running-a-scan"
+            ]
+          },
+          {
             "group": "Architecture",
             "icon": "sitemap",
             "pages": [
@@ -114,7 +124,6 @@
             "group": "Others",
             "icon": "bug",
             "pages": [
-              "others/gimorra",
               "others/projects",
               "others/audit-report",
               "others/cli-references",
@@ -171,7 +180,7 @@
         },
         {
           "anchor": "Meet Gimorra",
-          "href": "/others/gimorra",
+          "href": "/gimorra",
           "icon": "bolt"
         },
         {
@@ -220,5 +229,11 @@
       "title": "Oh my, the page has gone missing all on its own!",
       "description": "Oh dear! I'm terribly sorry for the mix-up. Perhaps try the main path home, or check your directions again. Yours politely, with a tip of the hat."
     }
-  }
+  },
+  "redirects": [
+    {
+      "source": "/others/gimorra",
+      "destination": "/gimorra"
+    }
+  ]
 }

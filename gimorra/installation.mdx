@@ -1,0 +1,76 @@
+---
+title: "Installation"
+description: "Get access to Gimorra, install the CLI and its scan engine, and check that the host is ready."
+icon: "download"
+---
+
+Gimorra is in an invite-only alpha. Your invitation includes the install command, so the first step is to get an invitation.
+
+<Steps>
+  <Step title="Get an invitation">
+    Visit [gimorra.vigolium.com](https://gimorra.vigolium.com/), [request a demo](https://www.vigolium.com/request-demo), or email [jessie@vigolium.com](mailto:jessie@vigolium.com). Your invitation link opens a page with your own install command.
+  </Step>
+  <Step title="Run the install command">
+    The command looks like this. Copy the real one from your invitation page:
+
+    ```bash
+    curl -fsSL <your install URL> | bash
+    ```
+
+    Please don't share your install link.
+  </Step>
+  <Step title="Check the host">
+    ```bash
+    gimorra doctor          # read-only report of what is installed and what is missing
+    gimorra setup --yes     # installs what it can, and tells you any step left for you
+    ```
+  </Step>
+</Steps>
+
+## What the installer does
+
+The installer is one script. It runs these steps in order:
+
+1. Detects the platform. Gimorra supports macOS and Linux, on arm64 or x64.
+2. Finds the current release and downloads it. It checks the SHA-256 checksum, and it also checks the release signature when the host's `openssl` supports Ed25519. If a checksum is missing or wrong, the install stops.
+3. Installs `gimorra` in `~/.local/bin` by default, and adds that directory to `PATH` in your shell profile.
+4. Installs the Vigolium scan engine version that this Gimorra release is tested with, unless Vigolium is already installed.
+5. Runs `gimorra setup --yes` to finish setting up the host and to list anything left for you to do.
+
+## Installer options
+
+Pass options after `bash -s --`:
+
+```bash
+curl -fsSL <your install URL> | bash -s -- --for audit
+```
+
+| Option | What it does |
+|---|---|
+| `--for scan` | Sets up the host for live scans. This is the default. |
+| `--for audit` | Sets up the host for source-code audits only. It installs the audit tools and skips the scan engine. |
+| `--for browser` | Also installs the browser that browser-driven agents use. |
+| `--for all` | Installs everything above. |
+| `--path <dir>` | The source tree that `--for audit` sets up language servers for. |
+| `--prefetch` | Also downloads the files a run would otherwise download the first time it needs them. |
+| `--skip-engine` | Skips installing the Vigolium engine. |
+| `--version <v>` | Installs a specific release instead of the latest one. |
+
+## Where to run it
+
+Gimorra runs its tools as your user, on the machine where you start it. A tool that misbehaves can affect that machine. Run Gimorra in a VM, a container or a machine you can throw away. Don't run it on a laptop that holds credentials you need to protect.
+
+<Tip>
+  In a cloud coding sandbox such as Claude Code on the web, put the install command in the environment's setup script. In auto mode, the agent is not allowed to pipe a downloaded script into `bash` during a session.
+</Tip>
+
+## Next steps
+
+<Columns cols={2}>
+  <Card title="LLM configuration" icon="microchip" href="/gimorra/llm-configuration">
+    Connect the model that drives the agent.
+  </Card>
+  <Card title="Running a scan" icon="play" href="/gimorra/running-a-scan">
+    Start a scan against a target you are authorized to test.
+  </Card>
+</Columns>

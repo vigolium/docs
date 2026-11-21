@@ -21,7 +21,7 @@ The platform is built around three key components that work together to provide 
   <Card title="Vigolium Workbench" icon="desktop">
     A self-hosted dashboard for visualizing scan results, managing projects, and tracking findings across your infrastructure. Deploy it on your own servers for full control over your data.
   </Card>
-  <Card title="Gimorra" icon="bolt">
+  <Card title="Gimorra" icon="bolt" href="https://gimorra.vigolium.com">
     The autonomous offensive-security agent. Pointed at an authorized target with a goal and a scope, it runs recon → scan → propose PoC → **deterministically prove** → report, with Vigolium as its scan engine.
   </Card>
 </Columns>
@@ -206,7 +206,7 @@ Vigolium is the scan engine underneath it. Gimorra is the operator above it.
 Autonomy is bought with **deterministic guardrails** rather than a human gating every action: ordinary code re-proves every finding (the agent proposes, code disposes), auto-cleanup and a kill switch bound what a run can leave behind, and a deny-wins scope guard is evaluated on every tool call. None of the three depends on the model, so a prompt-injected agent does not get past them.
 
 <Callout icon="rocket" color="#FFC107" iconType="regular">
-  Read the full introduction on the [Gimorra](/others/gimorra) page, or [Request a Demo](https://www.vigolium.com/request-demo) to see it against your own target.
+  Head to [gimorra.vigolium.com](https://gimorra.vigolium.com) for the full introduction, or [Request a Demo](https://www.vigolium.com/request-demo) to see it against your own target.
 </Callout>
 
 ---
@@ -222,7 +222,7 @@ Autonomy is bought with **deterministic guardrails** rather than a human gating 
 | Try agentic scanning | [Agent Mode](/agentic-scan/agent-mode) |
 | Let AI drive scans autonomously | [Autopilot](/agentic-scan/autopilot) |
 | Run multi-phase AI + native pipelines | [Swarm](/agentic-scan/swarm) |
-| Run a whole engagement autonomously | [Gimorra](/others/gimorra) |
+| Run a whole engagement autonomously | [Gimorra](https://gimorra.vigolium.com) |
 | Audit source code in depth | [Agentic Security Audit](/getting-started/agentic-security-audit) |
 | Chat with the agent runtime | [Olium](/agentic-scan/olium) |
 | Run Vigolium as an API server | [Server Mode](/server-mode/) |

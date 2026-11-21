@@ -1,0 +1,140 @@
+---
+title: "LLM configuration"
+description: "Connect the model that drives Gimorra: a Claude login, an Anthropic API key, a proxy, or an OpenAI-compatible endpoint."
+icon: "microchip"
+---
+
+Gimorra runs its agents on a coding-agent engine, the Claude Code SDK by default, which uses the Anthropic Messages API. You choose the model and the endpoint that serves it. Pick one of the setups below, then [verify the connection](#verify-the-connection).
+
+Gimorra reads settings from two places. An environment variable overrides the config file, and the config file overrides the built-in default:
+
+```text
+environment variable  >  ~/.gimorra/configs.yaml  >  built-in default
+```
+
+## Pick a setup
+
+<Tabs>
+  <Tab title="Claude login">
+    If the Claude Code CLI is logged in on this machine, you don't need to configure anything. When no endpoint, key or model is set, Gimorra uses that login.
+
+    To set it explicitly and choose the model:
+
+    ```bash
+    gimorra config set llm.connections.main.native-cli claude
+    gimorra config set llm.connections.main.model claude-sonnet-5
+    ```
+
+    To use the login for one run without changing the default:
+
+    ```bash
+    gimorra scan -t https://app.example.com --llm-profile native-cli-claude
+    ```
+
+    In a Claude Code cloud session, the shell already has the session's Claude settings, and Gimorra's runs use them.
+  </Tab>
+  <Tab title="Anthropic API key">
+    ```bash
+    export GIMORRA_LLM_API_KEY=sk-ant-...
+    export GIMORRA_LLM_MODEL=claude-opus-5   # optional; if unset, Gimorra picks a model per task
+    ```
+
+    With no base URL set, Gimorra sends requests to `https://api.anthropic.com`.
+
+    Exporting only `ANTHROPIC_API_KEY` also works. In that case Gimorra passes the variable through unchanged, and you lose routing, the fallback ladder and `gimorra doctor llm`. Set the `GIMORRA_LLM_*` variables to get them.
+
+    A Claude subscription works the same way. Run `claude setup-token` to get a token, then export it as `CLAUDE_CODE_OAUTH_TOKEN`.
+  </Tab>
+  <Tab title="Anthropic-compatible proxy">
+    Use a proxy that speaks the Anthropic Messages API and sits in front of subscriptions you already pay for. One proxy key can reach several models, which you need for [routing](#route-work-to-different-models).
+
+    ```bash
+    export GIMORRA_LLM_BASE_URL=http://127.0.0.1:8317   # no trailing /v1
+    export GIMORRA_LLM_API_KEY=<the proxy's key>
+    export GIMORRA_LLM_MODEL=<a model id the proxy serves>
+    export GIMORRA_LLM_MODEL_FALLBACK=<a cheaper model id>   # optional
+    ```
+
+    Use the model ids that your proxy serves, not bare `claude-*` ids. If the proxy rejects requests that carry two credential headers, set `llm.connections.main.auth_style` to `bearer`.
+  </Tab>
+  <Tab title="OpenAI-compatible endpoint">
+    Use this for vLLM, LiteLLM, Ollama, LM Studio, OpenRouter, or any server that only answers `/v1/chat/completions`. Set the API type to `openai`, and keep `/v1` at the end of the base URL:
+
+    ```bash
+    export GIMORRA_LLM_BASE_URL=http://127.0.0.1:8317/v1   # keep /v1 for an OpenAI endpoint
+    export GIMORRA_LLM_API_KEY=sk-...                      # optional for a local server with no key
+    export GIMORRA_LLM_MODEL=<a model id the endpoint serves>
+    export GIMORRA_LLM_API=openai
+    ```
+
+    Gimorra runs a local bridge that translates Messages API requests into chat-completion requests. The bridge listens on `127.0.0.1` only, and it keeps your endpoint key out of the agents' environment. Through the bridge, Anthropic's server-side tools such as web search are unavailable, and the model gets a text note in place of each image.
+  </Tab>
+</Tabs>
+
+## Save the settings in the config file
+
+Each `GIMORRA_LLM_*` variable has a matching key under the `main` connection. `gimorra config set` saves the value in `~/.gimorra/configs.yaml`, with file mode `0600`:
+
+```bash
+gimorra config set llm.connections.main.base_url https://proxy.example
+gimorra config set llm.connections.main.api_key  sk-...
+gimorra config set llm.connections.main.model    your/model
+gimorra config set llm.connections.main.api      openai   # only for an OpenAI-compatible endpoint
+```
+
+`main` is the default connection. The supervisor, its child agents and every phase use it, unless a routing rule sends them somewhere else.
+
+## Verify the connection
+
+`gimorra config llm` shows the settings Gimorra resolved. `gimorra doctor llm` tests them by sending one 16-token request to each model:
+
+```bash
+gimorra config llm   # read-only: the resolved connections and routing
+gimorra doctor llm   # sends a test request to every connection a run would use
+```
+
+Run `gimorra doctor llm` after every change. If it passes, a run can reach the model.
+
+## Route work to different models
+
+You can add more connections and send different work to each one. For example, the supervisor can use a strong model while the child agents use a cheaper one. Add the connections to `~/.gimorra/configs.yaml`:
+
+```yaml
+llm:
+  connections:
+    main:
+      base_url: ${GIMORRA_LLM_BASE_URL:}
+      api_key: ${GIMORRA_LLM_API_KEY:}
+      model: ${GIMORRA_LLM_MODEL:}
+    budget:
+      base_url: https://proxy.example
+      api_key: sk-...
+      model: a-cheaper-model
+  routing:
+    default: main
+```
+
+To use a connection for one run, pass `--llm-profile`, or `-L` for short:
+
+```bash
+gimorra scan -t https://app.example.com -L budget
+gimorra audit ./repo -L budget
+```
+
+Gimorra checks routing rules in a fixed order and uses the first match: planning, profiles, kinds, tiers, engines, and then the default.
+
+### When a provider fails
+
+By default, `llm.routing.on_failure` is `chain`. When a session keeps failing on one connection, Gimorra moves it to the next connection in a fallback ladder instead of failing the run. `llm.routing.retry_budget_ms` limits the total time one session spends retrying, and the default is 2 hours. Set `on_failure` to `off` if you want a session to fail as soon as its connection runs out of retries.
+
+## Reasoning effort
+
+`--llm-effort <level>`, or `-E`, sets the model's reasoning effort for one run. To change it on a run that is already going:
+
+```bash
+gimorra eng effort <engagement-id> <level>
+```
+
+<Note>
+  Gimorra spends tokens on your account. Every run has a spend limit. See [Budgets and limits](/gimorra/running-a-scan#budgets-and-limits).
+</Note>
